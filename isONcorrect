@@ -1,0 +1,250 @@
+#! /usr/bin/env python
+
+from __future__ import print_function
+import os,sys
+import argparse
+
+import errno
+from time import time
+
+from modules import get_sorted_fastq_for_cluster
+from modules import cluster
+from modules import p_minimizers_shared
+import math
+import parasail
+import re
+from collections import deque
+
+phred_char_to_p = {chr(i) : min( 10**( - (ord(chr(i)) - 33)/10.0 ), 0.5)  for i in range(128)} # PHRED encoded quality character to prob of error. Need this locally if multiprocessing
+
+
+'''
+    Below code taken from https://github.com/lh3/readfq/blob/master/readfq.py
+'''
+def readfq(fp): # this is a generator function
+    last = None # this is a buffer keeping the last unprocessed line
+    while True: # mimic closure; is it a bad idea?
+        if not last: # the first record or a record following a fastq
+            for l in fp: # search for the start of the next record
+                if l[0] in '>@': # fasta/q header line
+                    last = l[:-1] # save this line
+                    break
+        if not last: break
+        name, seqs, last = last[1:].replace(" ", "_"), [], None
+        for l in fp: # read the sequence
+            if l[0] in '@+>':
+                last = l[:-1]
+                break
+            seqs.append(l[:-1])
+        if not last or last[0] != '+': # this is a fasta record
+            yield name, (''.join(seqs), None) # yield a fasta record
+            if not last: break
+        else: # this is a fastq record
+            seq, leng, seqs = ''.join(seqs), 0, []
+            for l in fp: # read the quality
+                seqs.append(l[:-1])
+                leng += len(l) - 1
+                if leng >= len(seq): # have read enough quality
+                    last = None
+                    yield name, (seq, ''.join(seqs)); # yield a fastq record
+                    break
+            if last: # reach EOF before reading enough quality
+                yield name, (seq, None) # yield a fasta record instead
+                break
+
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+        print("creating", path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
+def cigar_to_seq(cigar, query, ref):
+    cigar_tuples = []
+    result = re.split(r'[=DXSMI]+', cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = cigar[i]
+        i += 1
+        cigar_tuples.append((int(length), type_ ))
+
+    r_index = 0
+    q_index = 0
+    q_aln = []
+    r_aln = []
+    for length_ , type_ in cigar_tuples:
+        if type_ == "=" or type_ == "X":
+            q_aln.append(query[q_index : q_index + length_])
+            r_aln.append(ref[r_index : r_index + length_])
+
+            r_index += length_
+            q_index += length_
+        
+        elif  type_ == "I":
+            # insertion w.r.t. reference
+            r_aln.append('-' * length_)
+            q_aln.append(query[q_index: q_index + length_])
+            #  only query index change
+            q_index += length_
+
+        elif type_ == 'D':
+            # deletion w.r.t. reference
+            r_aln.append(ref[r_index: r_index + length_])
+            q_aln.append('-' * length_)
+            #  only ref index change
+            r_index += length_
+        
+        else:
+            print("error")
+            print(cigar)
+            sys.exit()
+
+    return  "".join([s for s in q_aln]), "".join([s for s in r_aln])
+
+
+def parasail_block_alignment(s1, s2, k, match_id, x_acc = "", y_acc = "", match_score = 2, mismatch_penalty = -2, opening_penalty = 5, gap_ext = 1, ends_discrepancy_threshold = 0):
+    user_matrix = parasail.matrix_create("ACGT", match_score, mismatch_penalty)
+    result = parasail.sg_trace_scan_16(s1, s2, opening_penalty, gap_ext, user_matrix)
+    if result.saturated:
+        print("SATURATED!")
+        result = parasail.sg_trace_scan_32(s1, s2, opening_penalty, gap_ext, user_matrix)
+    if sys.version_info[0] < 3:
+        cigar_string = str(result.cigar.decode).decode('utf-8')
+    else:
+        cigar_string = str(result.cigar.decode, 'utf-8')
+    
+    s1_alignment, s2_alignment = cigar_to_seq(cigar_string, s1, s2)
+
+    # Rolling window of matching blocks
+    # k=15
+    # match_id = int(k*0.8)  1.0 - math.ceil(window_fraction)
+    match_vector = [ 1 if n1 == n2 else 0 for n1, n2 in zip(s1_alignment, s2_alignment) ]
+    # print("".join([str(m) for m in match_vector]))
+    
+    match_window = deque(match_vector[:k]) # initialization
+    current_match_count = sum(match_window)
+    aligned_region = []
+    if current_match_count >= match_id:
+        aligned_region.append(1)
+    else:
+        aligned_region.append(0)
+
+
+    for new_m_state in match_vector[k:]:
+        prev_m_state = match_window.popleft()
+        current_match_count = current_match_count - prev_m_state + new_m_state 
+        match_window.append(new_m_state)
+        
+        if current_match_count >= match_id:
+            aligned_region.append(1)
+        else:        
+            aligned_region.append(0)
+
+    block_coverage = "".join([str(m) for m in aligned_region])
+    # print(block_coverage)
+    # print("Aligned ratio (tot aligned/len(seq1):", sum(aligned_region)/float(len(s1)))
+    alignment_ratio = sum(aligned_region)/float(len(s1))
+    return s1, s2, s1_alignment, s2_alignment, alignment_ratio, block_coverage
+
+def block_align(origin_seq, seq, origin_qual, qual, args):
+
+    poisson_mean = sum([ qual.count(char_) * phred_char_to_p[char_] for char_ in set(qual)])
+    poisson_mean2 = sum([ origin_qual.count(char_) * phred_char_to_p[char_] for char_ in set(origin_qual)])
+
+    error_rate_sum = poisson_mean/float(len(seq)) + poisson_mean2/float(len(origin_seq))  # k = max(int(mean_plus_two_stdvs_q2 + mean_plus_two_stdvs_q1) + 1 + int(len(seq)*args.variant_rate) , 40)
+    if error_rate_sum <= 0.01:
+        gap_opening_penalty = 5
+    elif  0.01 < error_rate_sum <= 0.04:
+        gap_opening_penalty = 4
+    elif  0.04 < error_rate_sum <= 0.1:
+        gap_opening_penalty = 3
+    elif  0.1 < error_rate_sum:
+        gap_opening_penalty = 2
+
+    match_id_tailored = math.floor((1.0 - error_rate_sum) * args.k)
+    s1, s2, s1_alignment, s2_alignment, alignment_ratio, block_coverage  = parasail_block_alignment(seq, origin_seq, args.k, match_id_tailored, opening_penalty = gap_opening_penalty  )
+    print()
+    print("Expected errors:", poisson_mean, poisson_mean2)
+    print(s1_alignment)
+    print(block_coverage)
+    print(s2_alignment)
+    print(alignment_ratio)
+    print()
+    return error_rate_sum, s1_alignment, s2_alignment, alignment_ratio, block_coverage
+
+
+def main(args):
+
+    print("started sorting seqs")
+    start = time()
+    reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(args.fastq, 'r')))}
+    # read_array = [ (i, 0, acc, seq, qual, float(acc.split("_")[-1])) for i, (acc, (seq, qual)) in enumerate(readfq(open(sorted_reads_fastq_file, 'r')))]
+    start = time()
+    origin_acc, origin_seq, origin_qual = reads[0]
+
+    for i in range(1, len(reads)):
+        acc, seq, qual = reads[i]
+        error_rate_sum, s1_alignment, s2_alignment, alignment_ratio, block_coverage = block_align(origin_seq, seq, origin_qual, qual, args)
+        # add positons that was aligned to origin here to calculate total coverge over positions
+
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.2')
+
+    parser.add_argument('--fastq', type=str,  default=False, help='Path to consensus fastq file(s)')
+    parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
+
+    parser.add_argument('--ont', action="store_true", help='Clustering of ONT transcript reads.')
+    parser.add_argument('--isoseq', action="store_true", help='Clustering of PacBio Iso-Seq reads.')
+
+    parser.add_argument('--k', type=int, default=15, help='Kmer size')
+    parser.add_argument('--w', type=int, default=50, help='Window size')
+    parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
+    # parser.add_argument('--pickled_subreads', type=str, help='Path to an already parsed subreads file in pickle format')
+    # parser.set_defaults(which='main')
+    args = parser.parse_args()
+
+    if args.ont and args.isoseq:
+        print("Arguments mutually exclusive, specify either --isoseq or --ont. ")
+        sys.exit()
+    elif args.isoseq:
+        args.k = 15
+        args.w = 50
+    elif args.ont:
+        args.k = 13
+        args.w = 20
+
+
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit()
+    if not args.fastq and not args.flnc and not  args.ccs:
+        parser.print_help()
+        sys.exit()
+
+
+    if args.outfolder and not os.path.exists(args.outfolder):
+        os.makedirs(args.outfolder)
+
+
+    # edlib_module = 'edlib'
+    parasail_module = 'parasail'
+    # if edlib_module not in sys.modules:
+    #     print('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment.'.format(edlib_module))
+    if parasail_module not in sys.modules:
+        print('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment!'.format(parasail_module))
+        sys.exit(1)
+    if 100 < args.w or args.w < args.k:
+        print('Please specify a window of size larger or equal to k, and smaller than 100.')
+        sys.exit(1)
+
+    main(args)
+
