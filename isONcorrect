@@ -7,17 +7,19 @@ import argparse
 import errno
 from time import time
 
-from modules import get_sorted_fastq_for_cluster
-from modules import cluster
-from modules import p_minimizers_shared
+# from modules import get_sorted_fastq_for_cluster
+# from modules import cluster
+# from modules import p_minimizers_shared
 import math
 import parasail
 import re
 from collections import deque
+from modules import correct_seqs
 
 phred_char_to_p = {chr(i) : min( 10**( - (ord(chr(i)) - 33)/10.0 ), 0.5)  for i in range(128)} # PHRED encoded quality character to prob of error. Need this locally if multiprocessing
+phred_char_to_val = {chr(i) : max( (ord(chr(i)) - 33), 3)  for i in range(128)} # PHRED encoded quality character to prob of error. Need this locally if multiprocessing
 
-
+# print(phred_char_to_val)
 '''
     Below code taken from https://github.com/lh3/readfq/blob/master/readfq.py
 '''
@@ -146,7 +148,7 @@ def parasail_block_alignment(s1, s2, k, match_id, x_acc = "", y_acc = "", match_
         else:        
             aligned_region.append(0)
 
-    block_coverage = "".join([str(m) for m in aligned_region])
+    block_coverage = "".join([str(m) for m in aligned_region + [aligned_region[-1]]*(k-1) ])
     # print(block_coverage)
     # print("Aligned ratio (tot aligned/len(seq1):", sum(aligned_region)/float(len(s1)))
     alignment_ratio = sum(aligned_region)/float(len(s1))
@@ -169,15 +171,28 @@ def block_align(origin_seq, seq, origin_qual, qual, args):
 
     match_id_tailored = math.floor((1.0 - error_rate_sum) * args.k)
     s1, s2, s1_alignment, s2_alignment, alignment_ratio, block_coverage  = parasail_block_alignment(seq, origin_seq, args.k, match_id_tailored, opening_penalty = gap_opening_penalty  )
-    print()
-    print("Expected errors:", poisson_mean, poisson_mean2)
-    print(s1_alignment)
-    print(block_coverage)
-    print(s2_alignment)
-    print(alignment_ratio)
-    print()
+    # print()
+    # print("Expected errors:", poisson_mean, poisson_mean2)
+    # print(s1_alignment)
+    # print(block_coverage)
+    # print(s2_alignment)
+    # print(alignment_ratio)
+    # print()
     return error_rate_sum, s1_alignment, s2_alignment, alignment_ratio, block_coverage
 
+
+def get_seq_to_acc(S):
+    seq_to_acc = {}
+    for i, (acc, seq, qual) in S.items():
+        if seq in seq_to_acc:
+            seq_to_acc[seq].append(acc)
+        else: 
+            seq_to_acc[seq] = []
+            seq_to_acc[seq] = [acc]
+
+    unique_seq_to_acc = {seq: acc_list[0] for seq, acc_list in  seq_to_acc.items() if len(acc_list) == 1 } 
+    print("Non-converged (unique) sequences left:", len(unique_seq_to_acc))
+    return seq_to_acc
 
 def main(args):
 
@@ -185,15 +200,37 @@ def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(args.fastq, 'r')))}
     # read_array = [ (i, 0, acc, seq, qual, float(acc.split("_")[-1])) for i, (acc, (seq, qual)) in enumerate(readfq(open(sorted_reads_fastq_file, 'r')))]
+    print("Correcting {0} reads.".format(len(reads)))
     start = time()
+
     origin_acc, origin_seq, origin_qual = reads[0]
+
+    qual_dict = {origin_acc : [ phred_char_to_val[q] for q in origin_qual] }    
+    block_dict = {origin_acc : [ 1 for q in origin_qual] }    
+    seq_to_acc = get_seq_to_acc(reads)
+    partition = {}
+
 
     for i in range(1, len(reads)):
         acc, seq, qual = reads[i]
-        error_rate_sum, s1_alignment, s2_alignment, alignment_ratio, block_coverage = block_align(origin_seq, seq, origin_qual, qual, args)
+        error_rate_sum, read_alignment, origin_alignment, alignment_ratio, block_coverage = block_align(origin_seq, seq, origin_qual, qual, args)
+        
         # add positons that was aligned to origin here to calculate total coverge over positions
+        start here
+        ### get this from block coverage
+        ### Add new segments to a new artificially constructed "representative". 
+        ### Longest block segment between each two nucleotides in the origin_repr sequence
 
+        mismatches = len([ 1 for n1, n2 in zip(origin_alignment,read_alignment) if n1 != n2 and n1 != "-" and n2 != "-" ])
+        matches = len([ 1 for n1, n2 in zip(origin_alignment,read_alignment) if n1 == n2 and n1 != "-"])
+        indels = len(origin_alignment) - mismatches - matches
 
+        # print([ phred_char_to_val[q] for q in qual])
+        qual_dict[acc] =  [ phred_char_to_val[q] for q in qual]
+        # block_dict[acc] =  [ phred_char_to_val[q] for q in block_coverage]
+        partition[seq] = (matches+indels, origin_alignment, read_alignment, len(seq_to_acc[seq]))
+
+    S_prime_partition, S_prime_quality_vector = correct_seqs.correct_to_consensus(origin_seq, partition, seq_to_acc, qual_dict)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
