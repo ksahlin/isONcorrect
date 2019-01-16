@@ -6,6 +6,7 @@ import argparse
 
 import errno
 from time import time
+import itertools
 
 # from modules import get_sorted_fastq_for_cluster
 # from modules import cluster
@@ -210,13 +211,61 @@ def main(args):
     seq_to_acc = get_seq_to_acc(reads)
     partition = {}
 
-
+    ### Augment reference starting with origin as basis
+    reference_seq = origin_seq
+    reference_qual = origin_qual
     for i in range(1, len(reads)):
         acc, seq, qual = reads[i]
-        error_rate_sum, read_alignment, origin_alignment, alignment_ratio, block_coverage = block_align(origin_seq, seq, origin_qual, qual, args)
+        error_rate_sum, read_alignment, reference_alignment, alignment_ratio, block_coverage = block_align(reference_seq, seq, reference_qual, qual, args)
+        # print()
+        # print(read_alignment)
+        # print(reference_alignment)
+        # print(reference_qual)
+
+        # print([list(_) for ch, g in itertools.groupby(reference_alignment)])
+        curr_ref_pos = 0
+        curr_aln_pos = 0
+        new_ref = []
+        new_quals = []
+        for ch, g in itertools.groupby(reference_alignment):
+            l = list(g)
+            if l[0] == "-" and len(l) > 10 : # add quality values of read check here
+                # print(l)
+                read_pos = len([read_char for read_char in read_alignment[:curr_aln_pos] if read_char != "-"])
+                q_part = qual[read_pos:read_pos+ len(l)]
+                # print([round(phred_char_to_p[q_v], 4) for q_v in q_part])
+                print("AVG:", sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)))
+                print(read_alignment[curr_aln_pos: curr_aln_pos + len(l)] )
+                if sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)) < 0.2:
+                    new_ref.append(read_alignment[curr_aln_pos: curr_aln_pos + len(l)] )
+                    new_quals.append(qual[read_pos:read_pos+ len(l)])
+            if l[0] != "-":
+                new_ref.append(l)
+                new_quals.append(reference_qual[curr_ref_pos : curr_ref_pos + len(l)])
+                curr_ref_pos += len(l)
+
+            curr_aln_pos += len(l)
+
+        # for base in reference_alignment
+        # print(len(reference_seq), curr_ref_pos)
+        # print(len(reference_alignment), curr_aln_pos)
+        reference_seq = "".join([c for sublist in new_ref for c in sublist])
+        reference_qual = "".join([c for sublist in new_quals for c in sublist])
+        # print(len(reference_seq), len(reference_qual))
+        # print(reference_seq)
+        # print(origin_seq)
+    print(reference_seq)
+
+    # sys.exit()
+
+    # correct all seqs w.r.t. origin consensus
+
+    for i in range(0, len(reads)):
+        acc, seq, qual = reads[i]
+        error_rate_sum, read_alignment, origin_alignment, alignment_ratio, block_coverage = block_align(reference_seq, seq, reference_qual, qual, args)
         
         # add positons that was aligned to origin here to calculate total coverge over positions
-        start here
+        # start here
         ### get this from block coverage
         ### Add new segments to a new artificially constructed "representative". 
         ### Longest block segment between each two nucleotides in the origin_repr sequence
@@ -230,7 +279,7 @@ def main(args):
         # block_dict[acc] =  [ phred_char_to_val[q] for q in block_coverage]
         partition[seq] = (matches+indels, origin_alignment, read_alignment, len(seq_to_acc[seq]))
 
-    S_prime_partition, S_prime_quality_vector = correct_seqs.correct_to_consensus(origin_seq, partition, seq_to_acc, qual_dict)
+    S_prime_partition, S_prime_quality_vector = correct_seqs.correct_to_consensus(reference_seq, partition, seq_to_acc, qual_dict)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
