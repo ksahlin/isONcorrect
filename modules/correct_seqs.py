@@ -86,6 +86,20 @@ def create_position_frequency_matrix(alignment_matrix, partition):
             nucl = s_aln[j]
             PFM[j][nucl] += indegree
 
+    # As = [PFM[p]["A"] for p in range(len(PFM)) ]
+    # Cs = [PFM[p]["C"] for p in range(len(PFM)) ]
+    # Gs = [PFM[p]["G"] for p in range(len(PFM)) ]
+    # Ts = [PFM[p]["T"] for p in range(len(PFM)) ]
+    # dels = [PFM[p]["-"] for p in range(len(PFM))]
+    # for i in range(len(As)):
+    #     if i % 2 == 1:
+    #         print(As[i], Cs[i], Gs[i], Ts[i], dels[i])
+    # print(As)
+    # print(Cs)
+    # print(Gs)
+    # print(Ts)
+    # print(dels)
+
     return PFM
 
 
