@@ -182,6 +182,12 @@ def block_align(origin_seq, seq, origin_qual, qual, args):
     return error_rate_sum, s1_alignment, s2_alignment, alignment_ratio, block_coverage
 
 
+# def update_reference(ref, read_aln, V):
+#     """
+#         If reference is a sequence of R bases, store a vector V of 2R+1 bases.
+#         Update the reference if 3 sequences are suggesting a diff to current ref
+#     """
+
 def get_seq_to_acc(S):
     seq_to_acc = {}
     for i, (acc, seq, qual) in S.items():
@@ -194,6 +200,7 @@ def get_seq_to_acc(S):
     unique_seq_to_acc = {seq: acc_list[0] for seq, acc_list in  seq_to_acc.items() if len(acc_list) == 1 } 
     print("Non-converged (unique) sequences left:", len(unique_seq_to_acc))
     return seq_to_acc
+
 
 def main(args):
 
@@ -214,9 +221,12 @@ def main(args):
     ### Augment reference starting with origin as basis
     reference_seq = origin_seq
     reference_qual = origin_qual
+    prev_ref = reference_seq
     for i in range(1, len(reads)):
+        print(i)
         acc, seq, qual = reads[i]
         error_rate_sum, read_alignment, reference_alignment, alignment_ratio, block_coverage = block_align(reference_seq, seq, reference_qual, qual, args)
+
         # print()
         # print(read_alignment)
         # print(reference_alignment)
@@ -251,12 +261,40 @@ def main(args):
         # print(len(reference_alignment), curr_aln_pos)
         reference_seq = "".join([c for sublist in new_ref for c in sublist])
         reference_qual = "".join([c for sublist in new_quals for c in sublist])
-        # print(len(reference_seq), len(reference_qual))
+        print(len(reference_seq), len(reference_qual)) 
+        
+        if i > 1 and (prev_ref != reference_seq or len(partition) == 10):
+            if len(partition) < 3:
+                pass
+                print("lol", len(partition))
+            else:
+                print("Using {0} to update consensus".format(len(partition)))
+                new_reference_seq = correct_seqs.update_reference(prev_ref, partition, seq_to_acc, qual_dict)
+                error_rate_sum, new_ref_alignment, tmp_ref_alignment, aln_ratio, bl_cov = block_align(prev_ref, new_reference_seq, reference_qual, qual, args)
+                print(new_ref_alignment)
+                print(reference_alignment)
+            
+            prev_ref = reference_seq
+            partition = {} 
+            # reference_seq = new_reference_seq
+
+        if i == 1 and reference_seq != prev_ref:
+            prev_ref = reference_seq
+            partition = {} 
+            print("HERE")
+            continue
+
+        
+        mismatches = len([ 1 for n1, n2 in zip(reference_alignment,read_alignment) if n1 != n2 and n1 != "-" and n2 != "-" ])
+        matches = len([ 1 for n1, n2 in zip(reference_alignment,read_alignment) if n1 == n2 and n1 != "-"])
+        indels = len(reference_alignment) - mismatches - matches
+        partition[seq] = (matches+indels, reference_alignment, read_alignment, len(seq_to_acc[seq]))
+
         # print(reference_seq)
         # print(origin_seq)
     print(reference_seq)
 
-    # sys.exit()
+    sys.exit()
 
     # correct all seqs w.r.t. origin consensus
 

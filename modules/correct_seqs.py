@@ -36,8 +36,8 @@ def annotate_with_quality_values(alignment_matrix, seq_to_acc, qual_dict):
     PFM_qualities = []
     PFM_max_qualities = []
     for j in range(len(alignment_matrix[s])): # for each column
-        PFM_qualities.append({"A": 0, "C": 0, "G": 0, "T": 0, "-": 0})
-        PFM_max_qualities.append({"A": 0, "C": 0, "G": 0, "T": 0, "-": 0})
+        PFM_qualities.append({"A": 0, "C": 0, "G": 0, "T": 0, "U": 0, "-": 0})
+        PFM_max_qualities.append({"A": 0, "C": 0, "G": 0, "T": 0, "U": 0, "-": 0})
         for s in alignment_matrix_of_qualities:
             nucl = alignment_matrix[s][j]
             sum_quality_at_position = alignment_matrix_of_qualities[s][j]
@@ -78,7 +78,7 @@ def annotate_with_quality_values(alignment_matrix, seq_to_acc, qual_dict):
 
 def create_position_frequency_matrix(alignment_matrix, partition):
     nr_columns = len( alignment_matrix[ list(alignment_matrix)[0] ]) # just pick a key
-    PFM = [{"A": 0, "C": 0, "G": 0, "T": 0, "-": 0} for j in range(nr_columns)]
+    PFM = [{"A": 0, "C": 0, "G": 0, "T": 0, "U" : 0, "-": 0} for j in range(nr_columns)]
     for s in alignment_matrix:
         s_aln = alignment_matrix[s]
         indegree = partition[s][3]
@@ -241,8 +241,8 @@ def create_multialignment_format_NEW(query_to_target_positioned_dict, start, sto
     # 4
     position_solutions = {max_ins : {} for max_ins in max_insertions}
 
-    for nucl in ["A", "G", "C", "T", "-"]:
-        position_solutions[nucl] = {"A": ["A"], "G": ["G"], "C": ["C"], "T": ["T"], "-": ["-"]}
+    for nucl in ["A", "G", "C", "T", "U", "-"]:
+        position_solutions[nucl] = {"A": ["A"], "G": ["G"], "C": ["C"], "T": ["T"], "U": ["U"], "-": ["-"]}
 
     for p in range(nr_pos):
         max_ins = max_insertions[p]
@@ -458,4 +458,37 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, qual_dict):
 
     
     return S_prime_partition, S_prime_quality_vector
+
+
+
+def update_reference(repr_seq, partition, seq_to_acc, qual_dict):
+    """
+         partition[seq] = (edit_dist, aln_rep, aln_s, depth_of_string)
+    """
+    
+    alignment_matrix = create_multialignment_matrix(repr_seq, partition) 
+    PFM = create_position_frequency_matrix(alignment_matrix, partition)
+
+    majority_vector = []
+    for j in range(len(PFM)): # j even is insertions and j odd is on bases in current ref
+        if j % 2 == 1: # at base pair state
+            max_v_j = max(PFM[j], key = lambda x: PFM[j][x] )
+            majority_count = PFM[j][max_v_j]
+            max_v_j_set = set([v for v in PFM[j] if PFM[j][v] == majority_count ])
+            max_v_j_set.discard("-")
+            all_major = "".join(max_v_j_set)
+            majority_vector.append( all_major )
+        else: # in insertion state
+            max_v_j = max(PFM[j], key = lambda x: PFM[j][x] )
+            majority_count = PFM[j][max_v_j]
+            max_v_j_set = set([v for v in PFM[j] if PFM[j][v] == majority_count ])
+            all_major = "".join(max_v_j_set)
+            majority_vector.append( all_major )
+
+
+
+    assert len(majority_vector) == len(PFM)
+    return "".join([n for n in majority_vector if n !="-"])
+
+
 
