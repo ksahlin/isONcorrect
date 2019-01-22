@@ -85,21 +85,6 @@ def create_position_frequency_matrix(alignment_matrix, partition):
         for j in range(nr_columns): # for each column
             nucl = s_aln[j]
             PFM[j][nucl] += indegree
-
-    # As = [PFM[p]["A"] for p in range(len(PFM)) ]
-    # Cs = [PFM[p]["C"] for p in range(len(PFM)) ]
-    # Gs = [PFM[p]["G"] for p in range(len(PFM)) ]
-    # Ts = [PFM[p]["T"] for p in range(len(PFM)) ]
-    # dels = [PFM[p]["-"] for p in range(len(PFM))]
-    # for i in range(len(As)):
-    #     if i % 2 == 1:
-    #         print(As[i], Cs[i], Gs[i], Ts[i], dels[i])
-    # print(As)
-    # print(Cs)
-    # print(Gs)
-    # print(Ts)
-    # print(dels)
-
     return PFM
 
 
@@ -312,6 +297,10 @@ def create_multialignment_matrix(repr_seq, partition):
         # print(m_alignment)
         # print(repr_seq)
         s_positioned, target_vector_start_position, target_vector_end_position = position_query_to_alignment(s_alignment, m_alignment, 0)
+        # if s_alignment == m_alignment:
+        #     print("POS:",s_positioned)
+        #     sys.exit()
+
         # assert s_positioned_new == s_positioned
         # print(s_positioned)
         # print()
@@ -321,6 +310,8 @@ def create_multialignment_matrix(repr_seq, partition):
         query_to_target_positioned_dict[q_acc] = (s_positioned, target_vector_start_position, target_vector_end_position)
 
     alignment_matrix = create_multialignment_format_NEW(query_to_target_positioned_dict, 0, 2*len(repr_seq))
+    # print(alignment_matrix)
+    # sys.exit()
     return alignment_matrix
 
 
@@ -359,136 +350,102 @@ def position_query_to_alignment(query_aligned, target_aligned, target_alignment_
 
     return query_positioned, target_vector_start_position, target_vector_end_position
 
-def correct_to_consensus(repr_seq, partition, seq_to_acc, qual_dict):
+
+
+
+def correct_to_consensus(repr_seq, partition, seq_to_acc):
     """
          partition[seq] = (edit_dist, aln_rep, aln_s, depth_of_string)
     """
-    S_prime_partition = {}
-    S_prime_quality_vector = {}
     N_t = sum([container_tuple[3] for s, container_tuple in partition.items()]) # total number of sequences in partition
     
     if len(partition) > 1:
         # all strings has not converged
         alignment_matrix = create_multialignment_matrix(repr_seq, partition) 
-        PFM = create_position_frequency_matrix(alignment_matrix, partition)
+        partition = { s : (alignment_matrix[s], partition[s][3]) for s in alignment_matrix}
+        PFM = PFM_from_msa(partition)
+        # PFM = create_position_frequency_matrix(alignment_matrix, partition)
+        # for i,pos_dict in enumerate(PFM):
+        #     print(i, pos_dict)
 
-        for s_before in partition:
-            s_after = "".join([n for n in alignment_matrix[s_before] if n != "-"])
-            assert s_before == s_after
-        # print(len(partition), N_t)
-        alignment_matrix_of_qualities, PFM_qualities, PFM_max_qualities, global_correction_threshold = annotate_with_quality_values(alignment_matrix, seq_to_acc, qual_dict)
+        S_prime_partition = correct_from_msa(partition, PFM, seq_to_acc)
 
-        assert len(alignment_matrix_of_qualities) == len(alignment_matrix)
-        if global_correction_threshold < 0:
-            return S_prime_partition, S_prime_quality_vector
-
-        majority_vector = []
-        for j in range(len(PFM_qualities)):
-            max_v_j = max(PFM_qualities[j], key = lambda x: PFM_qualities[j][x] )
-
-            majority_count =  PFM_qualities[j][max_v_j]
-            max_v_j_set = set([v for v in PFM_qualities[j] if PFM_qualities[j][v] == majority_count ])
-            all_major = "".join(max_v_j_set)
-            majority_vector.append( all_major )
-        assert len(majority_vector) == len(PFM_qualities)
-        ############################
-        ############################
-
-
-        for s in sorted(partition):
-            if partition[s][3] > 1: # at least 2 identical sequences --> its a nearest_neighbor of the partition, has converged, and should not be corrected
-                print("not correcting converged sequence!")
-                continue
-
-            s_alignment_in_matrix = alignment_matrix[s]
-            # s_min = 0
-            for i, p in enumerate(s_alignment_in_matrix):
-                if p != "-":
-                    s_min = i
-                    break
-            for i, p in enumerate(s_alignment_in_matrix[::-1]):
-                if p != "-":
-                    s_max = len(s_alignment_in_matrix) - i
-                    break
-
-            # print("S", s_min, s_max)
-            s_quals = alignment_matrix_of_qualities[s]
-            # ALL POSITIONS with sum of probabilities lower than the largest probability
-            minority_positions = [ (j,majority_vector[j], s_alignment_in_matrix[j]) for j in range(len(majority_vector)) if s_alignment_in_matrix[j] not in majority_vector[j] and s_min <= j <= s_max ]
-            minority_positions_correctable = [ j  for j in range(len(majority_vector)) if (len(majority_vector[j]) == 1 and majority_vector[j] != s_alignment_in_matrix[j] ) ]
-            minority_positions_correctable = [ (j, PFM_qualities[j][ s_alignment_in_matrix[j] ])  for j in minority_positions_correctable ]
-            nr_pos_to_correct = int(math.ceil( len(minority_positions_correctable) * 0.5)) # (step/ float(step +1)) ))
-            # print("positions to correct:", nr_pos_to_correct) 
-
-            if nr_pos_to_correct  == 0:
-                print("Edit distance to nearest_neighbor:", partition[s][0], "is nearest_neighbor:", s ==repr_seq, "Minority positions:", minority_positions)
-                continue
-            if len(minority_positions_correctable) == 0:
-                print("no unambiguous majority positions")
-                continue
-
-            minority_positions_correctable.sort(key=lambda x: x[1])
-            # print(len(minority_positions_correctable) ,minority_positions_correctable)
-            _, quality_threshold_to_correct = minority_positions_correctable[ nr_pos_to_correct - 1 ]
-            minority_positions_to_correct = [ (j, qual_j) for j, qual_j in minority_positions_correctable if qual_j <= quality_threshold_to_correct ]
-            print(quality_threshold_to_correct, len(minority_positions_to_correct))
-            # minority_positions_to_correct = [ (j, qual_j) for j, qual_j in minority_positions_correctable if qual_j <= global_correction_threshold ]
-            # print("actual:", len(minority_positions_to_correct))
-            # minority_positions_to_correct = sorted(minority_positions_correctable, key=lambda x: x[1])[:nr_pos_to_correct]  # sorted list with the smallest probabilities first
-
-            # print(minority_positions_to_correct)
-            s_new = alignment_matrix[s]
-            s_qual_new = alignment_matrix_of_qualities[s]
-            for j, qual_j in minority_positions_to_correct:
-                highest_prob_character_at_j = majority_vector[j]
-                assert len(majority_vector[j]) == 1
-                s_new[j] = highest_prob_character_at_j
-                s_qual_new[j] = PFM_max_qualities[j][highest_prob_character_at_j] 
-            
-            s_modified = "".join([nucl for nucl in s_new if nucl != "-" ])
-            s_qual_modified = [s_qual_new[j] for j in range(len(s_new)) if s_new[j] != "-" ]
-
-            # only unique strings can change in this step
-            accessions_of_s = seq_to_acc[s] 
-            for acc in accessions_of_s:
-                S_prime_partition[acc] = s_modified
-                S_prime_quality_vector[acc] = s_qual_modified
     else:
         print("Partition converged: Partition size(unique strings):{0}, partition support: {1}.".format(len(partition), N_t))
 
     
-    return S_prime_partition, S_prime_quality_vector
+    return S_prime_partition
 
 
 
-def update_reference(repr_seq, partition, seq_to_acc, qual_dict):
+def PFM_from_msa(partition):
+    nr_columns = len( list(partition.values())[0][0]) # just pick a key
+    PFM = [{"A": 0, "C": 0, "G": 0, "T": 0, "U" : 0, "-": 0} for j in range(nr_columns)]
+    for s in partition:
+        seq_aln, cnt = partition[s]
+        for j, n in enumerate(seq_aln):
+            PFM[j][n] += cnt
+    return PFM
+
+
+def correct_from_msa(partition, PFM, seq_to_acc):
+    nr_columns = len(PFM)
+    S_prime_partition = {}
+    for s in partition:
+        pos_corrected = 0
+        seq_aln, cnt = partition[s]
+        s_new = [n for n in seq_aln]
+
+        if cnt == 1:
+            for j, n in enumerate(seq_aln):
+                if PFM[j][n] < 3:
+                    # print(j, PFM[j])
+                    tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
+                    dels = tmp_dict["-"]
+                    del tmp_dict["-"]
+                    other_variant_counts = [tmp_dict[n] for n in tmp_dict if tmp_dict[n] >= 3]
+                    if len(other_variant_counts) == 1:
+                        base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
+                        # print(n, base_correct_to, tmp_dict)
+                        s_new[j] = base_correct_to
+                        pos_corrected += 1
+                    elif len(other_variant_counts) == 0:
+                        base_correct_to = "-"
+                        # print(n, base_correct_to, tmp_dict)
+                        pos_corrected += 1
+                    else:
+                        # print("Ambiguous correction")
+                        pass
+        print("Corrected {0} pos in seq of length {1}".format(pos_corrected, len(s)))
+
+
+        accessions_of_s = seq_to_acc[s] 
+        for acc in accessions_of_s:
+            S_prime_partition[acc] = "".join([n for n in s_new if n != "-"])
+
+    return S_prime_partition
+
+
+def msa(reference_seq, partition, seq_to_acc):
+
     """
          partition[seq] = (edit_dist, aln_rep, aln_s, depth_of_string)
     """
+    N_t = sum([container_tuple[1] for s, container_tuple in partition.items()]) # total number of sequences in partition
     
-    alignment_matrix = create_multialignment_matrix(repr_seq, partition) 
-    PFM = create_position_frequency_matrix(alignment_matrix, partition)
+    if len(partition) > 1:
+        # all strings has not converged
+        alignment_matrix = { seq : [n for n in partition[seq][0]] for seq in partition }
+        lengths = [len(v) for v in alignment_matrix.values()]
+        assert len(set(lengths)) == 1
 
-    majority_vector = []
-    for j in range(len(PFM)): # j even is insertions and j odd is on bases in current ref
-        if j % 2 == 1: # at base pair state
-            max_v_j = max(PFM[j], key = lambda x: PFM[j][x] )
-            majority_count = PFM[j][max_v_j]
-            max_v_j_set = set([v for v in PFM[j] if PFM[j][v] == majority_count ])
-            max_v_j_set.discard("-")
-            all_major = "".join(max_v_j_set)
-            majority_vector.append( all_major )
-        else: # in insertion state
-            max_v_j = max(PFM[j], key = lambda x: PFM[j][x] )
-            majority_count = PFM[j][max_v_j]
-            max_v_j_set = set([v for v in PFM[j] if PFM[j][v] == majority_count ])
-            all_major = "".join(max_v_j_set)
-            majority_vector.append( all_major )
+        PFM = PFM_from_msa(partition)
+        S_prime_partition = correct_from_msa(partition, PFM, seq_to_acc)
 
+    else:
+        print("Partition converged: Partition size(unique strings):{0}, partition support: {1}.".format(len(partition), N_t))
 
-
-    assert len(majority_vector) == len(PFM)
-    return "".join([n for n in majority_vector if n !="-"])
-
+    
+    return S_prime_partition
 
 
