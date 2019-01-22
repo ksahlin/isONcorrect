@@ -15,7 +15,7 @@ import math
 import parasail
 import re
 from collections import deque
-from modules import correct_seqs
+from modules import correct_seqs, create_augmented_reference
 
 phred_char_to_p = {chr(i) : min( 10**( - (ord(chr(i)) - 33)/10.0 ), 0.5)  for i in range(128)} # PHRED encoded quality character to prob of error. Need this locally if multiprocessing
 phred_char_to_val = {chr(i) : max( (ord(chr(i)) - 33), 3)  for i in range(128)} # PHRED encoded quality character to prob of error. Need this locally if multiprocessing
@@ -111,7 +111,7 @@ def cigar_to_seq(cigar, query, ref):
     return  "".join([s for s in q_aln]), "".join([s for s in r_aln])
 
 
-def parasail_block_alignment(s1, s2, k, match_id, x_acc = "", y_acc = "", match_score = 2, mismatch_penalty = -2, opening_penalty = 5, gap_ext = 1, ends_discrepancy_threshold = 0):
+def parasail_block_alignment(s1, s2, k, match_id, x_acc = "", y_acc = "", match_score = 4, mismatch_penalty = -4, opening_penalty = 5, gap_ext = 1, ends_discrepancy_threshold = 0):
     user_matrix = parasail.matrix_create("ACGT", match_score, mismatch_penalty)
     result = parasail.sg_trace_scan_16(s1, s2, opening_penalty, gap_ext, user_matrix)
     if result.saturated:
@@ -169,9 +169,11 @@ def block_align(origin_seq, seq, origin_qual, qual, args):
         gap_opening_penalty = 3
     elif  0.1 < error_rate_sum:
         gap_opening_penalty = 2
-
+    # elif  0.2 < error_rate_sum:
+    #     gap_opening_penalty = 1
+    # print(error_rate_sum)
     match_id_tailored = math.floor((1.0 - error_rate_sum) * args.k)
-    s1, s2, s1_alignment, s2_alignment, alignment_ratio, block_coverage  = parasail_block_alignment(seq, origin_seq, args.k, match_id_tailored, opening_penalty = gap_opening_penalty  )
+    s1, s2, s1_alignment, s2_alignment, alignment_ratio, block_coverage  = parasail_block_alignment(seq, origin_seq, args.k, match_id_tailored, opening_penalty = gap_opening_penalty )
     # print()
     # print("Expected errors:", poisson_mean, poisson_mean2)
     # print(s1_alignment)
@@ -201,123 +203,157 @@ def get_seq_to_acc(S):
     print("Non-converged (unique) sequences left:", len(unique_seq_to_acc))
     return seq_to_acc
 
+def get_seq_to_index(S):
+    seq_to_index = {}
+    for i, (acc, seq, qual) in S.items():
+        if seq in seq_to_index:
+            seq_to_index[seq].append(i)
+        else: 
+            seq_to_index[seq] = []
+            seq_to_index[seq] = [i]
+
+    unique_seq_to_index = {seq: acc_list[0] for seq, acc_list in  seq_to_index.items() if len(acc_list) == 1 } 
+    print("Non-converged (unique) sequences left:", len(unique_seq_to_index))
+    return seq_to_index
+
+def add_segment(reference_alignment, read_alignment, qual, reference_qual, ref_count_vector):
+    curr_ref_pos = 0
+    curr_aln_pos = 0
+    new_ref = []
+    new_quals = []
+    new_ref_count_vector = []
+    for ch, g in itertools.groupby(reference_alignment):
+        l = list(g)
+        if l[0] == "-" and len(l) > 10 : # add quality values of read check here
+            # print(l)
+            read_pos = len([read_char for read_char in read_alignment[:curr_aln_pos] if read_char != "-"])
+            q_part = qual[read_pos:read_pos+ len(l)]
+            # print([round(phred_char_to_p[q_v], 4) for q_v in q_part])
+            print("AVG:", sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)))
+            print(read_alignment[curr_aln_pos: curr_aln_pos + len(l)] )
+            if sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)) < 0.2:
+                print("Adding")
+                new_ref.append(read_alignment[curr_aln_pos: curr_aln_pos + len(l)] )
+                new_quals.append(qual[read_pos:read_pos+ len(l)])
+                new_ref_count_vector.append([1]*len(l))
+        if l[0] != "-":
+            new_ref.append(l)
+            new_quals.append(reference_qual[curr_ref_pos : curr_ref_pos + len(l)])
+            new_ref_count_vector.append(ref_count_vector[curr_ref_pos : curr_ref_pos + len(l)])
+            curr_ref_pos += len(l)
+
+        curr_aln_pos += len(l)
+
+    reference_seq = "".join([c for sublist in new_ref for c in sublist])
+    reference_qual = "".join([c for sublist in new_quals for c in sublist])
+    reference_count_vector = [c for sublist in new_ref_count_vector for c in sublist]
+    print(len(reference_seq), len(reference_qual), len(reference_count_vector))  
+    assert len(reference_seq) == len(reference_qual) == len(reference_count_vector)
+
+    return reference_seq, reference_qual, reference_count_vector
+
+
+def segment_should_be_added(reference_alignment, read_alignment, qual):
+    curr_ref_pos = 0
+    curr_aln_pos = 0
+    for ch, g in itertools.groupby(reference_alignment):
+        l = list(g)
+        if l[0] == "-" and len(l) > 10 : # add quality values of read check here
+            read_pos = len([read_char for read_char in read_alignment[:curr_aln_pos] if read_char != "-"])
+            q_part = qual[read_pos:read_pos+ len(l)]
+            if sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)) < 0.2:
+                return True
+        if l[0] != "-":
+            curr_ref_pos += len(l)
+        curr_aln_pos += len(l)
+    return False
+
+
 
 def main(args):
-
-    print("started sorting seqs")
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(args.fastq, 'r')))}
-    # read_array = [ (i, 0, acc, seq, qual, float(acc.split("_")[-1])) for i, (acc, (seq, qual)) in enumerate(readfq(open(sorted_reads_fastq_file, 'r')))]
+    seq_to_index = get_seq_to_index(reads)
+
+    spoa_corrected = open(args.fastq)  #{ i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(args.fastq, 'r')))}
+    isocon_corrected = open(args.fastq) #{ i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(args.fastq, 'r')))}
     print("Correcting {0} reads.".format(len(reads)))
     start = time()
 
-    origin_acc, origin_seq, origin_qual = reads[0]
-
-    qual_dict = {origin_acc : [ phred_char_to_val[q] for q in origin_qual] }    
-    block_dict = {origin_acc : [ 1 for q in origin_qual] }    
-    seq_to_acc = get_seq_to_acc(reads)
-    partition = {}
-
-    ### Augment reference starting with origin as basis
-    reference_seq = origin_seq
-    reference_qual = origin_qual
-    prev_ref = reference_seq
-    for i in range(1, len(reads)):
-        print(i)
-        acc, seq, qual = reads[i]
-        error_rate_sum, read_alignment, reference_alignment, alignment_ratio, block_coverage = block_align(reference_seq, seq, reference_qual, qual, args)
-
-        # print()
-        # print(read_alignment)
-        # print(reference_alignment)
-        # print(reference_qual)
-
-        # print([list(_) for ch, g in itertools.groupby(reference_alignment)])
-        curr_ref_pos = 0
-        curr_aln_pos = 0
-        new_ref = []
-        new_quals = []
-        for ch, g in itertools.groupby(reference_alignment):
-            l = list(g)
-            if l[0] == "-" and len(l) > 10 : # add quality values of read check here
-                # print(l)
-                read_pos = len([read_char for read_char in read_alignment[:curr_aln_pos] if read_char != "-"])
-                q_part = qual[read_pos:read_pos+ len(l)]
-                # print([round(phred_char_to_p[q_v], 4) for q_v in q_part])
-                print("AVG:", sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)))
-                print(read_alignment[curr_aln_pos: curr_aln_pos + len(l)] )
-                if sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)) < 0.2:
-                    new_ref.append(read_alignment[curr_aln_pos: curr_aln_pos + len(l)] )
-                    new_quals.append(qual[read_pos:read_pos+ len(l)])
-            if l[0] != "-":
-                new_ref.append(l)
-                new_quals.append(reference_qual[curr_ref_pos : curr_ref_pos + len(l)])
-                curr_ref_pos += len(l)
-
-            curr_aln_pos += len(l)
-
-        # for base in reference_alignment
-        # print(len(reference_seq), curr_ref_pos)
-        # print(len(reference_alignment), curr_aln_pos)
-        reference_seq = "".join([c for sublist in new_ref for c in sublist])
-        reference_qual = "".join([c for sublist in new_quals for c in sublist])
-        print(len(reference_seq), len(reference_qual)) 
+    for iteration in range(1,4):
+        print()
+        print("ITERATION", iteration)
         
-        if i > 1 and (prev_ref != reference_seq or len(partition) == 10):
-            if len(partition) < 3:
-                pass
-                print("lol", len(partition))
-            else:
-                print("Using {0} to update consensus".format(len(partition)))
-                new_reference_seq = correct_seqs.update_reference(prev_ref, partition, seq_to_acc, qual_dict)
-                error_rate_sum, new_ref_alignment, tmp_ref_alignment, aln_ratio, bl_cov = block_align(prev_ref, new_reference_seq, reference_qual, qual, args)
-                print(new_ref_alignment)
-                print(reference_alignment)
-            
-            prev_ref = reference_seq
-            partition = {} 
-            # reference_seq = new_reference_seq
+        # MSA
+        reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(spoa_corrected.name, "r")))}
+        seq_to_index = get_seq_to_index(reads)
+        ref_file_spoa = os.path.join(args.outfolder, "reference_{0}_spoa.fa".format(iteration))
+        spoa_out_file = os.path.join(args.outfolder, "spoa_out_{0}.fa".format(iteration))
+        reference_seq, msa = create_augmented_reference.run_spoa(spoa_corrected.name, ref_file_spoa, spoa_out_file, "spoa")
+        reference_qual = "".join(["," for i in range(len(reference_seq))]) 
+        partition = {}
+        for seq_aln in msa:
+            seq = "".join(n for n in seq_aln if n != "-")
+            partition[seq] = (seq_aln, len(seq_to_index[seq]))
 
-        if i == 1 and reference_seq != prev_ref:
-            prev_ref = reference_seq
-            partition = {} 
-            print("HERE")
-            continue
+        corrected_spoa = correct_seqs.msa(reference_seq, partition, seq_to_index)
+        spoa_corrected = open(os.path.join(args.outfolder, "corrected_reads_spoa_{0}.fastq".format(iteration)), "w")
+        for acc in sorted(corrected_spoa):
+            spoa_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_spoa[acc], "+", ","*len(corrected_spoa[acc])))
+        spoa_corrected.close()
 
-        
-        mismatches = len([ 1 for n1, n2 in zip(reference_alignment,read_alignment) if n1 != n2 and n1 != "-" and n2 != "-" ])
-        matches = len([ 1 for n1, n2 in zip(reference_alignment,read_alignment) if n1 == n2 and n1 != "-"])
-        indels = len(reference_alignment) - mismatches - matches
-        partition[seq] = (matches+indels, reference_alignment, read_alignment, len(seq_to_acc[seq]))
 
-        # print(reference_seq)
-        # print(origin_seq)
-    print(reference_seq)
+        # ISOCON
+        reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(isocon_corrected.name,"r")))}
+        seq_to_index = get_seq_to_index(reads)
+        ref_file_isocon = os.path.join(args.outfolder, "reference_{0}_isocon.fa".format(iteration))
+        isocon_out_file = os.path.join(args.outfolder, "isocon_out_{0}.fa".format(iteration))
+        reference_seq, msa = create_augmented_reference.run_spoa(isocon_corrected.name, ref_file_isocon, isocon_out_file, "spoa")
+        reference_qual = "".join(["," for i in range(len(reference_seq))]) 
+        partition = {}
+        for j in range(0, len(reads)):
+            acc, seq, qual = reads[j]
+            error_rate_sum, read_alignment, ref_alignment, alignment_ratio, block_coverage = block_align(reference_seq, seq, reference_qual, qual, args)
+            mismatches = len([ 1 for n1, n2 in zip(ref_alignment,read_alignment) if n1 != n2 and n1 != "-" and n2 != "-" ])
+            matches = len([ 1 for n1, n2 in zip(ref_alignment,read_alignment) if n1 == n2 and n1 != "-"])
+            indels = len(ref_alignment) - mismatches - matches
+            # qual_dict[acc] =  [ phred_char_to_val[q] for q in qual]
+            # block_dict[acc] =  [ phred_char_to_val[q] for q in block_coverage]
+            partition[seq] = (matches+indels, ref_alignment, read_alignment, len(seq_to_index[seq]))
 
-    sys.exit()
+        corrected_isocon = correct_seqs.correct_to_consensus(reference_seq, partition, seq_to_index)
 
-    # correct all seqs w.r.t. origin consensus
+        isocon_corrected = open(os.path.join(args.outfolder, "corrected_reads_isocon_{0}.fastq".format(iteration)), "w")
+        for acc in sorted(corrected_isocon):
+            isocon_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_isocon[acc], "+", ","*len(corrected_isocon[acc]) ))
+        isocon_corrected.close()
 
-    for i in range(0, len(reads)):
-        acc, seq, qual = reads[i]
-        error_rate_sum, read_alignment, origin_alignment, alignment_ratio, block_coverage = block_align(reference_seq, seq, reference_qual, qual, args)
-        
-        # add positons that was aligned to origin here to calculate total coverge over positions
-        # start here
-        ### get this from block coverage
-        ### Add new segments to a new artificially constructed "representative". 
-        ### Longest block segment between each two nucleotides in the origin_repr sequence
+    # sys.exit()
 
-        mismatches = len([ 1 for n1, n2 in zip(origin_alignment,read_alignment) if n1 != n2 and n1 != "-" and n2 != "-" ])
-        matches = len([ 1 for n1, n2 in zip(origin_alignment,read_alignment) if n1 == n2 and n1 != "-"])
-        indels = len(origin_alignment) - mismatches - matches
+    # # correct all seqs w.r.t. origin consensus
+    # qual_dict = {"augmented_ref" : [ phred_char_to_val[q] for q in reference_qual] }    
+    # # block_dict = {origin_acc : [ 1 for q in origin_qual] }    
+    # partition = {}
 
-        # print([ phred_char_to_val[q] for q in qual])
-        qual_dict[acc] =  [ phred_char_to_val[q] for q in qual]
-        # block_dict[acc] =  [ phred_char_to_val[q] for q in block_coverage]
-        partition[seq] = (matches+indels, origin_alignment, read_alignment, len(seq_to_acc[seq]))
+    # for i in range(0, len(reads)):
+    #     acc, seq, qual = reads[i]
+    #     error_rate_sum, read_alignment, origin_alignment, alignment_ratio, block_coverage = block_align(reference_seq, seq, reference_qual, qual, args)
 
-    S_prime_partition, S_prime_quality_vector = correct_seqs.correct_to_consensus(reference_seq, partition, seq_to_acc, qual_dict)
+    #     mismatches = len([ 1 for n1, n2 in zip(origin_alignment,read_alignment) if n1 != n2 and n1 != "-" and n2 != "-" ])
+    #     matches = len([ 1 for n1, n2 in zip(origin_alignment,read_alignment) if n1 == n2 and n1 != "-"])
+    #     indels = len(origin_alignment) - mismatches - matches
+
+    #     # print([ phred_char_to_val[q] for q in qual])
+    #     qual_dict[acc] =  [ phred_char_to_val[q] for q in qual]
+    #     # block_dict[acc] =  [ phred_char_to_val[q] for q in block_coverage]
+    #     partition[seq] = (matches+indels, origin_alignment, read_alignment, len(seq_to_acc[seq]))
+
+    # S_prime_partition, S_prime_quality_vector = correct_seqs.correct_to_consensus(reference_seq, partition, seq_to_acc, qual_dict)
+    # reads_corrected = open(os.path.join(args.outfolder,"corrected_reads_isocon.fa"), "w")
+
+    # for acc in S_prime_partition:
+    #     reads_corrected.write(">{0}\n{1}\n".format(acc, S_prime_partition[acc]))
+    # reads_corrected.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
