@@ -385,38 +385,63 @@ def PFM_from_msa(partition):
         seq_aln, cnt = partition[s]
         for j, n in enumerate(seq_aln):
             PFM[j][n] += cnt
+
+    # cov_tot = len(partition)
+    # for j in range(nr_columns):
+    #     cov = sum([ PFM[j][n] for n in PFM[j] if n != "-"])
+    #     print(j,cov, cov_tot, [ PFM[j][n] for n in PFM[j] if n != "-"])
     return PFM
 
 
 def correct_from_msa(partition, PFM, seq_to_acc):
     nr_columns = len(PFM)
     S_prime_partition = {}
+    
+    # max_vector = []
+    # for j in range(nr_columns):
+    #     (max_c, max_n) = max([ (PFM[j][n], n) for n in PFM[j] if n != "-"], key = lambda x: x[0])
+    #     max_vector.append( (max_c, max_n) )
+    # print(max_vector)
+
     for s in partition:
-        pos_corrected = 0
+        subs_pos_corrected = 0
+        ins_pos_corrected = 0
         seq_aln, cnt = partition[s]
         s_new = [n for n in seq_aln]
 
         if cnt == 1:
             for j, n in enumerate(seq_aln):
-                if PFM[j][n] < 3:
+
+                # ### new ###
+                # if n == "-":
+                #     pass
+                # elif n != max_vector[j][1] and max_vector[j][0] >= 3:
+                #     s_new[j] = max_vector[j][1]
+                # elif max_vector[j][0] < 3:
+                #     s_new[j] = "-"
+                # #########
+
+                if PFM[j][n] < 5:
                     # print(j, PFM[j])
                     tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
                     dels = tmp_dict["-"]
                     del tmp_dict["-"]
-                    other_variant_counts = [tmp_dict[n] for n in tmp_dict if tmp_dict[n] >= 3]
-                    if len(other_variant_counts) == 1:
+                    other_variant_counts = [tmp_dict[n] for n in tmp_dict if tmp_dict[n] >= 5]
+                    if len(other_variant_counts) > 0:
                         base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
                         # print(n, base_correct_to, tmp_dict)
                         s_new[j] = base_correct_to
-                        pos_corrected += 1
+                        subs_pos_corrected += 1
                     elif len(other_variant_counts) == 0:
                         base_correct_to = "-"
                         # print(n, base_correct_to, tmp_dict)
-                        pos_corrected += 1
+                        ins_pos_corrected += 1
+                        s_new[j] = base_correct_to
                     else:
                         # print("Ambiguous correction")
                         pass
-        print("Corrected {0} pos in seq of length {1}".format(pos_corrected, len(s)))
+
+        print("Corrected {0} subs pos and {1} ins pos in seq of length {2}".format(subs_pos_corrected, ins_pos_corrected, len(s)))
 
 
         accessions_of_s = seq_to_acc[s] 

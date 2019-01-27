@@ -275,32 +275,32 @@ def main(args):
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(args.fastq, 'r')))}
     seq_to_index = get_seq_to_index(reads)
 
-    spoa_corrected = open(args.fastq)  #{ i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(args.fastq, 'r')))}
+    # spoa_corrected = open(args.fastq)  #{ i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(args.fastq, 'r')))}
     isocon_corrected = open(args.fastq) #{ i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(args.fastq, 'r')))}
     print("Correcting {0} reads.".format(len(reads)))
     start = time()
 
-    for iteration in range(1,4):
+    for iteration in range(1,10):
         print()
         print("ITERATION", iteration)
         
-        # MSA
-        reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(spoa_corrected.name, "r")))}
-        seq_to_index = get_seq_to_index(reads)
-        ref_file_spoa = os.path.join(args.outfolder, "reference_{0}_spoa.fa".format(iteration))
-        spoa_out_file = os.path.join(args.outfolder, "spoa_out_{0}.fa".format(iteration))
-        reference_seq, msa = create_augmented_reference.run_spoa(spoa_corrected.name, ref_file_spoa, spoa_out_file, "spoa")
-        reference_qual = "".join(["," for i in range(len(reference_seq))]) 
-        partition = {}
-        for seq_aln in msa:
-            seq = "".join(n for n in seq_aln if n != "-")
-            partition[seq] = (seq_aln, len(seq_to_index[seq]))
+        # # MSA
+        # reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(readfq(open(spoa_corrected.name, "r")))}
+        # seq_to_index = get_seq_to_index(reads)
+        # ref_file_spoa = os.path.join(args.outfolder, "reference_{0}_spoa.fa".format(iteration))
+        # spoa_out_file = os.path.join(args.outfolder, "spoa_out_{0}.fa".format(iteration))
+        # reference_seq, msa = create_augmented_reference.run_spoa(spoa_corrected.name, ref_file_spoa, spoa_out_file, "spoa")
+        # reference_qual = "".join(["," for i in range(len(reference_seq))]) 
+        # partition = {}
+        # for seq_aln in msa:
+        #     seq = "".join(n for n in seq_aln if n != "-")
+        #     partition[seq] = (seq_aln, len(seq_to_index[seq]))
 
-        corrected_spoa = correct_seqs.msa(reference_seq, partition, seq_to_index)
-        spoa_corrected = open(os.path.join(args.outfolder, "corrected_reads_spoa_{0}.fastq".format(iteration)), "w")
-        for acc in sorted(corrected_spoa):
-            spoa_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_spoa[acc], "+", ","*len(corrected_spoa[acc])))
-        spoa_corrected.close()
+        # corrected_spoa = correct_seqs.msa(reference_seq, partition, seq_to_index)
+        # spoa_corrected = open(os.path.join(args.outfolder, "corrected_reads_spoa_{0}.fastq".format(iteration)), "w")
+        # for acc in sorted(corrected_spoa):
+        #     spoa_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_spoa[acc], "+", ","*len(corrected_spoa[acc])))
+        # spoa_corrected.close()
 
 
         # ISOCON
@@ -308,12 +308,26 @@ def main(args):
         seq_to_index = get_seq_to_index(reads)
         ref_file_isocon = os.path.join(args.outfolder, "reference_{0}_isocon.fa".format(iteration))
         isocon_out_file = os.path.join(args.outfolder, "isocon_out_{0}.fa".format(iteration))
-        reference_seq, msa = create_augmented_reference.run_spoa(isocon_corrected.name, ref_file_isocon, isocon_out_file, "spoa")
+        dot_graph_path = os.path.join(args.outfolder, "graph_isocon_{0}.dot".format(iteration))
+        reference_seq, msa = create_augmented_reference.run_spoa(isocon_corrected.name, ref_file_isocon, isocon_out_file, "spoa", dot_graph_path)
+        reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
+        
+        reference_qual_longest_path = "".join(["," for i in range(len(reference_seq_longest_path))]) 
         reference_qual = "".join(["," for i in range(len(reference_seq))]) 
+
+        error_rate_sum, ref_longest_alignment, ref_alignment, alignment_ratio, block_coverage = block_align(reference_seq, reference_seq_longest_path, reference_qual, reference_qual_longest_path, args)
+        print(ref_longest_alignment)
+        print(ref_alignment)
+        sys.exit()
+
         partition = {}
         for j in range(0, len(reads)):
             acc, seq, qual = reads[j]
             error_rate_sum, read_alignment, ref_alignment, alignment_ratio, block_coverage = block_align(reference_seq, seq, reference_qual, qual, args)
+            print(ref_alignment)
+            print(read_alignment)
+            print(block_coverage)
+            print()
             mismatches = len([ 1 for n1, n2 in zip(ref_alignment,read_alignment) if n1 != n2 and n1 != "-" and n2 != "-" ])
             matches = len([ 1 for n1, n2 in zip(ref_alignment,read_alignment) if n1 == n2 and n1 != "-"])
             indels = len(ref_alignment) - mismatches - matches
@@ -327,6 +341,10 @@ def main(args):
         for acc in sorted(corrected_isocon):
             isocon_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_isocon[acc], "+", ","*len(corrected_isocon[acc]) ))
         isocon_corrected.close()
+
+
+
+
 
     # sys.exit()
 
