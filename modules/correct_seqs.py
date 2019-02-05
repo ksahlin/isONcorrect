@@ -368,7 +368,7 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc):
         # for i,pos_dict in enumerate(PFM):
         #     print(i, pos_dict)
 
-        S_prime_partition = correct_from_msa(partition, PFM, seq_to_acc)
+        S_prime_partition = correct_from_msa(repr_seq, partition, PFM, seq_to_acc)
 
     else:
         print("Partition converged: Partition size(unique strings):{0}, partition support: {1}.".format(len(partition), N_t))
@@ -393,7 +393,7 @@ def PFM_from_msa(partition):
     return PFM
 
 
-def correct_from_msa(partition, PFM, seq_to_acc):
+def correct_from_msa(ref_seq, partition, PFM, seq_to_acc):
     nr_columns = len(PFM)
     S_prime_partition = {}
     
@@ -402,16 +402,30 @@ def correct_from_msa(partition, PFM, seq_to_acc):
     #     (max_c, max_n) = max([ (PFM[j][n], n) for n in PFM[j] if n != "-"], key = lambda x: x[0])
     #     max_vector.append( (max_c, max_n) )
     # print(max_vector)
-
+    ref_alignment = partition[ref_seq][0]
     for s in partition:
+        if s == ref_seq:
+            continue
         subs_pos_corrected = 0
         ins_pos_corrected = 0
+        del_pos_corrected = 0
         seq_aln, cnt = partition[s]
         s_new = [n for n in seq_aln]
 
         if cnt == 1:
             for j, n in enumerate(seq_aln):
 
+                ref_nucl = ref_alignment[j]
+                if n == ref_nucl:
+                    continue
+                else:
+                    if n == "-":
+                        s_new[j] = ref_nucl
+                        del_pos_corrected += 1
+                    else: # n is an insertion w.r.t. reference
+
+                        # print(n)
+                
                 # ### new ###
                 # if n == "-":
                 #     pass
@@ -421,27 +435,28 @@ def correct_from_msa(partition, PFM, seq_to_acc):
                 #     s_new[j] = "-"
                 # #########
 
-                if PFM[j][n] < 5:
-                    # print(j, PFM[j])
-                    tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
-                    dels = tmp_dict["-"]
-                    del tmp_dict["-"]
-                    other_variant_counts = [tmp_dict[n] for n in tmp_dict if tmp_dict[n] >= 5]
-                    if len(other_variant_counts) > 0:
-                        base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
-                        # print(n, base_correct_to, tmp_dict)
-                        s_new[j] = base_correct_to
-                        subs_pos_corrected += 1
-                    elif len(other_variant_counts) == 0:
-                        base_correct_to = "-"
-                        # print(n, base_correct_to, tmp_dict)
-                        ins_pos_corrected += 1
-                        s_new[j] = base_correct_to
-                    else:
-                        # print("Ambiguous correction")
-                        pass
+                        if PFM[j][n] < 2:
+                            # print(j, PFM[j])
+                            tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
+                            dels = tmp_dict["-"]
+                            del tmp_dict["-"]
+                            other_variant_counts = [tmp_dict[n] for n in tmp_dict if tmp_dict[n] >= 2]
+                            if len(other_variant_counts) > 0:
+                                base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
+                                # print(n, base_correct_to, tmp_dict)
+                                s_new[j] = base_correct_to
+                                subs_pos_corrected += 1
+                            elif len(other_variant_counts) == 0:
+                                # base_correct_to = "-"
+                                # print(n, tmp_dict)
+                                ins_pos_corrected += 1
+                                # s_new[j] = base_correct_to
+                                continue
+                            else:
+                                # print("Ambiguous correction")
+                                pass
 
-        print("Corrected {0} subs pos and {1} ins pos in seq of length {2}".format(subs_pos_corrected, ins_pos_corrected, len(s)))
+        print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in seq of length {3}".format(subs_pos_corrected, ins_pos_corrected, del_pos_corrected, len(s)))
 
 
         accessions_of_s = seq_to_acc[s] 
