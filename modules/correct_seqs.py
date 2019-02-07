@@ -390,6 +390,12 @@ def PFM_from_msa(partition):
     # for j in range(nr_columns):
     #     cov = sum([ PFM[j][n] for n in PFM[j] if n != "-"])
     #     print(j,cov, cov_tot, [ PFM[j][n] for n in PFM[j] if n != "-"])
+    # print("A", "".join([str(min(p["A"], 9)) for p in PFM]))
+    # print("C", "".join([str(min(p["C"], 9)) for p in PFM]))
+    # print("G", "".join([str(min(p["G"], 9)) for p in PFM]))
+    # print("T", "".join([str(min(p["T"], 9)) for p in PFM]))
+    # sys.exit()
+
     return PFM
 
 
@@ -414,47 +420,96 @@ def correct_from_msa(ref_seq, partition, PFM, seq_to_acc):
 
         if cnt == 1:
             for j, n in enumerate(seq_aln):
-
                 ref_nucl = ref_alignment[j]
-                if n == ref_nucl:
-                    continue
-                else:
+                if n != ref_nucl:
                     if n == "-":
-                        s_new[j] = ref_nucl
-                        del_pos_corrected += 1
-                    else: # n is an insertion w.r.t. reference
-
-                        # print(n)
-                
-                # ### new ###
-                # if n == "-":
-                #     pass
-                # elif n != max_vector[j][1] and max_vector[j][0] >= 3:
-                #     s_new[j] = max_vector[j][1]
-                # elif max_vector[j][0] < 3:
-                #     s_new[j] = "-"
-                # #########
-
-                        if PFM[j][n] < 2:
-                            # print(j, PFM[j])
+                        if PFM[j][n] > 15:
+                            pass
+                        else:
+                            s_new[j] = ref_nucl
+                            del_pos_corrected += 1
+                    else:
+                        if PFM[j][n] > 2:
+                            pass
+                        else:
                             tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
-                            dels = tmp_dict["-"]
-                            del tmp_dict["-"]
-                            other_variant_counts = [tmp_dict[n] for n in tmp_dict if tmp_dict[n] >= 2]
-                            if len(other_variant_counts) > 0:
-                                base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
-                                # print(n, base_correct_to, tmp_dict)
-                                s_new[j] = base_correct_to
-                                subs_pos_corrected += 1
-                            elif len(other_variant_counts) == 0:
-                                # base_correct_to = "-"
-                                # print(n, tmp_dict)
-                                ins_pos_corrected += 1
-                                # s_new[j] = base_correct_to
-                                continue
+                            base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
+                            s_new[j] = base_correct_to
+                            if base_correct_to != "-":
+                                subs_pos_corrected +=1
                             else:
-                                # print("Ambiguous correction")
-                                pass
+                                ins_pos_corrected += 1
+
+                if n == ref_nucl:
+                    if PFM[j][n] <3:
+                        tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
+                        base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
+                        s_new[j] = base_correct_to
+                        if base_correct_to != "-":
+                            subs_pos_corrected +=1
+                        else:
+                            ins_pos_corrected += 1
+
+                # if PFM[j][n] < :
+                #     if n != ref_nucl:
+                #         s_new[j] = ref_nucl
+                #         if ref_nucl == "-":
+                #             ins_pos_corrected += 1
+                #         else:
+                #             del_pos_corrected += 1
+
+                #     else:
+                #         tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
+                #         base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
+                #         s_new[j] = base_correct_to
+                #         if n == "-":
+                #             del_pos_corrected += 1
+                #         elif base_correct_to != "-":
+                #             subs_pos_corrected +=1
+                #         else:
+                #             ins_pos_corrected += 1
+
+
+                # ref_nucl = ref_alignment[j]
+                # if n == ref_nucl:
+                #     continue
+                # else:
+                #     if n == "-":
+                #         s_new[j] = ref_nucl
+                #         del_pos_corrected += 1
+                #     else: # n is an insertion w.r.t. reference
+
+                #         # print(n)
+                
+                # # ### new ###
+                # # if n == "-":
+                # #     pass
+                # # elif n != max_vector[j][1] and max_vector[j][0] >= 3:
+                # #     s_new[j] = max_vector[j][1]
+                # # elif max_vector[j][0] < 3:
+                # #     s_new[j] = "-"
+                # # #########
+
+                #         if PFM[j][n] < 2:
+                #             # print(j, PFM[j])
+                #             tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
+                #             dels = tmp_dict["-"]
+                #             del tmp_dict["-"]
+                #             other_variant_counts = [tmp_dict[n] for n in tmp_dict if tmp_dict[n] >= 2]
+                #             if len(other_variant_counts) > 0:
+                #                 base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
+                #                 # print(n, base_correct_to, tmp_dict)
+                #                 s_new[j] = base_correct_to
+                #                 subs_pos_corrected += 1
+                #             elif len(other_variant_counts) == 0:
+                #                 # base_correct_to = "-"
+                #                 # print(n, tmp_dict)
+                #                 ins_pos_corrected += 1
+                #                 # s_new[j] = base_correct_to
+                #                 continue
+                #             else:
+                #                 # print("Ambiguous correction")
+                #                 pass
 
         print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in seq of length {3}".format(subs_pos_corrected, ins_pos_corrected, del_pos_corrected, len(s)))
 
