@@ -381,7 +381,7 @@ def main(args):
             print()
 
 
-            read_exon_boundaries[acc] = exon_boundaries
+            read_exon_boundaries[j] = exon_boundaries
             mismatches = len([ 1 for n1, n2 in zip(ref_alignment,read_alignment) if n1 != n2 and n1 != "-" and n2 != "-" ])
             matches = len([ 1 for n1, n2 in zip(ref_alignment,read_alignment) if n1 == n2 and n1 != "-"])
             indels = len(ref_alignment) - mismatches - matches
@@ -391,8 +391,8 @@ def main(args):
 
         print([len(eb) for eb in read_exon_boundaries.values()])
         break_point_position_counter = {}
-        for acc in read_exon_boundaries:
-            for p in read_exon_boundaries[acc]:
+        for read_id in read_exon_boundaries:
+            for p in read_exon_boundaries[read_id]:
                 if p in break_point_position_counter:
                     break_point_position_counter[p] +=1
                 else:
@@ -400,21 +400,35 @@ def main(args):
         print(len(break_point_position_counter))
 
         isoforms = {}
-        for acc in read_exon_boundaries:
+        read_acc_to_isoform = {}
+        for read_id in read_exon_boundaries:
             v = []
-            for p in read_exon_boundaries[acc]:
+            for p in read_exon_boundaries[read_id]:
                 for eb in  [50, 110, 200, 260]:
                     if abs(p - eb) <= 10:
                         v.append(eb)
             iso = tuple(sorted(set(v))) if tuple(sorted(set(v))) else (0,0)
-            print(iso, acc)
+            print(iso, read_id)
             if iso in isoforms:
                 isoforms[iso] += 1
             else:
                 isoforms[iso]  = 1
+            read_acc_to_isoform[read_id] = iso
 
         print(isoforms)
         print(sorted([ (p,c) for p,c in break_point_position_counter.items()]))
+
+
+        for iso in isoforms:
+            iso_file = open(os.path.join(args.outfolder, "isoform_{0}.fastq".format(iso)), "w")
+            for read_id, read_iso in read_acc_to_isoform.items():
+                # print(read_acc_to_isoform.keys())
+                # print(reads.keys())
+                if read_iso == iso:
+                    acc, seq, qual = reads[read_id]
+                    iso_file.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, seq, "+", qual))
+
+
         sys.exit()
 
         corrected_isocon = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition, seq_to_index)
