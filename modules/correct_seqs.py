@@ -511,7 +511,7 @@ def correct_from_msa(ref_seq, partition, PFM, seq_to_acc):
                 #                 # print("Ambiguous correction")
                 #                 pass
 
-        print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in seq of length {3}".format(subs_pos_corrected, ins_pos_corrected, del_pos_corrected, len(s)))
+        # print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in seq of length {3}".format(subs_pos_corrected, ins_pos_corrected, del_pos_corrected, len(s)))
 
 
         accessions_of_s = seq_to_acc[s] 
