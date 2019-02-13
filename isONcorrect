@@ -55,6 +55,26 @@ def get_exon_boundaries(ref_alignment, block_coverage):
             ref_pos += 1
     return exon_boundaries
 
+def get_deletion_coordinates(ref_alignment, read_alignment):
+    deletion_coordinates = []
+    ref_pos = 0
+    del_state = False
+    cand_deletion = []
+    for i, n in enumerate(read_alignment):
+        if n == "-":
+            del_state = True
+            cand_deletion.append(ref_pos)
+        elif n != "-":
+            del_state = False
+            if len(cand_deletion) > 10:
+                deletion_coordinates.append(cand_deletion)
+            cand_deletion = []
+
+        if ref_alignment[i] != "-":
+            ref_pos += 1
+    deletion_coordinates = [item for sublist in deletion_coordinates for item in sublist]
+    return deletion_coordinates
+
 def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
@@ -68,7 +88,7 @@ def main(args):
     print("Correcting {0} reads.".format(len(reads)))
     start = time()
 
-    for iteration in range(1,10):
+    for iteration in range(1,2):
         print()
         print("ITERATION", iteration)
         args.iteration = iteration
@@ -112,20 +132,50 @@ def main(args):
         
         parasail_alignments = align.align_parasail(isocon_corrected.name, reference_seq_longest_path, args)
         mm2_alignments = align.align_mm2( isocon_corrected.name, reference_seq_longest_path, args)
+        # align.align_with_nlmgr(isocon_corrected, reference_seq_longest_path)
+
+
+        partition_mm2 = {}
+        partition_parasail = {}
+        partition_mm2[reference_seq_longest_path] = (0, reference_seq_longest_path, reference_seq_longest_path, 1)
+        partition_parasail[reference_seq_longest_path] = (0, reference_seq_longest_path, reference_seq_longest_path, 1)
+        # dels_parasail = []
+        # dels_mm2 = []
+        dels_distr_ref = []
         for j in range(0, len(reads)):
-            print(j)
-            print(parasail_alignments[j][1], "parasail")
-            print(parasail_alignments[j][2], "ref")
-            exon_boundaries = get_exon_boundaries(parasail_alignments[j][2], parasail_alignments[j][3])
-            print(exon_boundaries)
+            # print(j)
+            # print(parasail_alignments[j][1], "parasail")
+            # print(parasail_alignments[j][2], "ref")
+            exon_boundaries_parasail = get_exon_boundaries(parasail_alignments[j][2], parasail_alignments[j][3])
+            # print(exon_boundaries)
             print(mm2_alignments[j][1], "mm2")
             print(mm2_alignments[j][2], "ref")
-            exon_boundaries = get_exon_boundaries(mm2_alignments[j][2], mm2_alignments[j][3])
-            print(exon_boundaries)
+            exon_boundaries_mm2 = get_exon_boundaries(mm2_alignments[j][2], mm2_alignments[j][3])
+            deletion_coordinates_mm2 = get_deletion_coordinates(mm2_alignments[j][2], mm2_alignments[j][1])
+            # print(exon_boundaries)
+            print(deletion_coordinates_mm2)
+            dels_distr_ref.append(deletion_coordinates_mm2)
 
+            acc, seq, qual = reads[j]
+            partition_mm2[seq] = (0, mm2_alignments[j][2], mm2_alignments[j][1], len(seq_to_index[seq]))
+            partition_parasail[seq] = (0, parasail_alignments[j][2], parasail_alignments[j][1], len(seq_to_index[seq]))
+        dels_distr_ref = [coord for sublist in dels_distr_ref for coord in sublist]
 
-        # align.align_with_nlmgr(isocon_corrected, reference_seq_longest_path)
-        sys.exit()
+        d_c = open(os.path.join(args.outfolder, "dc.txt"), "w")        
+        for item in dels_distr_ref:
+            d_c.write("{0}\n".format(item))
+
+        from collections import Counter
+        c = Counter(dels_distr_ref)
+        print(c)
+        corrected_mm2 = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition_mm2, seq_to_index)
+        corrected_parasail = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition_parasail, seq_to_index)
+
+        isocon_corrected = open(os.path.join(args.outfolder, "corrected_reads_mm2_{0}.fastq".format(iteration)), "w")
+        for acc in sorted(corrected_mm2):
+            isocon_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_mm2[acc], "+", ","*len(corrected_mm2[acc]) ))
+        isocon_corrected.close()
+        # sys.exit()
 
         # read_exon_boundaries = {}
         # partition = {}
@@ -152,51 +202,51 @@ def main(args):
         #     # block_dict[acc] =  [ phred_char_to_val[q] for q in block_coverage]
         #     partition[seq] = (matches+indels, ref_alignment, read_alignment, len(seq_to_index[seq]))
 
-        print([len(eb) for eb in read_exon_boundaries.values()])
-        break_point_position_counter = {}
-        for read_id in read_exon_boundaries:
-            for p in read_exon_boundaries[read_id]:
-                if p in break_point_position_counter:
-                    break_point_position_counter[p] +=1
-                else:
-                    break_point_position_counter[p] = 1
-        print(len(break_point_position_counter))
+        # print([len(eb) for eb in read_exon_boundaries.values()])
+        # break_point_position_counter = {}
+        # for read_id in read_exon_boundaries:
+        #     for p in read_exon_boundaries[read_id]:
+        #         if p in break_point_position_counter:
+        #             break_point_position_counter[p] +=1
+        #         else:
+        #             break_point_position_counter[p] = 1
+        # print(len(break_point_position_counter))
 
 
 
-        isoforms = {}
-        read_acc_to_isoform = {}
-        for read_id in read_exon_boundaries:
-            v = []
-            for p in read_exon_boundaries[read_id]:
-                for eb in  [50, 110, 200, 260]:
-                    if abs(p - eb) <= 10:
-                        v.append(eb)
-            iso = tuple(sorted(set(v))) if tuple(sorted(set(v))) else (0,0)
-            print(iso, read_id)
-            if iso in isoforms:
-                isoforms[iso] += 1
-            else:
-                isoforms[iso]  = 1
-            read_acc_to_isoform[read_id] = iso
+        # isoforms = {}
+        # read_acc_to_isoform = {}
+        # for read_id in read_exon_boundaries:
+        #     v = []
+        #     for p in read_exon_boundaries[read_id]:
+        #         for eb in  [50, 110, 200, 260]:
+        #             if abs(p - eb) <= 10:
+        #                 v.append(eb)
+        #     iso = tuple(sorted(set(v))) if tuple(sorted(set(v))) else (0,0)
+        #     print(iso, read_id)
+        #     if iso in isoforms:
+        #         isoforms[iso] += 1
+        #     else:
+        #         isoforms[iso]  = 1
+        #     read_acc_to_isoform[read_id] = iso
 
-        print(isoforms)
-        print(sorted([ (p,c) for p,c in break_point_position_counter.items()]))
-
-
-        for iso in isoforms:
-            iso_file = open(os.path.join(args.outfolder, "isoform_{0}.fastq".format(iso)), "w")
-            for read_id, read_iso in read_acc_to_isoform.items():
-                # print(read_acc_to_isoform.keys())
-                # print(reads.keys())
-                if read_iso == iso:
-                    acc, seq, qual = reads[read_id]
-                    iso_file.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, seq, "+", qual))
+        # print(isoforms)
+        # print(sorted([ (p,c) for p,c in break_point_position_counter.items()]))
 
 
-        sys.exit()
+        # for iso in isoforms:
+        #     iso_file = open(os.path.join(args.outfolder, "isoform_{0}.fastq".format(iso)), "w")
+        #     for read_id, read_iso in read_acc_to_isoform.items():
+        #         # print(read_acc_to_isoform.keys())
+        #         # print(reads.keys())
+        #         if read_iso == iso:
+        #             acc, seq, qual = reads[read_id]
+        #             iso_file.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, seq, "+", qual))
 
-        corrected_isocon = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition, seq_to_index)
+
+        # sys.exit()
+
+        # corrected_isocon = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition, seq_to_index)
 
         # partition = {}
         # partition[reference_seq] = (0, reference_seq, reference_seq, 1)
@@ -216,10 +266,11 @@ def main(args):
         #     partition[seq] = (matches+indels, ref_alignment, read_alignment, len(seq_to_index[seq]))
         # corrected_isocon = correct_seqs.correct_to_consensus(reference_seq, partition, seq_to_index)
 
-        isocon_corrected = open(os.path.join(args.outfolder, "corrected_reads_isocon_{0}.fastq".format(iteration)), "w")
-        for acc in sorted(corrected_isocon):
-            isocon_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_isocon[acc], "+", ","*len(corrected_isocon[acc]) ))
-        isocon_corrected.close()
+        # isocon_corrected = open(os.path.join(args.outfolder, "corrected_reads_isocon_{0}.fastq".format(iteration)), "w")
+        # for acc in sorted(corrected_isocon):
+        #     isocon_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_isocon[acc], "+", ","*len(corrected_isocon[acc]) ))
+        # isocon_corrected.close()
+        
         # sys.exit()
 
     # # correct all seqs w.r.t. origin consensus

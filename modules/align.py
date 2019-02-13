@@ -52,7 +52,7 @@ def align_mm2(reads, ref, args):
     sam_file = minimap2(ref_file, reads,  minimap2_out)
     
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(reads,"r")))}
-
+    reads_acc_to_index = { acc : i for i, (acc, seq, qual) in reads.items()}
     k = args.k
     best_matches = {}
     current_min_ed = {}
@@ -63,18 +63,19 @@ def align_mm2(reads, ref, args):
     references = SAM_file.references
     alignments = {}
     for read in SAM_file.fetch(until_eof=True):
+        read_index = reads_acc_to_index[read.qname]
         if read.is_reverse:
             # print("read {0} is reverse complemented aligned to {1}.".format(read.query_name, references[read.reference_id]))
             # print(read.tostring(SAM_file))
             # sys.exit()
             continue
         if read.is_unmapped:
-            acc, read_seq, qual = reads[int(read.qname)]
+            acc, read_seq, qual = reads[read_index]
             print(read.qname, "is umapped", len(read_seq))
             continue
 
 
-        acc, read_seq, qual = reads[int(read.qname)]
+        acc, read_seq, qual = reads[read_index]
         # cigar = read.cigarstring
         # print(read.qname, len(read_seq))
         ref_alignment, m_line, read_alignment = cigar_to_seq_mm2(read, ref, read_seq)
@@ -84,7 +85,7 @@ def align_mm2(reads, ref, args):
         # print(ref_alignment)
         # print(read_alignment)
         # print(block_coverage)
-        alignments[int(read.qname)] = (acc, read_alignment, ref_alignment, block_coverage)
+        alignments[read_index] = (acc, read_alignment, ref_alignment, block_coverage)
 
     return alignments
 
