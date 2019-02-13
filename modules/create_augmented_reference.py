@@ -97,6 +97,26 @@ def run_spoa(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
 
     return consensus, msa
 
+
+
+
+# For eventual De Bruijn graph approach
+import itertools
+from collections import defaultdict
+def kmer_counter(reads):
+    k_size = 13
+    count = defaultdict(int)
+    for r_i in reads:
+        (acc, seq, qual) = reads[r_i]
+        # seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
+        read_kmers = deque([seq[i:i+k_size] for i in range(len(seq) - k_size )])
+        for kmer in read_kmers:
+            count[kmer] += 1
+
+    cnt_sorted = sorted(count.items(), key = lambda x: x[1], reverse=True)
+    print(cnt_sorted[:300])
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Maps the given reads with bwa.")
     parser.add_argument('reads', type=str, help='Fasta or fastq')
