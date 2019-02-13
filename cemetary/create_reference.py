@@ -207,3 +207,59 @@ def main(args):
     print("r2", "".join(r2))
 
     sys.exit()
+
+
+
+
+def add_segment(reference_alignment, read_alignment, qual, reference_qual, ref_count_vector):
+    curr_ref_pos = 0
+    curr_aln_pos = 0
+    new_ref = []
+    new_quals = []
+    new_ref_count_vector = []
+    for ch, g in itertools.groupby(reference_alignment):
+        l = list(g)
+        if l[0] == "-" and len(l) > 10 : # add quality values of read check here
+            # print(l)
+            read_pos = len([read_char for read_char in read_alignment[:curr_aln_pos] if read_char != "-"])
+            q_part = qual[read_pos:read_pos+ len(l)]
+            # print([round(phred_char_to_p[q_v], 4) for q_v in q_part])
+            print("AVG:", sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)))
+            print(read_alignment[curr_aln_pos: curr_aln_pos + len(l)] )
+            if sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)) < 0.2:
+                print("Adding")
+                new_ref.append(read_alignment[curr_aln_pos: curr_aln_pos + len(l)] )
+                new_quals.append(qual[read_pos:read_pos+ len(l)])
+                new_ref_count_vector.append([1]*len(l))
+        if l[0] != "-":
+            new_ref.append(l)
+            new_quals.append(reference_qual[curr_ref_pos : curr_ref_pos + len(l)])
+            new_ref_count_vector.append(ref_count_vector[curr_ref_pos : curr_ref_pos + len(l)])
+            curr_ref_pos += len(l)
+
+        curr_aln_pos += len(l)
+
+    reference_seq = "".join([c for sublist in new_ref for c in sublist])
+    reference_qual = "".join([c for sublist in new_quals for c in sublist])
+    reference_count_vector = [c for sublist in new_ref_count_vector for c in sublist]
+    print(len(reference_seq), len(reference_qual), len(reference_count_vector))  
+    assert len(reference_seq) == len(reference_qual) == len(reference_count_vector)
+
+    return reference_seq, reference_qual, reference_count_vector
+
+
+# def segment_should_be_added(reference_alignment, read_alignment, qual):
+#     curr_ref_pos = 0
+#     curr_aln_pos = 0
+#     for ch, g in itertools.groupby(reference_alignment):
+#         l = list(g)
+#         if l[0] == "-" and len(l) > 10 : # add quality values of read check here
+#             read_pos = len([read_char for read_char in read_alignment[:curr_aln_pos] if read_char != "-"])
+#             q_part = qual[read_pos:read_pos+ len(l)]
+#             if sum([phred_char_to_p[q_v] for q_v in q_part])/float(len(q_part)) < 0.2:
+#                 return True
+#         if l[0] != "-":
+#             curr_ref_pos += len(l)
+#         curr_aln_pos += len(l)
+#     return False
+
