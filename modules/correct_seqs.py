@@ -417,8 +417,19 @@ def blocks_from_msa(ref_seq, partition, k, match_id):
 
     return block_matrix
 
+def get_block_freqs(block_matrix):
+    nr_columns = len(len( list(block_matrix.values())[0][0])) 
+    BLOCK_FREQ = [0 for j in range(nr_columns)]
+    for s in block_matrix:
+        block_v, cnt = block_matrix[s]
+        for j in range(nr_columns):
+            BLOCK_FREQ[j] += cnt*block_v[j]
 
-def correct_to_consensus(repr_seq, partition, seq_to_acc):
+    for j in range(nr_columns):
+        print(j, BLOCK_FREQ[j])
+
+
+def correct_to_consensus(repr_seq, partition, seq_to_acc, k, match_id, read_errors, global_probs):
     """
          partition[seq] = (edit_dist, aln_rep, aln_s, depth_of_string)
     """
@@ -432,8 +443,16 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc):
         # PFM = create_position_frequency_matrix(alignment_matrix, partition)
         # for i,pos_dict in enumerate(PFM):
         #     print(i, pos_dict)
-        blocks = blocks_from_msa(repr_seq, partition, 13, 10)
-        S_prime_partition = correct_from_msa(repr_seq, partition, PFM, seq_to_acc)
+        blocks = blocks_from_msa(repr_seq, partition, k, match_id)
+        block_freq_vector = get_block_freqs(block_matrix)
+        
+        pos_cutoffs = [{} for p in range(len(block_freq_vector))]
+        for i, c in enumerate(block_freq_vector): # poisson rates
+            pos_cutoffs[i]["d"] = min(1, (c * global_probs[0]) + 3*math.sqrt((c * global_probs[0])) )
+            pos_cutoffs[i]["mm"] = min(1, (c * global_probs[1]) + 3*math.sqrt((c * global_probs[1])) )
+            pos_cutoffs[i]["i"] = min(1, (c * global_probs[2]) + 3*math.sqrt((c * global_probs[2])) )
+            
+        S_prime_partition = correct_from_msa(repr_seq, partition, PFM, seq_to_acc, pos_cutoffs = pos_cutoffs)
         sys.exit()
     else:
         print("Partition converged: Partition size(unique strings):{0}, partition support: {1}.".format(len(partition), N_t))
@@ -474,7 +493,7 @@ def PFM_from_msa(partition):
     return PFM
 
 
-def correct_from_msa(ref_seq, partition, PFM, seq_to_acc):
+def correct_from_msa(ref_seq, partition, PFM, seq_to_acc, pos_cutoffs = []):
     nr_columns = len(PFM)
     S_prime_partition = {}
     

@@ -32,7 +32,7 @@ def minimap2(reference, reads, outfile):
 
     with open(outfile, "w") as minimap_file:
         sys.stdout.flush()
-        subprocess.check_call([ "minimap2", "-ax", "splice", "-un", "-k9", "-w 1", "-n1", "-m 1", "-r 1000", "-s 10",
+        subprocess.check_call([ "minimap2", "-ax", "splice", "-un", "-k13", "-w 1", "-n1", "-m 80", "-r 1000", "-s40", "-O4,24", "-E2,1",
                                 "-t", str(processes),
                                reference, reads ],
                                 stdout=minimap_file,
@@ -72,6 +72,7 @@ def align_mm2(reads, ref, args):
         if read.is_unmapped:
             acc, read_seq, qual = reads[read_index]
             print(read.qname, "is umapped", len(read_seq))
+            alignments[read_index] = (acc, "unaligned", "unaligned", [])
             continue
 
 
@@ -86,7 +87,6 @@ def align_mm2(reads, ref, args):
         # print(read_alignment)
         # print(block_coverage)
         alignments[read_index] = (acc, read_alignment, ref_alignment, block_coverage)
-
     return alignments
 
 
