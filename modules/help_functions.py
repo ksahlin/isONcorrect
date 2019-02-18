@@ -46,3 +46,10 @@ def mkdir_p(path):
             pass
         else:
             raise
+
+
+def get_read_errors(ref_aln, read_aln, block_vector):
+    aligned_length = sum(block_vector)
+    errors = ["I" if n1 == "-" else "D" if n2 == "-" else "S" for i, (n1, n2) in enumerate(zip(ref_aln, read_aln)) if block_vector[i] == 1 and n1 != n2 ]
+    ins, del_, subs = errors.count("I"), errors.count("D"), errors.count("S")
+    return (ins, del_, subs,  aligned_length)

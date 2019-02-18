@@ -122,6 +122,7 @@ def main(args):
 
         isocon_out_file = os.path.join(args.outfolder, "isocon_out_{0}_affine.fa".format(iteration))
         reference_seq, msa = create_augmented_reference.run_spoa_affine(isocon_corrected.name, ref_file_isocon, isocon_out_file, "spoa_affine", dot_graph_path)
+
         reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
         
         # reference_qual_longest_path = "".join(["+" for i in range(len(reference_seq_longest_path))]) 
@@ -129,7 +130,7 @@ def main(args):
         # error_rate_sum, ref_longest_alignment, ref_alignment, alignment_ratio, block_coverage = block_align(reference_seq, reference_seq_longest_path, reference_qual, reference_qual_longest_path, args)
         # print(ref_longest_alignment)
         # print(ref_alignment)
-        
+        # reference_seq_longest_path = "GGGGTCAGATGCCCTGTAATGAGCCACAGAAACTTGGGCCCATGGGTAGGTTCCAGGAGAGAGGGGCCTGGAGGGGTCCTCAGCCCTGGGGGATTGGGGTGTCAAGCAACTTCTCTCTCCAGGCTCAGTCCTGCGGTCTGTGGGGAGACCTTCCTGTGGGCGCAGCTGGAGTCAAGGCTTGGGGTCTTGGGGTATGCTTCGCAGACAAAGCAGCTGTGCCAGTCTCCGAGTTCCTGGGACTCTGCCAGATCCAGGGCATCCTGAGCGGGCCCGGCTGGGGTGGGGATGGGGTCCGAGGGC"
         parasail_alignments = align.align_parasail(isocon_corrected.name, reference_seq_longest_path, args)
         mm2_alignments = align.align_mm2( isocon_corrected.name, reference_seq_longest_path, args)
         # align.align_with_nlmgr(isocon_corrected, reference_seq_longest_path)
@@ -148,18 +149,21 @@ def main(args):
             # print(parasail_alignments[j][2], "ref")
             exon_boundaries_parasail = get_exon_boundaries(parasail_alignments[j][2], parasail_alignments[j][3])
             # print(exon_boundaries)
-            print(mm2_alignments[j][1], "mm2")
-            print(mm2_alignments[j][2], "ref")
-            exon_boundaries_mm2 = get_exon_boundaries(mm2_alignments[j][2], mm2_alignments[j][3])
-            deletion_coordinates_mm2 = get_deletion_coordinates(mm2_alignments[j][2], mm2_alignments[j][1])
+            # print(mm2_alignments[j][1], "mm2")
+            # print(mm2_alignments[j][2], "ref")
+            # exon_boundaries_mm2 = get_exon_boundaries(mm2_alignments[j][2], mm2_alignments[j][3])
+            # deletion_coordinates_mm2 = get_deletion_coordinates(mm2_alignments[j][2], mm2_alignments[j][1])
+
+            (ins, del_, subs,  aligned_length) = help_functions.get_read_errors(parasail_alignments[j][2], parasail_alignments[j][1], parasail_alignments[j][3])
+            print(ins, del_, subs,  aligned_length)
             # print(exon_boundaries)
-            print(deletion_coordinates_mm2)
-            dels_distr_ref.append(deletion_coordinates_mm2)
+            # print(deletion_coordinates_mm2)
+            # dels_distr_ref.append(deletion_coordinates_mm2)
 
             acc, seq, qual = reads[j]
             partition_mm2[seq] = (0, mm2_alignments[j][2], mm2_alignments[j][1], len(seq_to_index[seq]))
             partition_parasail[seq] = (0, parasail_alignments[j][2], parasail_alignments[j][1], len(seq_to_index[seq]))
-        dels_distr_ref = [coord for sublist in dels_distr_ref for coord in sublist]
+        # dels_distr_ref = [coord for sublist in dels_distr_ref for coord in sublist]
 
         d_c = open(os.path.join(args.outfolder, "dc.txt"), "w")        
         for item in dels_distr_ref:
@@ -168,8 +172,10 @@ def main(args):
         from collections import Counter
         c = Counter(dels_distr_ref)
         print(c)
-        corrected_mm2 = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition_mm2, seq_to_index)
+        # corrected_mm2 = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition_mm2, seq_to_index)
+        global_error_rates = 
         corrected_parasail = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition_parasail, seq_to_index)
+        sys.exit()
 
         isocon_corrected = open(os.path.join(args.outfolder, "corrected_reads_mm2_{0}.fastq".format(iteration)), "w")
         for acc in sorted(corrected_mm2):
