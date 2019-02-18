@@ -2,6 +2,9 @@ import edlib
 import re
 import math
 
+from collections import deque
+
+
 def annotate_with_quality_values(alignment_matrix, seq_to_acc, qual_dict):
     alignment_matrix_of_qualities = {}
     alignment_matrix_of_max_qualities = {}
@@ -352,6 +355,68 @@ def position_query_to_alignment(query_aligned, target_aligned, target_alignment_
 
 
 
+def get_block_vector(match_vector, k, match_id):
+    # initialization
+    pos = 0
+    valid_positions = 0
+    current_match_count = 0
+    while valid_positions <=k:
+        if match_vector[pos] == -1:
+            pass
+        else:
+            current_match_count += match_vector[pos]
+            valid_positions +=1
+        pos +=1
+    match_window = deque([ val for val in match_vector[:pos] if val != -1])
+
+    # match_window = deque(match_vector[:k]) # initialization
+    # current_match_count = sum([m for m in match_window)
+    aligned_region = []
+    if current_match_count >= match_id:
+        aligned_region.append(1)
+    else:
+        aligned_region.append(0)
+    curr_window_state = 1 if current_match_count >= match_id else 0
+    for new_m_state in match_vector[pos:]:
+        if new_m_state == -1:
+            aligned_region.append(curr_window_state)
+        else:
+            prev_m_state = match_window.popleft()
+            current_match_count = current_match_count - prev_m_state + new_m_state 
+            curr_window_state = 1 if current_match_count >= match_id else 0
+            match_window.append(new_m_state)
+            aligned_region.append(curr_window_state)
+
+    # print(len(aligned_region))
+    aligned_region = aligned_region + [m for m in [aligned_region[-1]]*(pos-1) ]
+    # print(match_vector)
+    # print(aligned_region)
+    # print(len(aligned_region),len(match_vector))
+    assert len(aligned_region) == len(match_vector)
+    return aligned_region
+
+def get_block_coverage(read_alignment, ref_alignment, k, match_id):
+    match_vector = [ 0 if n1 != n2 else -1 if n2 == "-" else 1 for n1, n2 in zip(read_alignment, ref_alignment) ]
+    block_coverage_f = get_block_vector(match_vector, k, match_id)
+    block_coverage_reverse = get_block_vector(match_vector[::-1], k, match_id)
+    assert len(block_coverage_f) == len(block_coverage_reverse)
+    block_coverage = [ 1 if n1 +n2 >0 else 0 for n1, n2 in zip(block_coverage_f, block_coverage_reverse[::-1])]
+    return block_coverage
+
+def blocks_from_msa(ref_seq, partition, k, match_id):
+    block_matrix = {}
+    ref_aln = partition[ref_seq][0]
+    for s in partition:
+        if s == ref_seq:
+            continue
+        else:
+            seq_aln, cnt = partition[s]
+            block_vector = get_block_coverage(seq_aln, ref_aln, k, match_id)
+            print("".join([str(b) for b in block_vector]))
+            block_matrix[s] = (block_vector, cnt)
+
+    return block_matrix
+
 
 def correct_to_consensus(repr_seq, partition, seq_to_acc):
     """
@@ -367,13 +432,23 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc):
         # PFM = create_position_frequency_matrix(alignment_matrix, partition)
         # for i,pos_dict in enumerate(PFM):
         #     print(i, pos_dict)
-
+        blocks = blocks_from_msa(repr_seq, partition, 13, 10)
         S_prime_partition = correct_from_msa(repr_seq, partition, PFM, seq_to_acc)
-
+        sys.exit()
     else:
         print("Partition converged: Partition size(unique strings):{0}, partition support: {1}.".format(len(partition), N_t))
 
     
+    only_deletions_pos = set([p for p, d in enumerate(PFM) if d["A"] == d["C"] == d["G"] == d["T"] == 0] )
+    print("only deleted pos:", only_deletions_pos)
+    for seq, almnt in alignment_matrix.items():
+        if seq not in seq_to_acc:
+            print(">augmented_ref")
+        else:
+            print(">{0}".format(seq_to_acc[seq][0]))
+        print("".join([n for p, n in enumerate(almnt) if p not in only_deletions_pos]))
+    sys.exit()  
+
     return S_prime_partition
 
 

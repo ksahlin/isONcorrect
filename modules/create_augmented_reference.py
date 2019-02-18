@@ -58,7 +58,7 @@ def run_spoa_affine(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_pat
         print('Running spoa...', end=' ')
         stdout.flush()
         null = open("/dev/null", "w")
-        subprocess.check_call([ spoa_path, "-q", reads, "-l", "0", "-r", "2", "-o","-4", "-e", "0", "-d", dot_graph_path], stderr=output_file, stdout=null)
+        subprocess.check_call([ spoa_path, "-q", reads, "-l", "2", "-r", "2", "-o","-4", "-e", "0", "-d", dot_graph_path], stderr=output_file, stdout=null)
         print('Done.')
         stdout.flush()
     output_file.close()
