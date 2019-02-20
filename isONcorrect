@@ -88,7 +88,7 @@ def main(args):
     print("Correcting {0} reads.".format(len(reads)))
     start = time()
 
-    for iteration in range(1,2):
+    for iteration in range(1,3):
         print()
         print("ITERATION", iteration)
         args.iteration = iteration
@@ -148,7 +148,7 @@ def main(args):
             # print(j)
             # print(parasail_alignments[j][1], "parasail")
             # print(parasail_alignments[j][2], "ref")
-            print("".join([str(n) for n in parasail_alignments[j][3]]), "block")
+            # print("".join([str(n) for n in parasail_alignments[j][3]]), "block")
 
             exon_boundaries_parasail = get_exon_boundaries(parasail_alignments[j][2], parasail_alignments[j][3])
             # print(exon_boundaries)
@@ -158,7 +158,7 @@ def main(args):
             # deletion_coordinates_mm2 = get_deletion_coordinates(mm2_alignments[j][2], mm2_alignments[j][1])
 
             (ins, del_, subs,  aligned_length) = help_functions.get_read_errors(parasail_alignments[j][2], parasail_alignments[j][1], parasail_alignments[j][3])
-            print(ins, del_, subs,  aligned_length)
+            # print(ins, del_, subs,  aligned_length)
             # print(exon_boundaries)
             # print(deletion_coordinates_mm2)
             # dels_distr_ref.append(deletion_coordinates_mm2)
@@ -178,12 +178,18 @@ def main(args):
         print(c)
         # corrected_mm2 = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition_mm2, seq_to_index)
         corrected_parasail = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition_parasail, seq_to_index, read_errors, args)
-        sys.exit()
 
-        isocon_corrected = open(os.path.join(args.outfolder, "corrected_reads_mm2_{0}.fastq".format(iteration)), "w")
-        for acc in sorted(corrected_mm2):
-            isocon_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_mm2[acc], "+", ","*len(corrected_mm2[acc]) ))
+
+        isocon_corrected = open(os.path.join(args.outfolder, "corrected_reads_parasail_{0}.fastq".format(iteration)), "w")
+        for acc in sorted(corrected_parasail):
+            isocon_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_parasail[acc], "+", ","*len(corrected_parasail[acc]) ))
         isocon_corrected.close()
+        # sys.exit()
+
+        # isocon_corrected = open(os.path.join(args.outfolder, "corrected_reads_mm2_{0}.fastq".format(iteration)), "w")
+        # for acc in sorted(corrected_mm2):
+        #     isocon_corrected.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, corrected_mm2[acc], "+", ","*len(corrected_mm2[acc]) ))
+        # isocon_corrected.close()
         # sys.exit()
 
         # read_exon_boundaries = {}

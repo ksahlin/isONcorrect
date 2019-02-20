@@ -412,7 +412,7 @@ def blocks_from_msa(ref_seq, partition, k, match_id):
         else:
             seq_aln, cnt = partition[s]
             block_vector = get_block_coverage(seq_aln, ref_aln, k, match_id)
-            print("".join([str(b) for b in block_vector]))
+            # print("".join([str(b) for b in block_vector]))
             block_matrix[s] = (block_vector, cnt)
 
     return block_matrix
@@ -425,8 +425,9 @@ def get_block_freqs(block_matrix):
         for j in range(nr_columns):
             BLOCK_FREQ[j] += cnt*block_v[j]
 
-    for j in range(nr_columns):
-        print(j, BLOCK_FREQ[j])
+    # for j in range(nr_columns):
+    #     print(j, BLOCK_FREQ[j])
+    return BLOCK_FREQ
 
 def get_global_probs(read_errors):
     tot_ins = sum([ read_errors[seq][0] for seq in read_errors])
@@ -460,25 +461,26 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
         block_freq_vector = get_block_freqs(block_matrix)
         pos_cutoffs = [{} for p in range(len(block_freq_vector))]
         for i, c in enumerate(block_freq_vector): # poisson rates
-            pos_cutoffs[i]["d"] = min(1, (c * global_probs[1]) + 3*math.sqrt((c * global_probs[1])) )
-            pos_cutoffs[i]["mm"] = min(1, (c * global_probs[2]) + 3*math.sqrt((c * global_probs[2])) )
-            pos_cutoffs[i]["i"] = min(1, (c * global_probs[0]) + 3*math.sqrt((c * global_probs[0])) )
-            
+            pos_cutoffs[i]["d"] = max(1, (c * p_del) + 3*math.sqrt((c * p_del)) )
+            pos_cutoffs[i]["mm"] = max(1, (c * p_subs) + 3*math.sqrt((c * p_subs)) )
+            pos_cutoffs[i]["i"] = max(1, (c * p_ins) + 3*math.sqrt((c * p_ins)) )
+        
+        # print(pos_cutoffs)
         S_prime_partition = correct_from_msa(repr_seq, partition, PFM, seq_to_acc, pos_cutoffs = pos_cutoffs)
-        sys.exit()
+        # sys.exit()
     else:
         print("Partition converged: Partition size(unique strings):{0}, partition support: {1}.".format(len(partition), N_t))
 
     
-    only_deletions_pos = set([p for p, d in enumerate(PFM) if d["A"] == d["C"] == d["G"] == d["T"] == 0] )
-    print("only deleted pos:", only_deletions_pos)
-    for seq, almnt in alignment_matrix.items():
-        if seq not in seq_to_acc:
-            print(">augmented_ref")
-        else:
-            print(">{0}".format(seq_to_acc[seq][0]))
-        print("".join([n for p, n in enumerate(almnt) if p not in only_deletions_pos]))
-    sys.exit()  
+    # only_deletions_pos = set([p for p, d in enumerate(PFM) if d["A"] == d["C"] == d["G"] == d["T"] == 0] )
+    # print("only deleted pos:", only_deletions_pos)
+    # for seq, almnt in alignment_matrix.items():
+    #     if seq not in seq_to_acc:
+    #         print(">augmented_ref")
+    #     else:
+    #         print(">{0}".format(seq_to_acc[seq][0]))
+    #     print("".join([n for p, n in enumerate(almnt) if p not in only_deletions_pos]))
+    # sys.exit()  
 
     return S_prime_partition
 
@@ -508,13 +510,16 @@ def PFM_from_msa(partition):
 def correct_from_msa(ref_seq, partition, PFM, seq_to_acc, pos_cutoffs = []):
     nr_columns = len(PFM)
     S_prime_partition = {}
-    
+    pos_cutoffs start here introducing pos cutoffs
     # max_vector = []
     # for j in range(nr_columns):
     #     (max_c, max_n) = max([ (PFM[j][n], n) for n in PFM[j] if n != "-"], key = lambda x: x[0])
     #     max_vector.append( (max_c, max_n) )
     # print(max_vector)
     ref_alignment = partition[ref_seq][0]
+    subs_tot = 0
+    ins_tot = 0
+    del_tot = 0
     for s in partition:
         if s == ref_seq:
             continue
@@ -616,13 +621,17 @@ def correct_from_msa(ref_seq, partition, PFM, seq_to_acc, pos_cutoffs = []):
                 #             else:
                 #                 # print("Ambiguous correction")
                 #                 pass
-
+        subs_tot += subs_pos_corrected
+        ins_tot += ins_pos_corrected
+        del_tot += del_pos_corrected
         # print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in seq of length {3}".format(subs_pos_corrected, ins_pos_corrected, del_pos_corrected, len(s)))
 
 
         accessions_of_s = seq_to_acc[s] 
         for acc in accessions_of_s:
             S_prime_partition[acc] = "".join([n for n in s_new if n != "-"])
+
+    print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in partition".format(subs_tot, ins_tot, del_tot))
 
     return S_prime_partition
 
