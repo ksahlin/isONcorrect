@@ -418,7 +418,7 @@ def blocks_from_msa(ref_seq, partition, k, match_id):
     return block_matrix
 
 def get_block_freqs(block_matrix):
-    nr_columns = len(len( list(block_matrix.values())[0][0])) 
+    nr_columns = len( list(block_matrix.values())[0][0])
     BLOCK_FREQ = [0 for j in range(nr_columns)]
     for s in block_matrix:
         block_v, cnt = block_matrix[s]
@@ -428,8 +428,17 @@ def get_block_freqs(block_matrix):
     for j in range(nr_columns):
         print(j, BLOCK_FREQ[j])
 
+def get_global_probs(read_errors):
+    tot_ins = sum([ read_errors[seq][0] for seq in read_errors])
+    tot_del = sum([ read_errors[seq][1] for seq in read_errors])
+    tot_subs = sum([ read_errors[seq][2] for seq in read_errors])
+    tot_aln_length = sum([ read_errors[seq][3] for seq in read_errors])
+    print(tot_ins,tot_del, tot_subs, tot_aln_length)
+    p_ins, p_del, p_subs = tot_ins/float(tot_aln_length), tot_del/float(tot_aln_length), tot_subs/float(tot_aln_length)
+    print(p_ins, p_del, p_subs)
+    return p_ins, p_del, p_subs
 
-def correct_to_consensus(repr_seq, partition, seq_to_acc, k, match_id, read_errors, global_probs):
+def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
     """
          partition[seq] = (edit_dist, aln_rep, aln_s, depth_of_string)
     """
@@ -443,14 +452,17 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, k, match_id, read_erro
         # PFM = create_position_frequency_matrix(alignment_matrix, partition)
         # for i,pos_dict in enumerate(PFM):
         #     print(i, pos_dict)
-        blocks = blocks_from_msa(repr_seq, partition, k, match_id)
+        p_ins, p_del, p_subs = get_global_probs(read_errors)
+        tot_prob = p_ins + p_del + p_subs 
+        print(tot_prob,args.k, int( (1- tot_prob)*args.k))
+        match_id = int( (1- tot_prob)*args.k)
+        block_matrix = blocks_from_msa(repr_seq, partition, args.k, match_id)
         block_freq_vector = get_block_freqs(block_matrix)
-        
         pos_cutoffs = [{} for p in range(len(block_freq_vector))]
         for i, c in enumerate(block_freq_vector): # poisson rates
-            pos_cutoffs[i]["d"] = min(1, (c * global_probs[0]) + 3*math.sqrt((c * global_probs[0])) )
-            pos_cutoffs[i]["mm"] = min(1, (c * global_probs[1]) + 3*math.sqrt((c * global_probs[1])) )
-            pos_cutoffs[i]["i"] = min(1, (c * global_probs[2]) + 3*math.sqrt((c * global_probs[2])) )
+            pos_cutoffs[i]["d"] = min(1, (c * global_probs[1]) + 3*math.sqrt((c * global_probs[1])) )
+            pos_cutoffs[i]["mm"] = min(1, (c * global_probs[2]) + 3*math.sqrt((c * global_probs[2])) )
+            pos_cutoffs[i]["i"] = min(1, (c * global_probs[0]) + 3*math.sqrt((c * global_probs[0])) )
             
         S_prime_partition = correct_from_msa(repr_seq, partition, PFM, seq_to_acc, pos_cutoffs = pos_cutoffs)
         sys.exit()
