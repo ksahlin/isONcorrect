@@ -88,7 +88,7 @@ def main(args):
     print("Correcting {0} reads.".format(len(reads)))
     start = time()
 
-    for iteration in range(1,3):
+    for iteration in range(1,2):
         print()
         print("ITERATION", iteration)
         args.iteration = iteration
@@ -124,13 +124,18 @@ def main(args):
         reference_seq, msa = create_augmented_reference.run_spoa_affine(isocon_corrected.name, ref_file_isocon, isocon_out_file, "spoa_affine", dot_graph_path)
 
         reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
+        # reference_seq_longest_path_botond = create_augmented_reference.longest_path_botond(dot_graph_path)
+        print("nx:", reference_seq_longest_path)
+        # print("botond:", reference_seq_longest_path_botond)
         
+        # reference_seq_true = "GGGGTCAGATGCCCTGTAATGAGCCACAGAAACTTGGGCCCATGGGTAGGTTCCAGGAGAGAGGGGCCTGGAGGGGTCCTCAGCCCTGGGGGATTGGGGTGTCAAGCAACTTCTCTCTCCAGGCTCAGTCCTGCGGTCTGTGGGGAGACCTTCCTGTGGGCGCAGCTGGAGTCAAGGCTTGGGGTCTTGGGGTATGCTTCGCAGACAAAGCAGCTGTGCCAGTCTCCGAGTTCCTGGGACTCTGCCAGATCCAGGGCATCCTGAGCGGGCCCGGCTGGGGTGGGGATGGGGTCCGAGGGC"
         # reference_qual_longest_path = "".join(["+" for i in range(len(reference_seq_longest_path))]) 
-        # reference_qual = "".join(["+" for i in range(len(reference_seq))]) 
-        # error_rate_sum, ref_longest_alignment, ref_alignment, alignment_ratio, block_coverage = block_align(reference_seq, reference_seq_longest_path, reference_qual, reference_qual_longest_path, args)
+        # reference_qual_true = "".join(["+" for i in range(len(reference_seq_true))]) 
+        # error_rate_sum, ref_longest_alignment, ref_true_alignment, block_coverage = align.block_align_parasail(reference_seq_true, reference_seq_longest_path, reference_qual_true, reference_qual_longest_path, args)
         # print(ref_longest_alignment)
-        # print(ref_alignment)
-        # reference_seq_longest_path = "GGGGTCAGATGCCCTGTAATGAGCCACAGAAACTTGGGCCCATGGGTAGGTTCCAGGAGAGAGGGGCCTGGAGGGGTCCTCAGCCCTGGGGGATTGGGGTGTCAAGCAACTTCTCTCTCCAGGCTCAGTCCTGCGGTCTGTGGGGAGACCTTCCTGTGGGCGCAGCTGGAGTCAAGGCTTGGGGTCTTGGGGTATGCTTCGCAGACAAAGCAGCTGTGCCAGTCTCCGAGTTCCTGGGACTCTGCCAGATCCAGGGCATCCTGAGCGGGCCCGGCTGGGGTGGGGATGGGGTCCGAGGGC"
+        # print(ref_true_alignment)
+        # sys.exit()
+
         parasail_alignments = align.align_parasail(isocon_corrected.name, reference_seq_longest_path, args)
         mm2_alignments = align.align_mm2( isocon_corrected.name, reference_seq_longest_path, args)
         # align.align_with_nlmgr(isocon_corrected, reference_seq_longest_path)
