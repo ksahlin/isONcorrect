@@ -10,6 +10,56 @@ from sys import stdout
 
 import networkx as nx
 
+from collections import defaultdict
+import numpy as np
+
+# Botonds DP
+def cutoff(x):
+    return x
+
+def longest_path_botond(dot_graph_path):
+    G = nx.drawing.nx_pydot.read_dot(dot_graph_path)   
+    topo = list(nx.topological_sort(G))   
+    data = nx.get_node_attributes(G, 'label')
+    # data = {x: chr(int(y.split(" - ")[1].split("\"")[0])) for x, y in data.items()}
+    data = {x: y.split(" - ")[1].split("\"")[0] for x, y in data.items()}
+    scores = defaultdict(int)
+    bt = defaultdict(lambda: -1)
+     
+    for n in topo:
+        sc = []
+        for p in G.predecessors(n):
+            tmp = G.get_edge_data(p, n, key=0)
+            if 'label' in tmp:
+                weight = int(tmp['label'].strip("\""))
+                sc.append((p, scores[p] + cutoff(weight)))
+                # sc.append((p, scores[p] + weight))
+        sc = sorted(sc, key=lambda x: x[1], reverse=True)
+        if len(sc) < 1:
+            continue
+        bt[n] = sc[0][0]
+        scores[n] = sc[0][1]
+     
+    max_score = max(scores.values())
+    lookup = {y: x for x, y in scores.items()}
+     
+    prev = lookup[max_score]
+    nodes = []
+     
+    while prev != -1:
+        nodes.append(prev)
+        prev = bt[prev]
+     
+    nodes = list(reversed(nodes))
+     
+    print(">cons_" + str(len(nodes)))
+     
+    bases = [data[n] for n in nodes]
+    cons = ''.join(bases)
+    print(cons)
+    return cons
+
+
 def longest_path(dot_graph_path):
     G = nx.DiGraph()
     for line in open(dot_graph_path, "r"):
@@ -42,14 +92,13 @@ def longest_path(dot_graph_path):
     # print(G.nodes(data=True))
     order = list(nx.algorithms.dag.topological_sort(G))
     # print([ [G[n][nbr]["weight"] for nbr in G.neighbors(n)] for n in order ])
-    print(order)
+    # print(order)
     longest_path = nx.algorithms.dag.dag_longest_path(G)
-    print("longest path", [(i,n) for i,n in enumerate(longest_path)])
+    # print("longest path", [(i,n) for i,n in enumerate(longest_path)])
     augmented_ref = "".join([ G.node[n]["nucleotide"] for n in longest_path])
     # augmented_ref = "".join([ info["label"][-2] for n, info in G.nodes(data=True)])
     print(augmented_ref)
     print(len(augmented_ref))
-    # sys.exit()
     return augmented_ref
 
 
