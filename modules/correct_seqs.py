@@ -3,7 +3,7 @@ import re
 import math
 
 from collections import deque
-
+import itertools
 
 def annotate_with_quality_values(alignment_matrix, seq_to_acc, qual_dict):
     alignment_matrix_of_qualities = {}
@@ -403,19 +403,47 @@ def get_block_coverage(read_alignment, ref_alignment, k, match_id):
     block_coverage = [ 1 if n1 +n2 >0 else 0 for n1, n2 in zip(block_coverage_f, block_coverage_reverse[::-1])]
     return block_coverage
 
+def get_homopolymer_factor(ref_aln):
+    homopol_correction_vector = []
+    ref_aln_to_str = "".join([n for n in ref_aln if n != "-"])
+    str_to_list_index = [i for i, n in enumerate(ref_aln) if n != "-" ]
+    # print(ref_aln_to_str)
+    # print(str_to_list_index)
+    # print([(ch, sum(1 for _ in g)) for ch, g in itertools.groupby(ref_aln_to_str)])
+    curr_pos = 0
+    start_coord = 0
+    for ch, g in itertools.groupby(ref_aln_to_str):
+        h_len =  sum(1 for _ in g)
+        stop_coord = str_to_list_index[curr_pos + h_len -1]
+        # print(start_coord, stop_coord)
+        for i in range(stop_coord - start_coord +1):
+            homopol_correction_vector.append(h_len)
+        curr_pos += h_len
+        start_coord = stop_coord +1
+
+    # last positions corner case
+    for i in range(len(ref_aln) - len(homopol_correction_vector)):
+        homopol_correction_vector.append(h_len)
+
+    # print(ref_aln)
+    # print(homopol_correction_vector)
+    # print(len(homopol_correction_vector), len(ref_aln))
+    return homopol_correction_vector
+
+
 def blocks_from_msa(ref_seq, partition, k, match_id):
     block_matrix = {}
     ref_aln = partition[ref_seq][0]
     for s in partition:
         if s == ref_seq:
-            continue
+            homopol_correction_vector = get_homopolymer_factor(ref_aln)
         else:
             seq_aln, cnt = partition[s]
             block_vector = get_block_coverage(seq_aln, ref_aln, k, match_id)
             # print("".join([str(b) for b in block_vector]))
             block_matrix[s] = (block_vector, cnt)
 
-    return block_matrix
+    return block_matrix, homopol_correction_vector
 
 def get_block_freqs_and_majority(block_matrix, partition):
     nr_columns = len( list(block_matrix.values())[0][0])
@@ -435,6 +463,7 @@ def get_block_freqs_and_majority(block_matrix, partition):
     #     print(j, BLOCK_FREQ[j], block_majority_vector[j], block_frequency_matrix[j])
 
     # print("".join([n for n in block_majority_vector if n != "-"]))
+    # print([(n, BLOCK_FREQ[i]) for i, n in enumerate(block_majority_vector)])
     # sys.exit()
     return BLOCK_FREQ, block_majority_vector, block_frequency_matrix
 
@@ -466,16 +495,24 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
         tot_prob = p_ins + p_del + p_subs 
         print(tot_prob,args.k, int( (1- tot_prob)*args.k))
         match_id = int( (1- tot_prob)*args.k)
-        block_matrix = blocks_from_msa(repr_seq, partition, args.k, match_id)
+        block_matrix, homopol_correction_vector = blocks_from_msa(repr_seq, partition, args.k, match_id)
         block_freq_vector, block_majority_vector, BFM = get_block_freqs_and_majority(block_matrix, partition)
         pos_cutoffs = [{} for p in range(len(block_freq_vector))]
-        print(block_freq_vector[628])
+        # print(block_freq_vector)
+        # print(homopol_correction_vector)
         for i, c in enumerate(block_freq_vector): # poisson rates
-            if i == 628:
-                print( c, (c * p_del),  3*math.sqrt((c * p_del)) )
-            pos_cutoffs[i]["d"] = max(1, (c * p_del) + 3*math.sqrt((c * p_del)) )
+            p_del_pos = 1.0 - (1.0 - p_del)**homopol_correction_vector[i]
+            # print(p_del_pos)
+            # if i == 628:
+            #     print( c,  max(1, (c * p_del) + 3*math.sqrt((c * p_del)) ),  max(1, (c * p_subs) + 3*math.sqrt((c * p_subs)) ),max(1, (c * p_ins) + 3*math.sqrt((c * p_ins)) ) )
+            pos_cutoffs[i]["d"] = max(1, (c * p_del_pos) + 3*math.sqrt((c * p_del_pos)) )
             pos_cutoffs[i]["mm"] = max(1, (c * p_subs) + 3*math.sqrt((c * p_subs)) )
             pos_cutoffs[i]["i"] = max(1, (c * p_ins) + 3*math.sqrt((c * p_ins)) )
+
+        # print(BFM)
+        # print(block_freq_vector)
+        # print(pos_cutoffs)
+        # sys.exit()
         
         # print(pos_cutoffs)
         S_prime_partition = correct_from_msa(repr_seq, partition, BFM, seq_to_acc, pos_cutoffs = pos_cutoffs, block_matrix = block_matrix, block_majority_vector= block_majority_vector)
@@ -526,8 +563,8 @@ def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], bloc
     subs_tot = 0
     ins_tot = 0
     del_tot = 0
-    print(sum([ block_matrix[s][0][628] for s in block_matrix ]))
-    sys.exit()
+    # print(sum([ block_matrix[s][0][628] for s in block_matrix ]))
+    # sys.exit()
     for s in partition:
         if s == ref_seq:
             continue
@@ -588,7 +625,9 @@ def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], bloc
                         else: # deletion: majority has nucleotide but this is not present in reference, this should be rare. Unsure if this should be classified even as a bug
                             print(j, pos_cutoffs[j],BFM[j][n])
                             print("Unexpected! Majority: {0}, base in read and reference:{1}. Total counts over position: {2}".format(majority_correct_to, n, tmp_dict) )
-                            sys.exit()
+                            s_new[j] = majority_correct_to
+                            
+                            # sys.exit()
 
                     # if n == "-":  # deletion
                     #     if PFM[j][n] <= pos_cutoffs[j]["mm"]:
