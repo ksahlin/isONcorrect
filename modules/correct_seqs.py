@@ -506,8 +506,8 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
             # if i == 628:
             #     print( c,  max(1, (c * p_del) + 3*math.sqrt((c * p_del)) ),  max(1, (c * p_subs) + 3*math.sqrt((c * p_subs)) ),max(1, (c * p_ins) + 3*math.sqrt((c * p_ins)) ) )
             pos_cutoffs[i]["d"] = max(1, (c * p_del_pos) + 3*math.sqrt((c * p_del_pos)) )
-            pos_cutoffs[i]["mm"] = max(1, (c * p_subs) + 3*math.sqrt((c * p_subs)) )
-            pos_cutoffs[i]["i"] = max(1, (c * p_ins) + 3*math.sqrt((c * p_ins)) )
+            pos_cutoffs[i]["mm"] = max(1, (c * p_subs/3.0) + 3*math.sqrt((c * p_subs/3.0)) )
+            pos_cutoffs[i]["i"] = max(1, (c * p_ins/4.0) + 3*math.sqrt((c * p_ins/4.0)) )
 
         # print(BFM)
         # print(block_freq_vector)

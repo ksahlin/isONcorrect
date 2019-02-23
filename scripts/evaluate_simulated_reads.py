@@ -490,13 +490,15 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
 
     # total discoveries, total perfect matches (1.0 identity), errors for each consensus
     # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(nr_unique_refs, q_acc, best_match_container[q_acc], errors_container[q_acc], identity_container[q_acc], *error_types_container[q_acc]))
+    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del"))
+
     for q_acc in errors_container:
         # each ro displays values for a consensus transcript
         if  identity_container[q_acc] > params.sim_cutoff:
-            ssw_stats = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], identity_container[q_acc], *error_types_container[q_acc])
+            ssw_stats = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])
             # print(ssw_stats, minimizer_graph_c_to_t[q_acc])
             # print()
-            out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], identity_container[q_acc], *error_types_container[q_acc]))
+            out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc]))
 
 
 def main(args):
