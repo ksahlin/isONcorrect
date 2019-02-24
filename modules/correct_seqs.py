@@ -445,6 +445,7 @@ def blocks_from_msa(ref_seq, partition, k, match_id):
 
     return block_matrix, homopol_correction_vector
 
+
 def get_block_freqs_and_majority(block_matrix, partition):
     nr_columns = len( list(block_matrix.values())[0][0])
     block_frequency_matrix = [{"A": 0, "C": 0, "G": 0, "T": 0, "U" : 0, "-": 0} for j in range(nr_columns)]
@@ -502,12 +503,14 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
         # print(homopol_correction_vector)
         for i, c in enumerate(block_freq_vector): # poisson rates
             p_del_pos = 1.0 - (1.0 - p_del)**homopol_correction_vector[i]
+            # if (c * p_del_pos) + 3*math.sqrt((c * p_del_pos))> 50:
+            #     print(i,c, homopol_correction_vector[i], (c * p_del_pos) + 3*math.sqrt((c * p_del_pos)))
             # print(p_del_pos)
             # if i == 628:
             #     print( c,  max(1, (c * p_del) + 3*math.sqrt((c * p_del)) ),  max(1, (c * p_subs) + 3*math.sqrt((c * p_subs)) ),max(1, (c * p_ins) + 3*math.sqrt((c * p_ins)) ) )
             pos_cutoffs[i]["d"] = max(1, (c * p_del_pos) + 3*math.sqrt((c * p_del_pos)) )
             pos_cutoffs[i]["mm"] = max(1, (c * p_subs/3.0) + 3*math.sqrt((c * p_subs/3.0)) )
-            pos_cutoffs[i]["i"] = max(1, (c * p_ins/4.0) + 3*math.sqrt((c * p_ins/4.0)) )
+            pos_cutoffs[i]["i"] = max(1, (c * p_ins/1.0) + 3*math.sqrt((c * p_ins/1.0)) )
 
         # print(BFM)
         # print(block_freq_vector)
@@ -554,6 +557,87 @@ def PFM_from_msa(partition):
     # sys.exit()
 
     return PFM
+
+
+from collections import defaultdict
+def get_block_freqs_and_majority_window(block_matrix, partition, k):
+    nr_columns = len( list(block_matrix.values())[0][0]) - k
+    block_frequency_matrix = defaultdict(int) 
+    BLOCK_FREQ = [0 for j in range(nr_columns)]
+    for s in block_matrix:
+        read_aln_vector, _  = partition[s]
+        block_v, cnt = block_matrix[s]
+        for j in range(nr_columns):
+            BLOCK_FREQ[j] += cnt*block_v[j]
+            if block_v[j] == 1:
+                segment = "".join([n for n in read_aln_vector[j:j+k]])
+                block_frequency_matrix[j][segment] += cnt
+
+    block_majority_vector = [max(d.items(), key=lambda x: x[1])[0] for d in block_frequency_matrix]
+    # for j in range(nr_columns):
+    #     print(j, BLOCK_FREQ[j], block_majority_vector[j], block_frequency_matrix[j])
+
+    # print("".join([segment for segment in block_majority_vector if segment != "-"]))
+    # print([(segment, BLOCK_FREQ[i]) for i, segment in enumerate(block_majority_vector)])
+    # sys.exit()
+    return BLOCK_FREQ, block_majority_vector, block_frequency_matrix
+
+def correct_from_msa_window(ref_seq, partition, BFM, seq_to_acc, k, pos_cutoffs = [], block_matrix = {}, block_majority_vector = []):
+    nr_columns = len(BFM)
+    S_prime_partition = {}
+    ref_alignment = partition[ref_seq][0]
+    ref_alignment_kmers = ["".join([n for n in ref_alignment[i:i+k]]) for i in range(len(ref_alignment) -k)]
+    subs_tot = 0
+    ins_tot = 0
+    del_tot = 0
+    # print(sum([ block_matrix[s][0][628] for s in block_matrix ]))
+    # sys.exit()
+    for s in partition:
+        if s == ref_seq:
+            continue
+        subs_pos_corrected = 0
+        ins_pos_corrected = 0
+        del_pos_corrected = 0
+        seq_aln, cnt = partition[s]
+        seq_alignment_kmers = ["".join( n for n in seq_aln[i:i+k]) for i in range(len(seq_aln) -k)]
+        s_new_kmers = [ "".join( n for n in seq_aln[i:i+k]) for i in range(len(seq_aln) -k)]
+        block_v_kmers = [ block_v[i:i+k] for i in range(len(block_v) -k)]
+        # s_new = [n for n in seq_aln]
+        # block_v, _ = block_matrix[s]
+        assert len(block_v_kmers) == len(seq_alignment_kmers)
+
+        if cnt == 1:
+            for j, kmer in enumerate(seq_alignment_kmers):
+                if block_v_kmers[j] == 0:
+                    # print(j,"not present")
+                    continue
+
+                ref_kmer = ref_alignment_kmers[j]
+                # print(j, pos_cutoffs[j]["mm"],pos_cutoffs[j]["i"], pos_cutoffs[j]["d"] )
+                # print(BFM[j])
+                # print()
+
+                kmer_count = [ c if in block:] implement code for finding elegible reads to count kmers over. Elegible if has at least one 1 in block vector
+                if kmer_count < 2:
+                    tmp_dict = {segment:cnt for segment, cnt in BFM[j].items()}
+                    majority_correct_to = block_majority_vector[j] 
+                    s_new_kmers[j] = ref_kmer
+        
+        for kmer1, kmer2 in zip(s_new_kmers[:-1], s_new_kmers[1:]):
+            if kmer1[1:] == kmer2[:-1]:
+                pass
+            else:
+                print(kmer1, kmer2, "not matching")
+
+        # accessions_of_s = seq_to_acc[s] 
+        # for acc in accessions_of_s:
+        #     S_prime_partition[acc] = "".join([kmer for kmer in s_new if kmer != "-"])
+    sys.exit()
+    print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in partition".format(subs_tot, ins_tot, del_tot))
+
+    return S_prime_partition
+
+
 
 
 def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], block_matrix = {}, block_majority_vector = []):
@@ -626,98 +710,11 @@ def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], bloc
                             print(j, pos_cutoffs[j],BFM[j][n])
                             print("Unexpected! Majority: {0}, base in read and reference:{1}. Total counts over position: {2}".format(majority_correct_to, n, tmp_dict) )
                             s_new[j] = majority_correct_to
-                            
-                            # sys.exit()
 
-                    # if n == "-":  # deletion
-                    #     if PFM[j][n] <= pos_cutoffs[j]["mm"]:
-                    #         base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
-                    #         s_new[j] = base_correct_to
-                    #         del_pos_corrected += 1
-                    # else:
-                    #     if ref_nucl == "-": # insertion
-                    #         if PFM[j][n] <= pos_cutoffs[j]["i"]:
-                    #             s_new[j] = ref_nucl
-                    #             ins_pos_corrected += 1
-                    #     else: # substitution                                
-                    #         if PFM[j][n] <= pos_cutoffs[j]["mm"]:
-                    #             s_new[j] = ref_nucl
-                    #             subs_pos_corrected +=1
-
-                    # if PFM[j][n] <3:
-                    #     tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
-                    #     base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
-                    #     s_new[j] = base_correct_to
-                    #     if base_correct_to != "-":
-                    #         subs_pos_corrected +=1
-                    #     else:
-                    #         ins_pos_corrected += 1
-
-                # if PFM[j][n] < :
-                #     if n != ref_nucl:
-                #         s_new[j] = ref_nucl
-                #         if ref_nucl == "-":
-                #             ins_pos_corrected += 1
-                #         else:
-                #             del_pos_corrected += 1
-
-                #     else:
-                #         tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
-                #         base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
-                #         s_new[j] = base_correct_to
-                #         if n == "-":
-                #             del_pos_corrected += 1
-                #         elif base_correct_to != "-":
-                #             subs_pos_corrected +=1
-                #         else:
-                #             ins_pos_corrected += 1
-
-
-                # ref_nucl = ref_alignment[j]
-                # if n == ref_nucl:
-                #     continue
-                # else:
-                #     if n == "-":
-                #         s_new[j] = ref_nucl
-                #         del_pos_corrected += 1
-                #     else: # n is an insertion w.r.t. reference
-
-                #         # print(n)
-                
-                # # ### new ###
-                # # if n == "-":
-                # #     pass
-                # # elif n != max_vector[j][1] and max_vector[j][0] >= 3:
-                # #     s_new[j] = max_vector[j][1]
-                # # elif max_vector[j][0] < 3:
-                # #     s_new[j] = "-"
-                # # #########
-
-                #         if PFM[j][n] < 2:
-                #             # print(j, PFM[j])
-                #             tmp_dict = {n:cnt for n, cnt in PFM[j].items()}
-                #             dels = tmp_dict["-"]
-                #             del tmp_dict["-"]
-                #             other_variant_counts = [tmp_dict[n] for n in tmp_dict if tmp_dict[n] >= 2]
-                #             if len(other_variant_counts) > 0:
-                #                 base_correct_to = max(tmp_dict, key = lambda x: tmp_dict[x] )
-                #                 # print(n, base_correct_to, tmp_dict)
-                #                 s_new[j] = base_correct_to
-                #                 subs_pos_corrected += 1
-                #             elif len(other_variant_counts) == 0:
-                #                 # base_correct_to = "-"
-                #                 # print(n, tmp_dict)
-                #                 ins_pos_corrected += 1
-                #                 # s_new[j] = base_correct_to
-                #                 continue
-                #             else:
-                #                 # print("Ambiguous correction")
-                #                 pass
         subs_tot += subs_pos_corrected
         ins_tot += ins_pos_corrected
         del_tot += del_pos_corrected
         print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in seq of length {3}".format(subs_pos_corrected, ins_pos_corrected, del_pos_corrected, len(s)))
-
 
         accessions_of_s = seq_to_acc[s] 
         for acc in accessions_of_s:

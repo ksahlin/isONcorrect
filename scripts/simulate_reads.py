@@ -44,7 +44,8 @@ def check_valid_args(args, ref):
     # assert args.stop > args.start and args.stop > max(args.coords)
     assert args.coords == sorted(args.coords) # has to be in increasing order
     assert len(ref[list(ref.keys())[0]][0]) >= max(args.coords)
-    assert len(args.coords)/2 == len(args.probs)
+    print(args.coords, args.probs)
+    assert (len(args.coords)-1) == len(args.probs)
 
 
 
@@ -58,13 +59,14 @@ def simulate_reads( args, ref ):
     # exons = [seq[j_start: j_stop] for (j_start, j_stop) in zip(range(0,300, 50), range(50, 301, 50)) ]
     # exons_probs = [1.0, 0.2, 1.0, 1.0, 0.2, 1.0]
 
-    exon_coords = [(start, stop) for start, stop in zip(args.coords[:-1: 2], args.coords[1: :2]) ]
+    exon_coords = [(start, stop) for start, stop in zip(args.coords[:-1], args.coords[1:]) ]
     exons = [seq[j_start: j_stop] for (j_start, j_stop) in exon_coords ]
     exons_probs = args.probs
-    # print(exon_coords)
-    # print(exons)
-
-
+    print(exon_coords)
+    print(exons)
+    print(exons_probs)
+    # sys.exit()
+    reads = {}
     for i in range(args.nr_reads):
         read = []
         for j, e in enumerate(exons):
@@ -87,11 +89,15 @@ def simulate_reads( args, ref ):
         if not read:
             continue
         read_seq = "".join([n for n in read])
+        reads[str(i)] = read_seq
 
-        if is_fastq:
-            outfile.write("@{0}\n{1}\n{2}\n{3}\n".format(i, read_seq, "+", "+"*len(read_seq)))
-        else:
-            outfile.write(">{0}\n{1}\n".format(i, read_seq))
+
+    if is_fastq:
+        for acc, read_seq in sorted(reads.items(), key = lambda x: len(x[1]), reverse = True):
+            outfile.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, read_seq, "+", "+"*len(read_seq)))
+    else:
+        for acc, read_seq in sorted(reads.items(), key = lambda x: len(x[1]), reverse = True):
+            outfile.write(">{0}\n{1}\n".format(acc, read_seq))
     
     outfile.close
 
