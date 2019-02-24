@@ -255,6 +255,39 @@ def get_block_coverage(read_alignment, ref_alignment, k, match_id):
     block_coverage = [ 1 if n1 +n2 >0 else 0 for n1, n2 in zip(block_coverage_f, block_coverage_reverse[::-1])]
     return block_coverage
 
+import re
+def get_block_coverage2(read_alignment, ref_alignment, k, match_id):
+    match_vector = "".join([ "-" if n1 == "-" or n2 == "-" else "|" for n1, n2 in zip(read_alignment, ref_alignment) ])
+    p=re.compile("[-]+")
+    # all_indels = re.findall(p, match_vector)
+    all_indels = []
+    for m in p.finditer(match_vector):
+        if len(m.group()) >= 10:
+            all_indels.append((m.start(), len(m.group())))
+            print(m.start(), m.group())
+
+
+    block_coverage = [ 1 for i in range(len(match_vector))]
+    prev_stop = 0
+    for pos, i_len in all_indels:
+        if pos - prev_stop < 7:
+            s_pos = prev_stop
+        else:
+            s_pos = pos
+
+        for i in range(i_len):
+            block_coverage[s_pos+i] = 0
+        
+        prev_stop = s_pos + i_len
+
+    # aligned_region = get_block_vector(match_vector, k, match_id)
+    # aligned_region_reverse = get_block_vector(match_vector[::-1], k, match_id)
+    # block_coverage_f = [m for m in aligned_region + [aligned_region[-1]]*(k-1) ]
+    # block_coverage_reverse = [m for m in aligned_region_reverse + [aligned_region_reverse[-1]]*(k-1) ]
+    # assert len(block_coverage_f) == len(block_coverage_reverse)
+    # block_coverage = [ 1 if n1 +n2 >0 else 0 for n1, n2 in zip(block_coverage_f, block_coverage_reverse[::-1])]
+    return block_coverage
+
 
 def parasail_block_alignment(read, reference, k, match_id, x_acc = "", y_acc = "", match_score = 4, mismatch_penalty = -4, opening_penalty = 5, gap_ext = 1, ends_discrepancy_threshold = 0):
     user_matrix = parasail.matrix_create("ACGT", match_score, mismatch_penalty)
@@ -269,8 +302,11 @@ def parasail_block_alignment(read, reference, k, match_id, x_acc = "", y_acc = "
     
     read_alignment, ref_alignment = cigar_to_seq(cigar_string, read, reference)
     block_coverage = get_block_coverage(read_alignment, ref_alignment, k, match_id)
-
-    return read, reference, read_alignment, ref_alignment, block_coverage
+    block_coverage2 = get_block_coverage2(read_alignment, ref_alignment, k, match_id)
+    print(block_coverage)
+    print(block_coverage2)
+    print()
+    return read, reference, read_alignment, ref_alignment, block_coverage2
 
 
 def block_align_parasail(reference, read, reference_qual, read_qual, args):
