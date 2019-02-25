@@ -395,13 +395,46 @@ def get_block_vector(match_vector, k, match_id):
     assert len(aligned_region) == len(match_vector)
     return aligned_region
 
+
 def get_block_coverage(read_alignment, ref_alignment, k, match_id):
     match_vector = [ 0 if n1 != n2 else -1 if n2 == "-" else 1 for n1, n2 in zip(read_alignment, ref_alignment) ]
     block_coverage_f = get_block_vector(match_vector, k, match_id)
     block_coverage_reverse = get_block_vector(match_vector[::-1], k, match_id)
     assert len(block_coverage_f) == len(block_coverage_reverse)
-    block_coverage = [ 1 if n1 +n2 >0 else 0 for n1, n2 in zip(block_coverage_f, block_coverage_reverse[::-1])]
+    block_coverage = [ 1 if n1 + n2 > 0 else 0 for n1, n2 in zip(block_coverage_f, block_coverage_reverse[::-1])]
     return block_coverage
+
+
+def get_block_coverage2(read_alignment, ref_alignment, k, match_id):
+    ref_nucl_since_gap_open = 0
+    deteted_blocks = []
+    start_coord = 0
+    for i, (n1, n2) in enumerate(zip(read_alignment, ref_alignment)):
+        if n2 == "-":
+            continue
+        elif n1 == "-":
+            ref_nucl_since_gap_open +=1
+        else:
+            if ref_nucl_since_gap_open >= 10:
+                deteted_blocks.append((start_coord, i))
+            ref_nucl_since_gap_open = 0
+            start_coord = i+1
+
+    block_coverage = [ 1 for i in range(len(read_alignment))]
+    prev_stop = 0
+    for start, stop in deteted_blocks:
+        if start - prev_stop < 14:
+            start_pos = prev_stop
+        else:
+            start_pos = start
+
+        for i in range(start_pos, stop):
+            block_coverage[i] = 0
+        prev_stop = stop
+
+    return block_coverage
+
+
 
 def get_homopolymer_factor(ref_aln):
     homopol_correction_vector = []
@@ -439,10 +472,14 @@ def blocks_from_msa(ref_seq, partition, k, match_id):
             homopol_correction_vector = get_homopolymer_factor(ref_aln)
         else:
             seq_aln, cnt = partition[s]
-            block_vector = get_block_coverage(seq_aln, ref_aln, k, match_id)
+            # block_vector = get_block_coverage(seq_aln, ref_aln, k, match_id)
+            block_vector = get_block_coverage2(seq_aln, ref_aln, k, match_id)
             # print("".join([str(b) for b in block_vector]))
+            # print("".join([str(b) for b in block_vector2]))
+            # print("".join([str(b) for b in ref_aln]))
+            # print("".join([str(b) for b in seq_aln]))
+            # print()
             block_matrix[s] = (block_vector, cnt)
-
     return block_matrix, homopol_correction_vector
 
 
@@ -476,6 +513,7 @@ def get_global_probs(read_errors):
     print(tot_ins,tot_del, tot_subs, tot_aln_length)
     p_ins, p_del, p_subs = tot_ins/float(tot_aln_length), tot_del/float(tot_aln_length), tot_subs/float(tot_aln_length)
     print(p_ins, p_del, p_subs)
+    # sys.exit()
     return p_ins, p_del, p_subs
 
 def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
@@ -503,14 +541,21 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
         # print(homopol_correction_vector)
         for i, c in enumerate(block_freq_vector): # poisson rates
             p_del_pos = 1.0 - (1.0 - p_del)**homopol_correction_vector[i]
+            
+            if homopol_correction_vector[i] > 1:
+                p_del_lambda = 1.0 - (1.0 - p_del)**homopol_correction_vector[i]
+                p_corr_lambda = (1.0 - p_del)**(homopol_correction_vector[i] - 1)
+                pos_cutoffs[i]["h"] = (c*p_del_lambda, c*p_corr_lambda)
+
+            
             # if (c * p_del_pos) + 3*math.sqrt((c * p_del_pos))> 50:
             #     print(i,c, homopol_correction_vector[i], (c * p_del_pos) + 3*math.sqrt((c * p_del_pos)))
             # print(p_del_pos)
             # if i == 628:
             #     print( c,  max(1, (c * p_del) + 3*math.sqrt((c * p_del)) ),  max(1, (c * p_subs) + 3*math.sqrt((c * p_subs)) ),max(1, (c * p_ins) + 3*math.sqrt((c * p_ins)) ) )
             pos_cutoffs[i]["d"] = max(1, (c * p_del_pos) + 3*math.sqrt((c * p_del_pos)) )
-            pos_cutoffs[i]["mm"] = max(1, (c * p_subs/3.0) + 3*math.sqrt((c * p_subs/3.0)) )
-            pos_cutoffs[i]["i"] = max(1, (c * p_ins/1.0) + 3*math.sqrt((c * p_ins/1.0)) )
+            pos_cutoffs[i]["mm"] = max(1, (c * p_subs) + 3*math.sqrt((c * p_subs)) )
+            pos_cutoffs[i]["i"] = max(1, (c * p_ins) + 3*math.sqrt((c * p_ins)) )
 
         # print(BFM)
         # print(block_freq_vector)
@@ -518,7 +563,7 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
         # sys.exit()
         
         # print(pos_cutoffs)
-        S_prime_partition = correct_from_msa(repr_seq, partition, BFM, seq_to_acc, pos_cutoffs = pos_cutoffs, block_matrix = block_matrix, block_majority_vector= block_majority_vector)
+        S_prime_partition = correct_from_msa(repr_seq, partition, BFM, seq_to_acc, pos_cutoffs = pos_cutoffs, block_matrix = block_matrix, block_majority_vector= block_majority_vector, homopol_correction_vector = homopol_correction_vector)
         # sys.exit()
     else:
         print("Partition converged: Partition size(unique strings):{0}, partition support: {1}.".format(len(partition), N_t))
@@ -559,88 +604,88 @@ def PFM_from_msa(partition):
     return PFM
 
 
-from collections import defaultdict
-def get_block_freqs_and_majority_window(block_matrix, partition, k):
-    nr_columns = len( list(block_matrix.values())[0][0]) - k
-    block_frequency_matrix = defaultdict(int) 
-    BLOCK_FREQ = [0 for j in range(nr_columns)]
-    for s in block_matrix:
-        read_aln_vector, _  = partition[s]
-        block_v, cnt = block_matrix[s]
-        for j in range(nr_columns):
-            BLOCK_FREQ[j] += cnt*block_v[j]
-            if block_v[j] == 1:
-                segment = "".join([n for n in read_aln_vector[j:j+k]])
-                block_frequency_matrix[j][segment] += cnt
+# from collections import defaultdict
+# def get_block_freqs_and_majority_window(block_matrix, partition, k):
+#     nr_columns = len( list(block_matrix.values())[0][0]) - k + 1
+#     block_frequency_matrix = defaultdict(int) 
+#     BLOCK_FREQ = [0 for j in range(nr_columns)]
+#     for s in block_matrix:
+#         read_aln_vector, _  = partition[s]
+#         block_v, cnt = block_matrix[s]
+#         for j in range(nr_columns):
+#             BLOCK_FREQ[j] += cnt*block_v[j]
+#             if block_v[j] == 1:
+#                 segment = "".join([n for n in read_aln_vector[j:j+k]])
+#                 block_frequency_matrix[j][segment] += cnt
 
-    block_majority_vector = [max(d.items(), key=lambda x: x[1])[0] for d in block_frequency_matrix]
-    # for j in range(nr_columns):
-    #     print(j, BLOCK_FREQ[j], block_majority_vector[j], block_frequency_matrix[j])
+#     block_majority_vector = [max(d.items(), key=lambda x: x[1])[0] for d in block_frequency_matrix]
+#     # for j in range(nr_columns):
+#     #     print(j, BLOCK_FREQ[j], block_majority_vector[j], block_frequency_matrix[j])
 
-    # print("".join([segment for segment in block_majority_vector if segment != "-"]))
-    # print([(segment, BLOCK_FREQ[i]) for i, segment in enumerate(block_majority_vector)])
-    # sys.exit()
-    return BLOCK_FREQ, block_majority_vector, block_frequency_matrix
+#     # print("".join([segment for segment in block_majority_vector if segment != "-"]))
+#     # print([(segment, BLOCK_FREQ[i]) for i, segment in enumerate(block_majority_vector)])
+#     # sys.exit()
+#     return BLOCK_FREQ, block_majority_vector, block_frequency_matrix
 
-def correct_from_msa_window(ref_seq, partition, BFM, seq_to_acc, k, pos_cutoffs = [], block_matrix = {}, block_majority_vector = []):
-    nr_columns = len(BFM)
-    S_prime_partition = {}
-    ref_alignment = partition[ref_seq][0]
-    ref_alignment_kmers = ["".join([n for n in ref_alignment[i:i+k]]) for i in range(len(ref_alignment) -k)]
-    subs_tot = 0
-    ins_tot = 0
-    del_tot = 0
-    # print(sum([ block_matrix[s][0][628] for s in block_matrix ]))
-    # sys.exit()
-    for s in partition:
-        if s == ref_seq:
-            continue
-        subs_pos_corrected = 0
-        ins_pos_corrected = 0
-        del_pos_corrected = 0
-        seq_aln, cnt = partition[s]
-        seq_alignment_kmers = ["".join( n for n in seq_aln[i:i+k]) for i in range(len(seq_aln) -k)]
-        s_new_kmers = [ "".join( n for n in seq_aln[i:i+k]) for i in range(len(seq_aln) -k)]
-        block_v_kmers = [ block_v[i:i+k] for i in range(len(block_v) -k)]
-        # s_new = [n for n in seq_aln]
-        # block_v, _ = block_matrix[s]
-        assert len(block_v_kmers) == len(seq_alignment_kmers)
 
-        if cnt == 1:
-            for j, kmer in enumerate(seq_alignment_kmers):
-                if block_v_kmers[j] == 0:
-                    # print(j,"not present")
-                    continue
+# def correct_from_msa_window(ref_seq, partition, BFM, seq_to_acc, k, pos_cutoffs = [], block_matrix = {}, block_majority_vector = []):
+#     nr_columns = len(BFM)
+#     S_prime_partition = {}
+#     ref_alignment = partition[ref_seq][0]
+#     ref_alignment_kmers = ["".join([n for n in ref_alignment[i:i+k]]) for i in range(len(ref_alignment) -k)]
+#     subs_tot = 0
+#     ins_tot = 0
+#     del_tot = 0
+#     # print(sum([ block_matrix[s][0][628] for s in block_matrix ]))
+#     # sys.exit()
+#     for s in partition:
+#         if s == ref_seq:
+#             continue
+#         subs_pos_corrected = 0
+#         ins_pos_corrected = 0
+#         del_pos_corrected = 0
+#         seq_aln, cnt = partition[s]
+#         seq_alignment_kmers = ["".join( n for n in seq_aln[i:i+k]) for i in range(len(seq_aln) -k)]
+#         s_new_kmers = [ "".join( n for n in seq_aln[i:i+k]) for i in range(len(seq_aln) -k)]
+#         block_v_kmers = [ block_v[i:i+k] for i in range(len(block_v) -k)]
+#         # s_new = [n for n in seq_aln]
+#         # block_v, _ = block_matrix[s]
+#         assert len(block_v_kmers) == len(seq_alignment_kmers)
 
-                ref_kmer = ref_alignment_kmers[j]
-                # print(j, pos_cutoffs[j]["mm"],pos_cutoffs[j]["i"], pos_cutoffs[j]["d"] )
-                # print(BFM[j])
-                # print()
+#         if cnt == 1:
+#             for j, kmer in enumerate(seq_alignment_kmers):
+#                 if block_v_kmers[j] == 0:
+#                     # print(j,"not present")
+#                     continue
 
-                kmer_count = [ c if in block:] implement code for finding elegible reads to count kmers over. Elegible if has at least one 1 in block vector
-                if kmer_count < 2:
-                    tmp_dict = {segment:cnt for segment, cnt in BFM[j].items()}
-                    majority_correct_to = block_majority_vector[j] 
-                    s_new_kmers[j] = ref_kmer
+#                 ref_kmer = ref_alignment_kmers[j]
+#                 # print(j, pos_cutoffs[j]["mm"],pos_cutoffs[j]["i"], pos_cutoffs[j]["d"] )
+#                 # print(BFM[j])
+#                 # print()
+
+#                 # kmer_count = [ c if in block:] implement code for finding elegible reads to count kmers over. Elegible if has at least one 1 in block vector
+#                 if kmer_count < 2:
+#                     tmp_dict = {segment:cnt for segment, cnt in BFM[j].items()}
+#                     majority_correct_to = block_majority_vector[j] 
+#                     s_new_kmers[j] = ref_kmer
         
-        for kmer1, kmer2 in zip(s_new_kmers[:-1], s_new_kmers[1:]):
-            if kmer1[1:] == kmer2[:-1]:
-                pass
-            else:
-                print(kmer1, kmer2, "not matching")
+#         for kmer1, kmer2 in zip(s_new_kmers[:-1], s_new_kmers[1:]):
+#             if kmer1[1:] == kmer2[:-1]:
+#                 pass
+#             else:
+#                 print(kmer1, kmer2, "not matching")
 
-        # accessions_of_s = seq_to_acc[s] 
-        # for acc in accessions_of_s:
-        #     S_prime_partition[acc] = "".join([kmer for kmer in s_new if kmer != "-"])
-    sys.exit()
-    print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in partition".format(subs_tot, ins_tot, del_tot))
+#         # accessions_of_s = seq_to_acc[s] 
+#         # for acc in accessions_of_s:
+#         #     S_prime_partition[acc] = "".join([kmer for kmer in s_new if kmer != "-"])
+#     sys.exit()
+#     print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in partition".format(subs_tot, ins_tot, del_tot))
 
-    return S_prime_partition
-
-
+#     return S_prime_partition
 
 
-def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], block_matrix = {}, block_majority_vector = []):
+from scipy.stats import poisson
+def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], block_matrix = {}, block_majority_vector = [], homopol_correction_vector = []):
     nr_columns = len(BFM)
     S_prime_partition = {}
     ref_alignment = partition[ref_seq][0]
@@ -649,6 +694,7 @@ def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], bloc
     del_tot = 0
     # print(sum([ block_matrix[s][0][628] for s in block_matrix ]))
     # sys.exit()
+    print(homopol_correction_vector)
     for s in partition:
         if s == ref_seq:
             continue
@@ -673,9 +719,28 @@ def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], bloc
 
                 if n != ref_nucl:
                     if n == "-":  # deletion
-                        if BFM[j][n] <= pos_cutoffs[j]["d"]:
-                            s_new[j] = ref_nucl
-                            del_pos_corrected += 1
+                        # if BFM[j][n] <= pos_cutoffs[j]["d"]:
+                        #     s_new[j] = ref_nucl
+                        #     del_pos_corrected += 1
+                        if homopol_correction_vector[j] > 1:
+                            lambda_del = pos_cutoffs[j]["h"][0]
+                            lambda_corr = pos_cutoffs[j]["h"][1]
+                            p_del = poisson.pmf(BFM[j][n], lambda_del)
+                            p_corr = poisson.pmf(BFM[j][n], lambda_corr)
+                            # if homopol_correction_vector[j] == 4:
+                            #     print(BFM[j][n], pos_cutoffs[j]["h"], p_del, p_corr)
+                            if p_corr < p_del:
+                                s_new[j] = ref_nucl
+                                del_pos_corrected += 1
+
+                            # if BFM[j][n] <= pos_cutoffs[j]["d"] and p_corr > p_del:
+                            #     print(j, homopol_correction_vector[j],)
+                            #     print(n, BFM[j][n], pos_cutoffs[j]["h"], p_del, p_corr)
+                            #     print(pos_cutoffs[j]["d"])
+                        else:
+                            if BFM[j][n] <= pos_cutoffs[j]["d"]:
+                                s_new[j] = ref_nucl
+                                del_pos_corrected += 1
                     else:
                         if ref_nucl == "-": # insertion
                             if BFM[j][n] <= pos_cutoffs[j]["i"]:
@@ -721,7 +786,7 @@ def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], bloc
             S_prime_partition[acc] = "".join([n for n in s_new if n != "-"])
 
     print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in partition".format(subs_tot, ins_tot, del_tot))
-
+    # sys.exit()
     return S_prime_partition
 
 

@@ -2,6 +2,7 @@ import os,sys
 import random
 import itertools
 import argparse
+import errno
 # from collections import deque
 
 '''
@@ -51,8 +52,8 @@ def check_valid_args(args, ref):
 
 def simulate_reads( args, ref ):
 
-    outfile = open(args.outfile, "w")
-    is_fastq = True if args.outfile[-1] == "q" else False
+    outfile = open(os.path.join(args.outfolder,"reads.fq"), "w")
+    is_fastq = True #if outfile[-1] == "q" else False
     seq, acc = ref[list(ref.keys())[0]]
     seq = seq.upper()
 
@@ -99,11 +100,45 @@ def simulate_reads( args, ref ):
         for acc, read_seq in sorted(reads.items(), key = lambda x: len(x[1]), reverse = True):
             outfile.write(">{0}\n{1}\n".format(acc, read_seq))
     
-    outfile.close
+    outfile.close()
 
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+        print("creating", path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
+def generate_isoforms(args, ref_path):
+    isoforms_out = open(os.path.join(args.outfolder,"isoforms.fa"), "w")
+    ref = {acc : seq for acc, (seq, qual) in readfq(open(ref_path, 'r'))}
+    # print(ref_path, ref)
+    seq = ref[list(ref.keys())[0]]
+    exon_coords = [(start, stop) for start, stop in zip(args.coords[:-1], args.coords[1:]) ]
+    exons = [seq[j_start: j_stop] for (j_start, j_stop) in exon_coords ]
+    for i in range(1, len(exons)+1):
+        for j, e in enumerate(itertools.combinations(exons,i)):
+            isoform = "".join([ex for ex in e])
+            isoforms_out.write(">{0}\n{1}\n".format("isoform_{0}_{1}".format(i,j), isoform))
+
+    isoforms_out.close()
 
 def main(args):
-    ref = {acc : (seq, qual) for acc, (seq, qual) in readfq(open(args.ref, 'r'))}
+    mkdir_p(args.outfolder)
+
+    if args.sim_genome_len > 0:
+        genome_out = open(os.path.join(args.outfolder,"reference.fa"), "w")
+        genome_out.write(">{0}\n{1}\n".format("ref", "".join([random.choice("ACGT") for i in range(args.sim_genome_len)]) ))
+        genome_out.close()
+        generate_isoforms(args,genome_out.name)
+        sys.exit()
+    else:
+        ref = {acc : (seq, qual) for acc, (seq, qual) in readfq(open(args.ref, 'r'))}
 
     check_valid_args(args, ref)
 
@@ -114,9 +149,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Plot p-minimizers shared.")
     parser.add_argument('--ref', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
     parser.add_argument('--nr_reads', type=int, default = 200, help='Outfolder path')
-    parser.add_argument('--outfile', type=str, help='Simulated reads file. If ending in "q", fastq format will be output with all quality values being 10, i.e., "+". ')
+    parser.add_argument('--outfolder', type=str, help='Outfolder.')
+    # parser.add_argument('--outfile', type=str, help='Simulated reads file. If ending in "q", fastq format will be output with all quality values being 10, i.e., "+". ')
+
     parser.add_argument('--coords', nargs='+', type=int, help='Exon coordinates. For example, --coords 0 50 100 150 220 240 gives exons 0-50, 100-150, 220-240. Has to be an even number.')
     parser.add_argument('--probs', nargs='+', type=float, help='Probability for each exon to be sampled. For example, --p 1.0, 0.2, 1.0 includes first and third exon in all reads and second exon is, on average, included in 1/5 of the reads.')
+    parser.add_argument('--sim_genome_len', type=int, default = 0, help='Length if simulation of genome')
+    
     # parser.add_argument('--start', type=int, help='Start sequencing coordinate, Has to be smaller than smallest jcoord and stop. ')
     # parser.add_argument('--stop', type=int, help='Stop sequencing coordinate, Has to be larger than largest jcoord and start.')
     
