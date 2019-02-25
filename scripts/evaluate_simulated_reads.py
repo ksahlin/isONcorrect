@@ -413,9 +413,9 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     best_match_container = {}
     not_FN = set()
     # print(consensus_transcripts)
-    if len(consensus_transcripts) == 0:
-        out_file.write("{0}\t{1}\t{2}\n".format(nr_unique_refs, len(consensus_transcripts), ",".join([ str(a) for a in transcript_abundances.values()])) )
-        return
+    # if len(consensus_transcripts) == 0:
+    #     out_file.write("{0}\t{1}\t{2}\n".format(nr_unique_refs, len(consensus_transcripts), ",".join([ str(a) for a in transcript_abundances.values()])) )
+    #     return
 
     sorted_lengths = sorted([(len(q_seq), q_acc) for q_acc, q_seq in consensus_transcripts.items()])
     # for l in sorted_lengths:
@@ -483,13 +483,22 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
         print("FN:",ref, len(reference_transcripts[ref]) )
     # current logging:
     # first row display info of number of uniqur reference transcripts, and number of inferred transcripts
-    if sampled_dict:
-        out_file.write("{0}\t{1}\t{2}\n".format(len(sampled_dict), len(consensus_transcripts), ",".join([ str(a) for a in transcript_abundances.values()])) )
-    else:
-        out_file.write("{0}\t{1}\t{2}\n".format(nr_unique_refs, len(consensus_transcripts), ",".join([ str(a) for a in transcript_abundances.values()])) )
+    # if sampled_dict:
+    #     out_file.write("{0}\t{1}\t{2}\n".format(len(sampled_dict), len(consensus_transcripts), ",".join([ str(a) for a in transcript_abundances.values()])) )
+    # else:
+    #     out_file.write("{0}\t{1}\t{2}\n".format(nr_unique_refs, len(consensus_transcripts), ",".join([ str(a) for a in transcript_abundances.values()])) )
 
     # total discoveries, total perfect matches (1.0 identity), errors for each consensus
     # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(nr_unique_refs, q_acc, best_match_container[q_acc], errors_container[q_acc], identity_container[q_acc], *error_types_container[q_acc]))
+
+    print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
+    tot_errors = sum([ ed for acc, ed in errors_container.items()])
+    all_errors = [error_types_container[acc] for acc in error_types_container]
+    all_s = sum([s for s,i,d in all_errors])
+    all_i = sum([i for s,i,d in all_errors])
+    all_d = sum([d for s,i,d in all_errors])
+    out_file.write("{0}\t{1}\t{2}\t{3}\n".format(tot_errors, all_s, all_i, all_d))
+    
     out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del"))
 
     for q_acc in errors_container:
@@ -499,6 +508,8 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
             # print(ssw_stats, minimizer_graph_c_to_t[q_acc])
             # print()
             out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc]))
+
+    print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
 
 
 def main(args):
