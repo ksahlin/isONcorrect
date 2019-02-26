@@ -425,7 +425,7 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     sorted_lengths = sorted([len(r_seq) for r_acc, r_seq in reference_transcripts.items()])
     # for l in sorted_lengths:
     #     print(l)
-
+    total_read_nucleotides = sum([len(q_seq) for q_acc, q_seq in consensus_transcripts.items()])
     # pre check exact matches:
     if params.only_exact:
         ref_seq_to_acc = {seq : acc for acc, seq in reference_transcripts.items()}
@@ -455,7 +455,6 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
             r_acc_max_id = "NONE"
             fewest_errors = len(q_seq)
             best_mismatches, best_insertions, best_deletions = len(q_seq), len(q_seq), len(q_seq)
-
             for j, (r_acc, r_seq) in enumerate(minimizer_graph_c_to_t[q_acc].items()):
                 deletions, insertions, mismatches, match_line = minimizer_graph_c_to_t[q_acc][r_acc]
                 edit_distance =  deletions + insertions + mismatches
@@ -497,7 +496,7 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     all_s = sum([s for s,i,d in all_errors])
     all_i = sum([i for s,i,d in all_errors])
     all_d = sum([d for s,i,d in all_errors])
-    out_file.write("{0}\t{1}\t{2}\t{3}\n".format(tot_errors, all_s, all_i, all_d))
+    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3)))
     
     out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del"))
 
