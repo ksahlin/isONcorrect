@@ -11,7 +11,7 @@ do
         python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --ref $outbase/$id/reference.fa  --coords 0 50 100 150 --outfolder $outbase/$id/$p --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
         python /Users/kxs624/Documents/workspace/isONcorrect/isONcorrect --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ > /dev/null
         python /Users/kxs624/Documents/workspace/isONcorrect/scripts/evaluate_simulated_reads.py  $outbase/$id/$p/isoncorrect/corrected_reads_parasail_1.fasta  $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation > /dev/null
-        echo -n  $id $p "    " && head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv
+        echo -n  $id$'\t'$p$'\t'&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv
         # head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv 
         # ( head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv  && $id && $p ) | cat
     done
