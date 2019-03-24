@@ -123,13 +123,36 @@ def run_spoa_affine(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_pat
     r.close()
     return consensus, msa
 
+def run_spoa_convex(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
+    with open(spoa_out_file, "w") as output_file:
+        print('Running spoa convex...', end=' ')
+        stdout.flush()
+        null = open("/dev/null", "w")
+        # print(spoa_path, "-l", "2", "-r", "2", "-g", "-4", "-e", "0", "-d", dot_graph_path, reads)
+        subprocess.check_call([ spoa_path, "-l", "2", "-r", "2", "-m", "10", "-g", "-8", "-e", "-2", "-q", "-24", "-c", "-1" , "-d", dot_graph_path, reads], stdout=output_file, stderr=null)
+        # subprocess.check_call([ spoa_path, "-q", reads, "-l", "2", "-r", "2", "-o","-4", "-e", "0", "-d", dot_graph_path], stderr=output_file, stdout=null)
+        print('Done.')
+        stdout.flush()
+    output_file.close()
+    l = open(spoa_out_file, "r").readlines()
+    consensus = l[1].strip()
+    msa = [s.strip() for s in l[3:]]
+    print("convex heaviest path:", consensus, len(consensus))
+    print()
+    # print(msa)
+    
+    r = open(ref_out_file, "w")
+    r.write(">{0}\n{1}".format("reference", consensus))
+    r.close()
+    return consensus, msa
+
 def run_spoa_affine_v2_0_3(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
     with open(spoa_out_file, "w") as output_file:
         print('Running spoa...', end=' ')
         stdout.flush()
         null = open("/dev/null", "w")
         # print(spoa_path, "-l", "2", "-r", "2", "-g", "-4", "-e", "0", "-d", dot_graph_path, reads)
-        subprocess.check_call([ spoa_path, "-l", "2", "-r", "2", "-x", "-8", "-m", "10", "-g", "-8", "-e", "-1", "-d", dot_graph_path, reads], stdout=output_file, stderr=null)
+        subprocess.check_call([ spoa_path, "-l", "2", "-r", "2", "-x", "-4", "-m", "10", "-g", "-8", "-e", "-1", "-d", dot_graph_path, reads], stdout=output_file, stderr=null)
         # subprocess.check_call([ spoa_path, "-q", reads, "-l", "2", "-r", "2", "-o","-4", "-e", "0", "-d", dot_graph_path], stderr=output_file, stdout=null)
         print('Done.')
         stdout.flush()

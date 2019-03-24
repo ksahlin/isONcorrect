@@ -78,7 +78,7 @@ def simulate_reads( args, ref ):
                 r = random.uniform(0,1)
                 if r < 0.84:
                     read.append(n)
-                elif 0.85 <= r <= 0.96:
+                elif 0.84 <= r <= 0.96:
                     pass 
                 else:
                     read.append(n)

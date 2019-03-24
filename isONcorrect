@@ -128,16 +128,32 @@ def main(args):
         reference_seq, msa = create_augmented_reference.run_spoa_affine_v2_0_3(isocon_corrected.name, ref_file_isocon, isocon_out_file, "spoa_affine_2_0_3", dot_graph_path)
         reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
         print("spoa_affine_2_0_3:", reference_seq_longest_path)
+
+        reference_seq_true = "GGGGTCAGATGCCCTGTAATGAGCCACAGAAACTTGGGCCCATGGGTAGGTTCCAGGAGAGAGGGGCCTGGAGGGGTCCTCAGCCCTGGGGGATTGGGGTGTCAAGCAACTTCTCTCTCCAGGCTCAGTCCTGCGGTCTGTGGGGAGACCTTCCTGTGGGCGCAGCTGGAGTCAAGGCTTGGGGTCTTGGGGTATGCTTCGCAGACAAAGCAGCTGTGCCAGTCTCCGAGTTCCTGGGACTCTGCCAGATCCAGGGCATCCTGAGCGGGCCCGGCTGGGGTGGGGATGGGGTCCGAGGGC"
+        reference_qual_true = "".join(["+" for i in range(len(reference_seq_true))]) 
+
+        reference_qual_longest_path = "".join(["+" for i in range(len(reference_seq_longest_path))]) 
+        error_rate_sum, ref_longest_alignment, ref_true_alignment, block_coverage = align.block_align_parasail(reference_seq_true, reference_seq_longest_path, reference_qual_true, reference_qual_longest_path, args)
+        print(ref_longest_alignment)
+        print(ref_true_alignment)
+        print(len([1 for n1,n2 in zip(ref_true_alignment,ref_longest_alignment) if n1 !=n2]) )
+
+
+        reference_seq, msa = create_augmented_reference.run_spoa_convex(isocon_corrected.name, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
+        reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
+        print("spoa_convex:", reference_seq_longest_path)
+        # error_rate_sum, ref_longest_alignment, ref_true_alignment, block_coverage = align.block_align_parasail(reference_seq_true, reference_seq_longest_path, reference_qual_true, reference_qual_longest_path, args)
+        # print(ref_longest_alignment)
+        # print(ref_true_alignment)
+        # print(len([1 for n1,n2 in zip(ref_true_alignment,ref_longest_alignment) if n1 !=n2]) )
+
         # sys.exit()
         # reference_seq_longest_path_botond = create_augmented_reference.longest_path_botond(dot_graph_path)
         # print("botond:", reference_seq_longest_path_botond)
         
-        # reference_seq_true = "GGGGTCAGATGCCCTGTAATGAGCCACAGAAACTTGGGCCCATGGGTAGGTTCCAGGAGAGAGGGGCCTGGAGGGGTCCTCAGCCCTGGGGGATTGGGGTGTCAAGCAACTTCTCTCTCCAGGCTCAGTCCTGCGGTCTGTGGGGAGACCTTCCTGTGGGCGCAGCTGGAGTCAAGGCTTGGGGTCTTGGGGTATGCTTCGCAGACAAAGCAGCTGTGCCAGTCTCCGAGTTCCTGGGACTCTGCCAGATCCAGGGCATCCTGAGCGGGCCCGGCTGGGGTGGGGATGGGGTCCGAGGGC"
-        # reference_qual_longest_path = "".join(["+" for i in range(len(reference_seq_longest_path))]) 
-        # reference_qual_true = "".join(["+" for i in range(len(reference_seq_true))]) 
-        # error_rate_sum, ref_longest_alignment, ref_true_alignment, block_coverage = align.block_align_parasail(reference_seq_true, reference_seq_longest_path, reference_qual_true, reference_qual_longest_path, args)
-        # print(ref_longest_alignment)
-        # print(ref_true_alignment)
+
+
+
         # sys.exit()
 
         parasail_alignments = align.align_parasail(isocon_corrected.name, reference_seq_longest_path, args)
