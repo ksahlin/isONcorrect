@@ -142,6 +142,11 @@ def main(args):
         reference_seq, msa = create_augmented_reference.run_spoa_convex(isocon_corrected.name, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
         reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
         print("spoa_convex:", reference_seq_longest_path)
+
+        ref_file = os.path.join(args.outfolder, "spoa_ref.fa")
+        r = open(ref_file, "w")
+        r.write(">{0}\n{1}\n".format("ref", reference_seq_longest_path))
+        r.close()
         # error_rate_sum, ref_longest_alignment, ref_true_alignment, block_coverage = align.block_align_parasail(reference_seq_true, reference_seq_longest_path, reference_qual_true, reference_qual_longest_path, args)
         # print(ref_longest_alignment)
         # print(ref_true_alignment)
