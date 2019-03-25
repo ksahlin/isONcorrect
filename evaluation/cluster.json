@@ -1,0 +1,24 @@
+{
+    "isoncorrect" : 
+    {
+        "jobname" : "isoncorrect",
+        "ntasks" : "1",
+        "Nodes" : 1,
+        "runtime" : "01:00:00",
+        "mail" : "ksahlin@kth.se",
+        "mail_type" : "FAIL",
+        "exclude" : "c[4,6-7,8-16]"
+    },
+
+    "clusters_to_fastq": 
+    {
+        "jobname" : "clusters_to_fastq",
+        "ntasks" : "1",
+        "Nodes" : 1,
+        "runtime" : "01:00:00",
+        "mail" : "ksahlin@kth.se",
+        "mail_type" : "FAIL",
+        "exclude" : "c[4,6-7,8-16]"
+    }
+    
+}
