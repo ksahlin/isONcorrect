@@ -89,7 +89,7 @@ rule isoncorrect:
 
 
 rule combine_isoncorrect:
-    input: all_clusters_fastq = dynamic(expand('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{clusterid}/corrected_reads_parasail_1.fastq'))
+    input: all_clusters_fastq = dynamic(expand('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{{clusterid}}/corrected_reads_parasail_1.fastq'))
     output: corrected_reads_fastq = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.fastq",
             corrected_reads_bam = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.bam"
     run:
