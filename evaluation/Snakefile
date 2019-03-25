@@ -1,0 +1,94 @@
+"""
+    snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experimental_experiments.json --latency-wait 100 --verbose -n
+
+    # BIOLOGICAL
+
+    # running isONclust/isONclust2
+    1. going from original reads to clusters
+    2. from cluster file to fastq files
+
+
+    ### Running isONcorrect
+    1. From cluster fasta to corrected reads
+    2. Merge all corrected read clusters
+
+    ### LR_EC_ANALYSER 
+    2. Run LR_EC_ANALYSER with combined output from isONcorrect
+
+
+    # SIMULATED
+
+    ### simulation evalautions
+    4. Basing exon correction plot with error rate
+
+
+    # target rules:
+
+"""
+
+shell.prefix("set -o pipefail; ")
+# configfile: "experiments.json"
+
+####################################################
+########## standard python functions ###############
+####################################################
+
+import re
+import os
+import errno
+import shutil
+
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+rule all:
+    #input: config["ROOT_OUT"] + "evaluation/all_datasets_eval_table.tsv"
+
+rule isONclust:
+    input:  fastq =  "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/raw.fastq",
+    output: time_and_mem = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont/time_and_mem.txt", # config["ROOT_OUT"] + "time_and_mem/isonclust/{dataset}/runtime.stdout",
+            clusters = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont/final_clusters.csv" #config["ROOT_OUT"] + "cluster/isonclust/{dataset}/final_clusters.csv"
+    run:
+        time = config["GNUTIME"]
+        mkdir_p(config["ROOT_OUT"] + "time_and_mem/isonclust/{0}/".format(wildcards.dataset) )
+        outfolder = config["ROOT_OUT"] + "cluster/isonclust/{0}/".format(wildcards.dataset)
+        mkdir_p(outfolder)
+        shell("source activate py36")
+        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust -k 13 -w 20 {input.flnc}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
+
+    
+
+rule clusters_to_fastq:
+    input: fastq = rules.isONclust.input.fastq,
+            clusters = rules.isONclust.output.clusters
+    output: dynamic("/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont/fastq_clusters/{clusterid}.fastq")
+    run:
+        time = config["GNUTIME"]
+        shell("source activate py36")
+        outfolder = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont/fastq_clusters/"
+        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust write_fastq --clusters {input.clusters} --fastq {input.fastq} --outfolder {outfolder} --N 100")
+
+
+
+rule isoncorrect:
+    input: reads = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont/fastq_clusters/{clusterid}.fastq"
+    output: corrected_reads = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{clusterid}/corrected_reads_parasail_1.fastq"
+    run: 
+
+
+rule lr_ec_analyser:
+
+rule sim_error_rate:
+
+
+
+
+
+
