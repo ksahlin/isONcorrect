@@ -50,7 +50,9 @@ def mkdir_p(path):
 
 rule all:
     input: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.bam",
-            dynamic('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{clusterid}/corrected_reads_parasail_1.fastq')
+
+rule correction:
+    input: dynamic('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{clusterid}/corrected_reads_parasail_1.fastq')
 
 rule isONclust:
     input:  fastq =  "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/raw.fastq",
