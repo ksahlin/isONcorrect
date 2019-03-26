@@ -13,7 +13,7 @@
     "clusters_to_fastq": 
     {
         "jobname" : "clusters_to_fastq",
-        "ntasks" : "1",
+        "ntasks" : "8",
         "Nodes" : 1,
         "runtime" : "01:00:00",
         "mail" : "ksahlin@kth.se",
