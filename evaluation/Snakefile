@@ -84,7 +84,7 @@ rule isoncorrect:
     input: reads = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont/fastq_clusters/{clusterid}.fastq"
     output: corrected_reads = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{clusterid}/corrected_reads_parasail_1.fastq"
     run: 
-        outfolder = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/"
+        outfolder = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{0}".format(wildcards.clusterid)
         shell("python /galaxy/home/ksahlin/prefix/source/isONcorrect/isONcorrect --fastq {input.reads}   --outfolder {outfolder} ")
 
 
@@ -97,19 +97,32 @@ rule combine_isoncorrect:
         shell("FastqToSam FASTQ={input.all_clusters_fastq} OUTPUT={output.corrected_reads_bam}")
 
 
+# rule lr_ec_analyser_quick:
+    
+#     run:
+#         shell("cd <path_to_this_project_root>")
+#         shell("bash setup.sh")
+#         shell("source venv/bin/activate")
+        # shell("python run_LR_EC_analyser.py --genome /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.dna.primary_assembly.fa \
+        #         --gtf /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.gtf \
+        #         --raw /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/raw.bam \
+        #         -o /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_lr_ec_analyser_test/ \
+        #         --hybrid /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/LoRDEC.bam \
+        #         --paralogous /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.paralog_genes.80_percent_plus_identity.txt \
+        #          --skip_bam_process --skip_alignqc --skip_copying")
+
 # rule lr_ec_analyser:
     
 #     run:
 #         shell("cd <path_to_this_project_root>")
 #         shell("bash setup.sh")
 #         shell("source venv/bin/activate")
-#         shell("python run_LR_EC_analyser.py --genome /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.dna.primary_assembly.fa \
-#                 --gtf /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.gtf \
-#                 --raw /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/raw.bam \
-#                 -o /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_lr_ec_analyser_test/ \
-#                 --hybrid /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/LoRDEC.bam \
-#                 --paralogous /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.paralog_genes.80_percent_plus_identity.txt \
-#                  --skip_bam_process --skip_alignqc --skip_copying")
+        # shell("python run_LR_EC_analyser.py --genome /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.dna.primary_assembly.fa \
+        #         --gtf /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.gtf \
+        #         --raw /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/raw.bam \
+        #         -o /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_lr_ec_analyser_test/ \
+        #         --hybrid /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/LoRDEC.bam \
+        #         --paralogous /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.paralog_genes.80_percent_plus_identity.txt ")
 
 
 # rule sim_error_rate:

@@ -162,13 +162,13 @@ def main(args):
         # sys.exit()
 
         parasail_alignments = align.align_parasail(isocon_corrected.name, reference_seq_longest_path, args)
-        mm2_alignments = align.align_mm2( isocon_corrected.name, reference_seq_longest_path, args)
+        # mm2_alignments = align.align_mm2( isocon_corrected.name, reference_seq_longest_path, args)
         # align.align_with_nlmgr(isocon_corrected, reference_seq_longest_path)
 
 
-        partition_mm2 = {}
+        # partition_mm2 = {}
         partition_parasail = {}
-        partition_mm2[reference_seq_longest_path] = (0, reference_seq_longest_path, reference_seq_longest_path, 1)
+        # partition_mm2[reference_seq_longest_path] = (0, reference_seq_longest_path, reference_seq_longest_path, 1)
         partition_parasail[reference_seq_longest_path] = (0, reference_seq_longest_path, reference_seq_longest_path, 1)
         # dels_parasail = []
         # dels_mm2 = []
@@ -195,7 +195,7 @@ def main(args):
 
             acc, seq, qual = reads[j]
             read_errors[seq] = (ins, del_, subs,  aligned_length)
-            partition_mm2[seq] = (0, mm2_alignments[j][2], mm2_alignments[j][1], len(seq_to_index[seq]))
+            # partition_mm2[seq] = (0, mm2_alignments[j][2], mm2_alignments[j][1], len(seq_to_index[seq]))
             partition_parasail[seq] = (0, parasail_alignments[j][2], parasail_alignments[j][1], len(seq_to_index[seq]))
         # dels_distr_ref = [coord for sublist in dels_distr_ref for coord in sublist]
 
