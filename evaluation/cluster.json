@@ -4,7 +4,7 @@
         "jobname" : "isoncorrect",
         "ntasks" : "1",
         "Nodes" : 1,
-        "runtime" : "01:00:00",
+        "runtime" : "1-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
         "exclude" : "c[4,6-7,8-16]"
@@ -15,7 +15,7 @@
         "jobname" : "clusters_to_fastq",
         "ntasks" : "8",
         "Nodes" : 1,
-        "runtime" : "01:00:00",
+        "runtime" : "10:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
         "exclude" : "c[4,6-7,8-16]"
