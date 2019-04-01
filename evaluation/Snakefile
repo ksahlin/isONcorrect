@@ -52,7 +52,11 @@ rule all:
     input: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.bam",
 
 rule correction:
-    input: dynamic('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{{clusterid}}/corrected_reads_parasail_1.fastq')
+    input: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.fastq"
+
+rule evaluation:
+    input: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/"
+
 
 rule isONclust:
     input:  fastq =  "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/raw.fastq",
@@ -71,12 +75,12 @@ rule isONclust:
 rule clusters_to_fastq:
     input: fastq = rules.isONclust.input.fastq,
             clusters = rules.isONclust.output.clusters
-    output: dynamic("/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont/fastq_clusters/{clusterid}.fastq")
+    output: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont/fastq_clusters/{clusterid}.fastq"
     run:
         time = config["GNUTIME"]
         shell("source activate py36")
         outfolder = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont/fastq_clusters/"
-        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust write_fastq --clusters {input.clusters} --fastq {input.fastq} --outfolder {outfolder} --N 100")
+        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust write_fastq --clusters {input.clusters} --fastq {input.fastq} --outfolder {outfolder} --N 1")
 
 
 
@@ -85,16 +89,34 @@ rule isoncorrect:
     output: corrected_reads = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{clusterid}/corrected_reads_parasail_1.fastq"
     run: 
         outfolder = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{0}".format(wildcards.clusterid)
-        shell("python /galaxy/home/ksahlin/prefix/source/isONcorrect/isONcorrect --fastq {input.reads}   --outfolder {outfolder} ")
+        shell("python /galaxy/home/ksahlin/prefix/source/isONcorrect/isONcorrect --fastq {input.reads}  --outfolder {outfolder} ")
 
 
 rule combine_isoncorrect:
-    input: all_clusters_fastq = dynamic(expand('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{{clusterid}}/corrected_reads_parasail_1.fastq'))
+    input: all_clusters_fastq = expand('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/{clusterid}/corrected_reads_parasail_1.fastq', clusterid=[str(i) for i in range(1000,1100)]) # all is range(0,69751)
     output: corrected_reads_fastq = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.fastq",
-            corrected_reads_bam = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.bam"
+            
     run:
         shell("cat {input.all_clusters_fastq} > {output.corrected_reads_fastq}")
-        shell("FastqToSam FASTQ={input.all_clusters_fastq} OUTPUT={output.corrected_reads_bam}")
+        # shell("FastqToSam FASTQ={input.all_clusters_fastq} OUTPUT={output.corrected_reads_bam}")
+
+rule align_reads_minimap2:
+    input: corrected_reads = combine_isoncorrect.output.corrected_reads_fastq,
+            ref = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.dna.primary_assembly.fa"
+    output: corrected_reads_aligned = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.sam"
+    run:
+        shell("/usr/bin/time -v  minimap2 -t 8 -ax splice -uf -k14 {ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
+
+rule sam_to_bam:
+    input: sam = align_reads_minimap2.output.corrected_reads_aligned
+    output:
+          bam_sorted = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.bam.sorted.bam"
+    shell:
+        bam="/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.sam"
+        shell("samtools view -Sbh {input.sam} > {bam}")
+        # shell("samtools sort {bam} {bam}.sorted.bam")
+        shell("samtools sort {bam} > {output.bam_sorted}")
+        shell("samtools index {output.bam_sorted}")
 
 
 # rule lr_ec_analyser_quick:
@@ -111,18 +133,22 @@ rule combine_isoncorrect:
         #         --paralogous /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.paralog_genes.80_percent_plus_identity.txt \
         #          --skip_bam_process --skip_alignqc --skip_copying")
 
-# rule lr_ec_analyser:
-    
-#     run:
-#         shell("cd <path_to_this_project_root>")
-#         shell("bash setup.sh")
-#         shell("source venv/bin/activate")
-        # shell("python run_LR_EC_analyser.py --genome /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.dna.primary_assembly.fa \
-        #         --gtf /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.gtf \
-        #         --raw /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/raw.bam \
-        #         -o /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_lr_ec_analyser_test/ \
-        #         --hybrid /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/LoRDEC.bam \
-        #         --paralogous /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.paralog_genes.80_percent_plus_identity.txt ")
+rule lr_ec_analyser:
+    input: sam_to_bam.output.bam_sorted
+    output:
+        stats = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/alignqc_out_on_isONcorrect.bam/data/alignment_stats.txt"
+    run:
+        shell("cd /galaxy/home/ksahlin/prefix/source/LR_EC_analyser")
+        shell("bash setup.sh")
+        shell("source venv/bin/activate")
+        shell("python run_LR_EC_analyser.py --genome /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.dna.primary_assembly.fa \
+                --gtf /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.gtf \
+                --raw /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/raw.bam \
+                --self {input.isoncorrect_bam}\
+                -o /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_lr_ec_analyser_test/ \
+                --hybrid /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/LoRDEC.bam \
+                --paralogous /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.87.paralog_genes.80_percent_plus_identity.txt \
+                --skip_bam_process")
 
 
 # rule sim_error_rate:
