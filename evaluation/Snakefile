@@ -106,7 +106,7 @@ rule align_reads_minimap2:
             ref = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont/Mus_musculus.GRCm38.dna.primary_assembly.fa"
     output: corrected_reads_aligned = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.sam"
     run:
-        shell("/usr/bin/time -v  minimap2 -t 8 -ax splice -uf -k14 {ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 -t 8 -ax splice -uf -k14 {input.ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
 
 rule sam_to_bam:
     input: sam = rules.align_reads_minimap2.output.corrected_reads_aligned
