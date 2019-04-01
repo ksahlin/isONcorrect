@@ -1,4 +1,18 @@
 {
+
+    "__default__" : 
+    {
+        "account" : "",
+        "ntasks" : "2",
+        "Nodes" : 1,
+        "runtime" : "3-00:00:00",
+        "jobname" : "pipline",
+        "mail" : "ksahlin@kth.se",
+        "mail_type" : "FAIL",
+        "exclude" : "c[4,6-7,8-16]"
+
+    },
+
     "isoncorrect" : 
     {
         "jobname" : "isoncorrect",
@@ -19,6 +33,17 @@
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
         "exclude" : "c[4,6-7,8-16]"
+    },
+
+    "lr_ec_analyser" : 
+    {
+        "jobname" : "lr_ec_analyser",
+        "ntasks" : "8",
+        "Nodes" : 1,
+        "runtime" : "2-00:00:00",
+        "mail" : "ksahlin@kth.se",
+        "mail_type" : "FAIL",
+        "exclude" : "c[4,6-7,8-16]"
     }
-    
+
 }
