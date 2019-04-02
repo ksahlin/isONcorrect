@@ -84,7 +84,20 @@ def main(args):
     seq_to_index = get_seq_to_index(reads)
 
     # spoa_corrected = open(args.fastq)  #{ i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
-    isocon_corrected = open(args.fastq) #{ i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
+    isocon_corrected = open(args.fastq, "r") #{ i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
+
+    stripped = []
+    i = 0
+    for acc, (seq, qual) in help_functions.readfq(open(args.fastq, 'r')):
+        if i > 200:
+            break
+        stripped.append((acc, seq, qual))
+        i += 1
+    spoa_cons = open(os.path.join(args.outfolder, "stripped.fastq"), "w")
+    for (acc, seq, qual) in stripped:
+        spoa_cons.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, seq, "+", qual))
+    spoa_cons.close()
+
     print("Correcting {0} reads.".format(len(reads)))
     start = time()
 
@@ -139,7 +152,7 @@ def main(args):
         # print(len([1 for n1,n2 in zip(ref_true_alignment,ref_longest_alignment) if n1 !=n2]) )
 
 
-        reference_seq, msa = create_augmented_reference.run_spoa_convex(isocon_corrected.name, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
+        reference_seq, msa = create_augmented_reference.run_spoa_convex(spoa_cons.name, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
         reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
         print("spoa_convex:", reference_seq_longest_path)
 
@@ -169,7 +182,7 @@ def main(args):
         # partition_mm2 = {}
         partition_parasail = {}
         # partition_mm2[reference_seq_longest_path] = (0, reference_seq_longest_path, reference_seq_longest_path, 1)
-        partition_parasail[reference_seq_longest_path] = (0, reference_seq_longest_path, reference_seq_longest_path, 1)
+        partition_parasail["ref"] = (0, reference_seq_longest_path, reference_seq_longest_path, 1)
         # dels_parasail = []
         # dels_mm2 = []
         dels_distr_ref = []
@@ -196,7 +209,7 @@ def main(args):
             acc, seq, qual = reads[j]
             read_errors[seq] = (ins, del_, subs,  aligned_length)
             # partition_mm2[seq] = (0, mm2_alignments[j][2], mm2_alignments[j][1], len(seq_to_index[seq]))
-            partition_parasail[seq] = (0, parasail_alignments[j][2], parasail_alignments[j][1], len(seq_to_index[seq]))
+            partition_parasail[acc] = (0, parasail_alignments[j][2], parasail_alignments[j][1], len(seq_to_index[seq]))
         # dels_distr_ref = [coord for sublist in dels_distr_ref for coord in sublist]
 
         d_c = open(os.path.join(args.outfolder, "dc.txt"), "w")        
@@ -210,7 +223,7 @@ def main(args):
         ## Column correct
 
         # corrected_mm2 = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition_mm2, seq_to_index)
-        corrected_parasail = correct_seqs.correct_to_consensus(reference_seq_longest_path, partition_parasail, seq_to_index, read_errors, args)
+        corrected_parasail = correct_seqs.correct_to_consensus(partition_parasail, read_errors, args)
         isocon_corrected = open(os.path.join(args.outfolder, "corrected_reads_parasail_{0}.fastq".format(iteration)), "w")
         isocon_corrected_fa = open(os.path.join(args.outfolder, "corrected_reads_parasail_{0}.fasta".format(iteration)), "w")
         for acc in sorted(corrected_parasail):
@@ -241,7 +254,7 @@ def main(args):
             isocon_corrected_fa.write(">{0}\n{1}\n".format(acc, corrected_parasail[acc] ))
         isocon_corrected.close()
         isocon_corrected_fa.close()
-        # sys.exit()
+        sys.exit()
         
 
         # Row Correct

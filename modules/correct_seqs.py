@@ -258,7 +258,7 @@ def create_multialignment_format_NEW(query_to_target_positioned_dict, start, sto
     return alignment_matrix
 
 
-def create_multialignment_matrix(repr_seq, partition):
+def create_multialignment_matrix(partition):
     """
         a partition is a dictionary of pairwise alignments for a given center repr_seq. "partition has the following
         structure:  partition = {s : (edit_distance, m_alignment, s_alignment, degree_of_s)}
@@ -292,6 +292,7 @@ def create_multialignment_matrix(repr_seq, partition):
         alignment_matrix is a representation of all alignments in a partition. this is a dictionary where sequences s_i belonging to the 
         partition as keys and the alignment of s_i with respect to the alignment matix.
     """
+    repr_seq = partition["ref"][1]
     query_to_target_positioned_dict = {}
     for q_acc in partition:
         (edit_distance, m_alignment, s_alignment, degree_of_s) = partition[q_acc]
@@ -464,14 +465,14 @@ def get_homopolymer_factor(ref_aln):
     return homopol_correction_vector
 
 
-def blocks_from_msa(ref_seq, partition, k, match_id):
+def blocks_from_msa(partition, k, match_id):
     block_matrix = {}
-    ref_aln = partition[ref_seq][0]
-    for s in partition:
-        if s == ref_seq:
+    ref_aln = partition["ref"][0]
+    for acc in partition:
+        if acc == "ref":
             homopol_correction_vector = get_homopolymer_factor(ref_aln)
         else:
-            seq_aln, cnt = partition[s]
+            seq_aln, cnt = partition[acc]
             # block_vector = get_block_coverage(seq_aln, ref_aln, k, match_id)
             block_vector = get_block_coverage2(seq_aln, ref_aln, k, match_id)
             # print("".join([str(b) for b in block_vector]))
@@ -479,7 +480,7 @@ def blocks_from_msa(ref_seq, partition, k, match_id):
             # print("".join([str(b) for b in ref_aln]))
             # print("".join([str(b) for b in seq_aln]))
             # print()
-            block_matrix[s] = (block_vector, cnt)
+            block_matrix[acc] = (block_vector, cnt)
     return block_matrix, homopol_correction_vector
 
 
@@ -516,16 +517,15 @@ def get_global_probs(read_errors):
     # sys.exit()
     return p_ins, p_del, p_subs
 
-def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
+def correct_to_consensus(partition, read_errors, args):
     """
-         partition[seq] = (edit_dist, aln_rep, aln_s, depth_of_string)
+         partition[acc] = (edit_dist, aln_rep, aln_s, depth_of_string)
     """
-    N_t = sum([container_tuple[3] for s, container_tuple in partition.items()]) # total number of sequences in partition
-    
+    N_t = sum([container_tuple[3] for acc, container_tuple in partition.items()]) # total number of sequences in partition
     if len(partition) > 1:
         # all strings has not converged
-        alignment_matrix = create_multialignment_matrix(repr_seq, partition) 
-        partition = { s : (alignment_matrix[s], partition[s][3]) for s in alignment_matrix}
+        alignment_matrix = create_multialignment_matrix(partition) 
+        partition = { acc : (alignment_matrix[acc], partition[acc][3]) for acc in alignment_matrix}
         PFM = PFM_from_msa(partition)
         # PFM = create_position_frequency_matrix(alignment_matrix, partition)
         # for i,pos_dict in enumerate(PFM):
@@ -534,7 +534,7 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
         tot_prob = p_ins + p_del + p_subs 
         print(tot_prob,args.k, int( (1- tot_prob)*args.k))
         match_id = int( (1- tot_prob)*args.k)
-        block_matrix, homopol_correction_vector = blocks_from_msa(repr_seq, partition, args.k, match_id)
+        block_matrix, homopol_correction_vector = blocks_from_msa(partition, args.k, match_id)
         block_freq_vector, block_majority_vector, BFM = get_block_freqs_and_majority(block_matrix, partition)
         pos_cutoffs = [{} for p in range(len(block_freq_vector))]
         # print(block_freq_vector)
@@ -563,7 +563,7 @@ def correct_to_consensus(repr_seq, partition, seq_to_acc, read_errors, args):
         # sys.exit()
         
         # print(pos_cutoffs)
-        S_prime_partition = correct_from_msa(repr_seq, partition, BFM, seq_to_acc, pos_cutoffs = pos_cutoffs, block_matrix = block_matrix, block_majority_vector= block_majority_vector, homopol_correction_vector = homopol_correction_vector)
+        S_prime_partition = correct_from_msa(partition, BFM, pos_cutoffs = pos_cutoffs, block_matrix = block_matrix, block_majority_vector= block_majority_vector, homopol_correction_vector = homopol_correction_vector)
         # sys.exit()
     else:
         print("Partition converged: Partition size(unique strings):{0}, partition support: {1}.".format(len(partition), N_t))
@@ -685,25 +685,25 @@ def PFM_from_msa(partition):
 
 
 from scipy.stats import poisson
-def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], block_matrix = {}, block_majority_vector = [], homopol_correction_vector = []):
+def correct_from_msa(partition, BFM, pos_cutoffs = [], block_matrix = {}, block_majority_vector = [], homopol_correction_vector = []):
     nr_columns = len(BFM)
     S_prime_partition = {}
-    ref_alignment = partition[ref_seq][0]
+    ref_alignment = partition['ref'][0]
     subs_tot = 0
     ins_tot = 0
     del_tot = 0
     # print(sum([ block_matrix[s][0][628] for s in block_matrix ]))
     # sys.exit()
     print(homopol_correction_vector)
-    for s in partition:
-        if s == ref_seq:
+    for read_acc in partition:
+        if read_acc == "ref":
             continue
         subs_pos_corrected = 0
         ins_pos_corrected = 0
         del_pos_corrected = 0
-        seq_aln, cnt = partition[s]
+        seq_aln, cnt = partition[read_acc]
         s_new = [n for n in seq_aln]
-        block_v, _ = block_matrix[s]
+        block_v, _ = block_matrix[read_acc]
         assert len(block_v) == len(seq_aln)
 
         if cnt == 1:
@@ -779,11 +779,11 @@ def correct_from_msa(ref_seq, partition, BFM, seq_to_acc, pos_cutoffs = [], bloc
         subs_tot += subs_pos_corrected
         ins_tot += ins_pos_corrected
         del_tot += del_pos_corrected
-        print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in seq of length {3}".format(subs_pos_corrected, ins_pos_corrected, del_pos_corrected, len(s)))
+        print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in seq of length {3}".format(subs_pos_corrected, ins_pos_corrected, del_pos_corrected, len(read_acc)))
 
-        accessions_of_s = seq_to_acc[s] 
-        for acc in accessions_of_s:
-            S_prime_partition[acc] = "".join([n for n in s_new if n != "-"])
+        # accessions_of_s = seq_to_acc[read_acc] 
+        # for acc in accessions_of_s:
+        S_prime_partition[read_acc] = "".join([n for n in s_new if n != "-"])
 
     print("Corrected {0} subs pos, {1} ins pos, and {2} del pos corrected in partition".format(subs_tot, ins_tot, del_tot))
     # sys.exit()
