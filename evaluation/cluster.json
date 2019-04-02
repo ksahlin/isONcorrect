@@ -48,7 +48,7 @@
     "lr_ec_analyser" : 
     {
         "jobname" : "lr_ec_analyser",
-        "ntasks" : "8",
+        "ntasks" : "64",
         "Nodes" : 1,
         "runtime" : "2-00:00:00",
         "mail" : "ksahlin@kth.se",
