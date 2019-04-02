@@ -147,7 +147,7 @@ rule lr_ec_analyser:
                 --self {input.isoncorrect_bam}\
                 -o /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_test/ \
                 --paralogous /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_test/Mus_musculus.GRCm38.87.paralog_genes.80_percent_plus_identity.txt \
-                --skip_bam_process --skip_copying")
+                --skip_bam_process --skip_copying -t 32")
 
 
 # rule sim_error_rate:
