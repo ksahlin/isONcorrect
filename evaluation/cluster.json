@@ -34,6 +34,16 @@
         "mail_type" : "FAIL",
         "exclude" : "c[4,6-7,8-16]"
     },
+    "align_reads_minimap2": 
+    {
+        "jobname" : "align_reads_minimap2",
+        "ntasks" : "32",
+        "Nodes" : 1,
+        "runtime" : "10:00:00",
+        "mail" : "ksahlin@kth.se",
+        "mail_type" : "FAIL",
+        "exclude" : "c[4,6-7,8-16]"
+    },
 
     "lr_ec_analyser" : 
     {
