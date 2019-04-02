@@ -112,7 +112,7 @@ rule sam_to_bam:
     input: sam = rules.align_reads_minimap2.output.corrected_reads_aligned
     output: bam_sorted = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_test/isONcorrect.bam.sorted.bam"
     run:
-        bam="/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.sam"
+        bam="/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.bam"
         shell("samtools view -Sbh {input.sam} > {bam}")
         # shell("samtools sort {bam} {bam}.sorted.bam")
         shell("samtools sort {bam} > {output.bam_sorted}")
@@ -139,9 +139,9 @@ rule lr_ec_analyser:
         stats = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_test/alignqc_out_on_isONcorrect.bam/data/alignment_stats.txt"
     run:
         shell("cd /galaxy/home/ksahlin/prefix/source/LR_EC_analyser")
-        shell("bash setup.sh")
-        shell("source venv/bin/activate")
-        shell("python run_LR_EC_analyser.py --genome /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_test/Mus_musculus.GRCm38.dna.primary_assembly.fa \
+        # shell("bash setup.sh")
+        # shell("source venv/bin/activate")
+        shell("python2 run_LR_EC_analyser.py --genome /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_test/Mus_musculus.GRCm38.dna.primary_assembly.fa \
                 --gtf /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_test/Mus_musculus.GRCm38.87.gtf \
                 --raw /nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_test/raw.bam \
                 --self {input.isoncorrect_bam}\
