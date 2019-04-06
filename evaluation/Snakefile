@@ -101,7 +101,10 @@ rule combine_isoncorrect:
     run:
         # shell("cat {input.all_clusters_fastq} > {output.corrected_reads_fastq}")
         shell("> {output.corrected_reads_fastq}")
-        shell('for f in {input.all_clusters_fastq}; do cat "$f" >> {output.corrected_reads_fastq}; done')
+        for f in input.all_clusters_fastq:
+            shell('cat "${f}" >> {output.corrected_reads_fastq}')
+        
+        # shell('for f in {input.all_clusters_fastq}; do cat "$f" >> {output.corrected_reads_fastq}; done')
 
         # shell("FastqToSam FASTQ={input.all_clusters_fastq} OUTPUT={output.corrected_reads_bam}")
 
