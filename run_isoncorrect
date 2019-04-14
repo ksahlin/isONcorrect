@@ -1,0 +1,110 @@
+#! /usr/bin/env python
+
+from __future__ import print_function
+import os,sys
+import argparse
+from sys import stdout
+import shutil
+import subprocess
+
+import errno
+from time import time
+import itertools
+
+import signal
+from multiprocessing import Pool
+import multiprocessing as mp
+
+# import math
+import re
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+        print("creating", path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
+def isoncorrect(data):
+    isoncorrect_location, read_fastq_file, outfolder = data[0],data[1],data[2],
+    mkdir_p(outfolder)
+    isoncorrect_exec = os.path.join(isoncorrect_location, "isONcorrect")
+    isoncorrect_error_file = os.path.join(outfolder, "stderr.txt")
+    with open(isoncorrect_error_file, "w") as error_file:
+        print('Running isoncorrect...', end=' ')
+        stdout.flush()
+        null = open("/dev/null", "w")
+        subprocess.check_call([ isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder ], stderr=error_file, stdout=null)
+        print('Done.')
+        stdout.flush()
+    error_file.close()
+    return
+
+def main(args):
+    directory = os.fsencode(args.fastq_folder)
+    isoncorrect_location = os.path.dirname(os.path.realpath(__file__))
+    print(isoncorrect_location)
+    instances = []
+    for file_ in os.listdir(directory):
+        read_fastq_file = os.fsdecode(file_)
+        if read_fastq_file.endswith(".fastq"): 
+            cl_id = read_fastq_file.split(".")[0]
+            outfolder = os.path.join(args.outfolder, cl_id)
+            print(cl_id, outfolder, read_fastq_file, directory)
+            fastq_file_path = os.path.join(os.fsdecode(directory), read_fastq_file)
+            print(fastq_file_path)
+            instances.append((isoncorrect_location, fastq_file_path, outfolder) )
+            # print(os.path.join(directory, read_fastq_file))
+            continue
+        else:
+            continue
+
+    # sys.exit()
+
+    original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, original_sigint_handler)
+    mp.set_start_method('spawn')
+    print(mp.get_context())
+    print("Environment set:", mp.get_context())
+    print("Using {0} cores.".format(args.nr_cores))
+    start_multi = time()
+    pool = Pool(processes=int(args.nr_cores))
+    try:
+        res = pool.map_async(isoncorrect, instances)
+        score_results =res.get(999999999) # Without the timeout this blocking call ignores all signals.
+    except KeyboardInterrupt:
+        print("Caught KeyboardInterrupt, terminating workers")
+        pool.terminate()
+        sys.exit()
+    else:
+        pool.close()
+    pool.join()
+
+    print("Time elapesd multiprocessing:", time() - start_multi)
+
+
+    return
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.2')
+    parser.add_argument('--fastq_folder', type=str,  default=False, help='Path to input fastq folder with reads in clusters')
+    parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
+    parser.add_argument('--k', type=int, default=13, help='Kmer size')
+    parser.add_argument('--w', type=int, default=20, help='Window size')
+    parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
+    args = parser.parse_args()
+
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit()
+    
+    if args.outfolder and not os.path.exists(args.outfolder):
+        os.makedirs(args.outfolder)
+
+    main(args)
