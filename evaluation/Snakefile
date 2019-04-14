@@ -52,10 +52,10 @@ def mkdir_p(path):
 #    input: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.bam",
 
 rule correction:
-    input: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.fastq"
+    input: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont_min_phred_q6/isONcorrect.fastq"
 
 rule alignment:
-    input: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont/isONcorrect.bam.sorted.bam"
+    input: "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont_test/isONcorrect.bam.sorted.bam"
 rule evaluation:
     input:  "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/mouse_ont_test/alignqc_out_on_isONcorrect.bam/data/gene_full_rarefraction.txt"
 
