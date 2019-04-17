@@ -151,10 +151,19 @@ def main(args):
         # print(ref_true_alignment)
         # print(len([1 for n1,n2 in zip(ref_true_alignment,ref_longest_alignment) if n1 !=n2]) )
 
-
+        
         reference_seq, msa = create_augmented_reference.run_spoa_convex(spoa_cons.name, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
         reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
         print("spoa_convex:", reference_seq_longest_path)
+        print(msa)
+        for i in range(len(msa)):
+            pieces = [ msa[j][i: i+7] for j in range(len(msa))]
+            print(pieces)
+            # most_common_k =
+            if i > 10:
+                break
+
+        sys.exit()
 
         ref_file = os.path.join(args.outfolder, "spoa_ref.fa")
         r = open(ref_file, "w")
