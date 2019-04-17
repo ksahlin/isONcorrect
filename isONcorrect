@@ -154,8 +154,9 @@ def main(args):
         
         reference_seq, msa = create_augmented_reference.run_spoa_convex(spoa_cons.name, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
         reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
+        for m in msa:
+            print(m[250:500])
         print("spoa_convex:", reference_seq_longest_path)
-        print(msa)
         for i in range(len(msa)):
             pieces = [ msa[j][i: i+7] for j in range(len(msa))]
             print(pieces)
