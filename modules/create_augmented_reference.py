@@ -199,16 +199,20 @@ import itertools
 from collections import defaultdict, deque
 def kmer_counter(reads, k_size):
     count = defaultdict(int)
+    position_count = defaultdict(list)
+
     for r_i in reads:
         (acc, seq, qual) = reads[r_i]
         # seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
         read_kmers = deque([seq[i:i+k_size] for i in range(len(seq) - k_size )])
-        for kmer in read_kmers:
+        for i, kmer in enumerate(read_kmers):
             count[kmer] += 1
 
-    cnt_sorted = sorted(count.items(), key = lambda x: x[1], reverse=True)
+            position_count[kmer].append( (r_i, i))
+
+    # cnt_sorted = sorted(count.items(), key = lambda x: x[1], reverse=True)
     # print(len(cnt_sorted),cnt_sorted)
-    return count
+    return count, position_count
 
 
 if __name__ == '__main__':

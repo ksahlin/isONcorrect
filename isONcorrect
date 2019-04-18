@@ -10,7 +10,11 @@ import itertools
 
 # import math
 import re
+
+from collections import defaultdict
+
 from modules import correct_seqs, create_augmented_reference, align, help_functions
+
 
 
 # print(phred_char_to_val)
@@ -74,6 +78,65 @@ def get_deletion_coordinates(ref_alignment, read_alignment):
             ref_pos += 1
     deletion_coordinates = [item for sublist in deletion_coordinates for item in sublist]
     return deletion_coordinates
+
+
+
+def get_best_correction(corr_read_id, i, read_kmers, DBG, position_DBG, k_size):
+    
+    # find left anchor
+    left_anchor_positions = defaultdict(lambda: defaultdict(list))
+    left_anchor_positions_pos = defaultdict(lambda: defaultdict(list))
+    for offset in range(1,10):
+        kmer = read_kmers[i - offset]
+        for (r_i, pos) in  position_DBG[kmer]:
+            if r_i == corr_read_id:
+                continue
+            left_anchor_positions[r_i][kmer].append(pos)
+            left_anchor_positions_pos[r_i][pos].append(kmer)
+
+    # find right anchor
+    right_anchor_positions = defaultdict(lambda: defaultdict(list))
+    right_anchor_positions_pos = defaultdict(lambda: defaultdict(list))
+
+    for offset in range(k_size +1,k_size + 11):
+        kmer = read_kmers[i + offset]
+        for (r_i, pos) in  position_DBG[kmer]:
+            if r_i == corr_read_id:
+                continue
+            right_anchor_positions[r_i][kmer].append(pos)
+            right_anchor_positions_pos[r_i][pos].append(kmer)
+
+    # print(i)
+    # print( "left:", left_anchor_positions)
+
+    # print( "right:", right_anchor_positions)
+
+    anchors = defaultdict(list)
+    for r_id in set(left_anchor_positions.keys()) & set(right_anchor_positions.keys()):
+        # print(r_id, sorted(left_anchor_positions_pos[r_id].keys()), sorted(right_anchor_positions_pos[r_id].keys()))
+        for l_pos in sorted(left_anchor_positions_pos[r_id].keys()):
+            for r_pos in sorted(right_anchor_positions_pos[r_id].keys()):
+                if k_size < r_pos - l_pos < k_size +10:
+                    anchors[r_id].append((l_pos, r_pos))
+                elif l_pos > r_pos:
+                    continue
+
+    print("final anchors for pos", i)
+    for r_i in anchors:
+        print(r_i, anchors[r_i])
+
+
+    # if i > 0:
+    #     start_kmer = read_kmers[i-1]
+    # else:
+    #     return False
+
+    # # if subs:
+    # for n in ["A", "C", "G", "T"]:
+    #     DBG
+
+    return 
+
 
 def main(args):
     start = time()
@@ -152,27 +215,48 @@ def main(args):
         # print(len([1 for n1,n2 in zip(ref_true_alignment,ref_longest_alignment) if n1 !=n2]) )
 
         
-        reference_seq, msa = create_augmented_reference.run_spoa_convex(spoa_cons.name, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
-        reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
-        k_count = create_augmented_reference.kmer_counter(reads, 9)
+        # reference_seq, msa = create_augmented_reference.run_spoa_convex(spoa_cons.name, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
+        # reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
+        
+        # k_count = create_augmented_reference.kmer_counter(reads, 9)
 
-        for i, m in enumerate(msa):
-            k_abundance = [k_count[reads[i][1][j:j+9]] for j in range(50)]
-            print(k_abundance)
-            print(m[0:250])
-            # print(reads[i][2][750:1000])
+        # for i, m in enumerate(msa):
+        #     k_abundance = [k_count[reads[i][1][j:j+9]] for j in range(50)]
+        #     print(k_abundance)
+        #     print(m[0:250])
+        #     # print(reads[i][2][750:1000])
+        #     print()
+        # print("spoa_convex longest path:", reference_seq_longest_path)
+        # print("spoa_convex:", reference_seq)
+
+        # for i in range(len(msa)):
+        #     pieces = [ msa[j][i: i+7] for j in range(len(msa))]
+        #     print(pieces)
+        #     # most_common_k =
+        #     if i > 10:
+        #         break
+
+
+        for k_size in range(7, 11):
+            DBG, position_DBG = create_augmented_reference.kmer_counter(reads, k_size)
+            corr_kmers = 0
+            for r_id, (acc, seq, qual) in reads.items():
+                corr_kmers_read = 0
+                read_kmers = [seq[i:i+k_size] for i in range(len(seq) - k_size + 1)]
+                for i, kmer in enumerate(read_kmers):
+                    if DBG[kmer] == 1:
+                        corr_kmers += 1
+                        corr_kmers_read += 1
+                        print(k_size, "read", r_id, kmer)
+                        get_best_correction(r_id, i, read_kmers, DBG, position_DBG, k_size)
+                
+
+                print("read:", r_id,  corr_kmers_read)
+                sys.exit()
+
+            print("total:", corr_kmers)
             print()
-        print("spoa_convex longest path:", reference_seq_longest_path)
-        print("spoa_convex:", reference_seq)
-
-        for i in range(len(msa)):
-            pieces = [ msa[j][i: i+7] for j in range(len(msa))]
-            print(pieces)
-            # most_common_k =
-            if i > 10:
-                break
-
-        sys.exit()
+            sys.exit()
 
         ref_file = os.path.join(args.outfolder, "spoa_ref.fa")
         r = open(ref_file, "w")
