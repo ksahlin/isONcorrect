@@ -154,11 +154,17 @@ def main(args):
         
         reference_seq, msa = create_augmented_reference.run_spoa_convex(spoa_cons.name, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
         reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)
+        k_count = create_augmented_reference.kmer_counter(reads, 9)
+
         for i, m in enumerate(msa):
-            print(m[750:1000])
+            k_abundance = [k_count[reads[i][1][j:j+9]] for j in range(50)]
+            print(k_abundance)
+            print(m[0:250])
             # print(reads[i][2][750:1000])
             print()
-        print("spoa_convex:", reference_seq_longest_path)
+        print("spoa_convex longest path:", reference_seq_longest_path)
+        print("spoa_convex:", reference_seq)
+
         for i in range(len(msa)):
             pieces = [ msa[j][i: i+7] for j in range(len(msa))]
             print(pieces)
@@ -272,7 +278,7 @@ def main(args):
         # Row Correct
 
         reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(isocon_corrected.name,"r")))}
-        k_count = create_augmented_reference.kmer_counter(reads)
+        k_count = create_augmented_reference.kmer_counter(reads, 7)
 
 
         for j in range(0, len(reads)):

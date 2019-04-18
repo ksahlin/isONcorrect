@@ -197,8 +197,7 @@ def run_spoa(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
 # For eventual De Bruijn graph approach
 import itertools
 from collections import defaultdict, deque
-def kmer_counter(reads):
-    k_size = 13
+def kmer_counter(reads, k_size):
     count = defaultdict(int)
     for r_i in reads:
         (acc, seq, qual) = reads[r_i]
@@ -208,7 +207,7 @@ def kmer_counter(reads):
             count[kmer] += 1
 
     cnt_sorted = sorted(count.items(), key = lambda x: x[1], reverse=True)
-    print(len(cnt_sorted),cnt_sorted)
+    # print(len(cnt_sorted),cnt_sorted)
     return count
 
 
