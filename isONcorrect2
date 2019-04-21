@@ -1,0 +1,153 @@
+#! /usr/bin/env python
+
+from __future__ import print_function
+import os,sys
+import argparse
+
+import errno
+from time import time
+import itertools
+
+# import math
+import re
+from collections import deque
+
+from modules import correct_seqs, create_augmented_reference, align, help_functions
+
+
+
+def get_seq_to_index(S):
+    seq_to_index = {}
+    for i, (acc, seq, qual) in S.items():
+        if seq in seq_to_index:
+            seq_to_index[seq].append(i)
+        else: 
+            seq_to_index[seq] = []
+            seq_to_index[seq] = [i]
+
+    unique_seq_to_index = {seq: acc_list[0] for seq, acc_list in  seq_to_index.items() if len(acc_list) == 1 } 
+    print("Non-converged (unique) sequences left:", len(unique_seq_to_index))
+    return seq_to_index
+
+
+def get_kmer_minimizers(seq, k_size, w_size):
+    # kmers = [seq[i:i+k_size] for i in range(len(seq)-k_size) ]
+    w = w_size - k_size
+    window_kmers = deque([seq[i:i+k_size] for i in range(w +1)])
+    curr_min = min(window_kmers)
+    minimizers = [ (curr_min, list(window_kmers).index(curr_min)) ]
+
+    for i in range(w+1,len(seq) - k_size):
+        new_kmer = seq[i:i+k_size]
+        # updateing window
+        discarded_kmer = window_kmers.popleft()
+        window_kmers.append(new_kmer)
+
+        # we have discarded previous windows minimizer, look for new minimizer brute force
+        if curr_min == discarded_kmer: 
+            curr_min = min(window_kmers)
+            minimizers.append( (curr_min, list(window_kmers).index(curr_min) + i - w ) )
+
+        # Previous minimizer still in window, we only need to compare with the recently added kmer 
+        elif new_kmer < curr_min:
+            curr_min = new_kmer
+            minimizers.append( (curr_min, i) )
+
+    return minimizers
+
+
+def get_minimizers_and_positions(reads, w, k, hash_fcn):
+    # 1. homopolymenr compress read and obtain minimizers
+    M = {}
+    for r_id in reads:
+        (acc, seq, qual) = reads[r_id]
+
+        seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
+        minimizers = get_kmer_minimizers(seq_hpol_comp, k, w)
+        
+        # 2. Find the homopolymer compressed error rate (else statement is the only one active in single core mode)
+        indices = [i for i, (n1,n2) in enumerate(zip(seq[:-1],seq[1:])) if n1 != n2] # indicies we want to take quality values from to get quality string of homopolymer compressed read 
+        indices.append(len(seq) - 1)
+        positions_in_non_compressed_sring = [(m, indices[p]) for m, p in minimizers ]
+        M[r_id] = positions_in_non_compressed_sring
+
+    return M
+
+
+def minimizers_comb_iterator(minimizers, k, x):
+    for i, (m1, p1) in enumerate(minimizers[:-1]):
+        for j, (m2, p2) in enumerate(minimizers[i+1:]):
+            if k < p2 - p1 <= x:
+                yield (m1,p1), (m2, p2)
+    # return m1, m2
+
+def main(args):
+    start = time()
+    reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
+    # kmer_counter(reads)
+    # sys.exit()
+
+    seq_to_index = get_seq_to_index(reads)
+
+    print("Correcting {0} reads.".format(len(reads)))
+    start = time()
+    for k_size in range(args.k, args.k +1):
+        DBG, position_DBG = create_augmented_reference.kmer_counter(reads, k_size)
+        # print("ITERATION", iteration)
+        # args.iteration = iteration
+
+        for hash_fcn in ["lexicographical"]: # add four others
+            M = get_minimizers_and_positions(reads, args.w, k_size, hash_fcn)
+            for r_id in reads:
+                (acc, seq, qual) = reads[r_id]
+                print("read", r_id, M[r_id])
+                for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, 20):
+                    # print(p1,p2)
+                    get_heaviest_path()
+                sys.exit()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.2')
+
+    parser.add_argument('--fastq', type=str,  default=False, help='Path to input fastq file with reads')
+    # parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
+
+    parser.add_argument('--ont', action="store_true", help='Clustering of ONT transcript reads.')
+    parser.add_argument('--isoseq', action="store_true", help='Clustering of PacBio Iso-Seq reads.')
+
+    parser.add_argument('--k', type=int, default=7, help='Kmer size')
+    parser.add_argument('--w', type=int, default=20, help='Window size')
+    parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
+    # parser.add_argument('--pickled_subreads', type=str, help='Path to an already parsed subreads file in pickle format')
+    # parser.set_defaults(which='main')
+    args = parser.parse_args()
+
+
+
+
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit()
+    if not args.fastq and not args.flnc and not  args.ccs:
+        parser.print_help()
+        sys.exit()
+
+
+    if args.outfolder and not os.path.exists(args.outfolder):
+        os.makedirs(args.outfolder)
+
+
+    # edlib_module = 'edlib'
+    parasail_module = 'parasail'
+    # if edlib_module not in sys.modules:
+    #     print('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment.'.format(edlib_module))
+    if parasail_module not in sys.modules:
+        print('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment!'.format(parasail_module))
+        sys.exit(1)
+    if 100 < args.w or args.w < args.k:
+        print('Please specify a window of size larger or equal to k, and smaller than 100.')
+        sys.exit(1)
+
+    main(args)
+
