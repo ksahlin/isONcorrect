@@ -133,27 +133,34 @@ def main(args):
             M = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
 
             for r_id in reads:
+                if r_id == 0:
+                    continue
                 (acc, seq, qual) = reads[r_id]
                 print("read", r_id, M[r_id])
                 for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, w):
 
                     # find the reads where this minimizer pair occurs (witin the same range) in other reads (at least 2 additional reads required)
-                    print(position_DBG[m1], position_DBG[m2])
+                    # print(position_DBG[m1], position_DBG[m2])
                     relevant_reads = get_relavant_reads(position_DBG, m1, p1, m2, p2, k_size, w)
                     if relevant_reads:
-                        print(p1, p2,relevant_reads)
+                        print(p1, p2, relevant_reads)
                         print(m1,m2)
-                        print(seq[p1:p2+ k_size + 1])
+                        print(r_id, seq[p1:p2+ k_size +1])
                         for rel_id, ll_ in relevant_reads.items():
                             for (pos1, pos2) in ll_:
-                                s_rel = reads[rel_id][1][pos1: pos2+k_size]
-                                print(s_rel)
+                                s_rel = reads[rel_id][1][pos1: pos2+k_size +1]
+                                print(rel_id, s_rel)
                         continue
                     else:
                         print(p1, p2)
                         continue
 
+                    # find count most common string, and count of current string
+                    # if curr_str_count == 1 and max_str_count > 2 and edlib(curr_str, max_str):
+                        # replace string
+                    
                     # get current path score
+
 
                     # find max score from the local DBG from the region in the reads in containig the minimizer pair range
 
