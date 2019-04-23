@@ -105,7 +105,11 @@ def get_relavant_reads(position_DBG, m1, p1, m2, p2, k, w):
                     relevant_reads[r_id].append((l_pos, r_pos))
                 elif l_pos > r_pos:
                     continue
+
     # print(relevant_reads)
+    bug in getting all positions: 
+    185 196 defaultdict(<class 'list'>, {0: [(185, 207)], 2: [(169, 189)], 5: [(173, 196)], 6: [(173, 190)], 7: [(175, 193)], 25: [(83, 110), (92, 110)], 34: [(64, 89)]})
+AGTGT AGAGT
 
     return relevant_reads
 
@@ -133,10 +137,12 @@ def main(args):
             M = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
 
             for r_id in reads:
-                if r_id == 0:
-                    continue
+                # if r_id == 0:
+                #     continue
                 (acc, seq, qual) = reads[r_id]
                 print("read", r_id, M[r_id])
+                # print(M[r_id])
+                # sys.exit()
                 for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, w):
 
                     # find the reads where this minimizer pair occurs (witin the same range) in other reads (at least 2 additional reads required)
@@ -145,10 +151,10 @@ def main(args):
                     if relevant_reads:
                         print(p1, p2, relevant_reads)
                         print(m1,m2)
-                        print(r_id, seq[p1:p2+ k_size +1])
+                        print(r_id, seq[p1:p2+ k_size])
                         for rel_id, ll_ in relevant_reads.items():
                             for (pos1, pos2) in ll_:
-                                s_rel = reads[rel_id][1][pos1: pos2+k_size +1]
+                                s_rel = reads[rel_id][1][pos1: pos2+k_size]
                                 print(rel_id, s_rel)
                         continue
                     else:
