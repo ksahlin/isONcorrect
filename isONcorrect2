@@ -56,23 +56,61 @@ def get_kmer_minimizers(seq, k_size, w_size):
 
     return minimizers
 
+def get_kmer_maximizers(seq, k_size, w_size):
+    # kmers = [seq[i:i+k_size] for i in range(len(seq)-k_size) ]
+    w = w_size - k_size
+    window_kmers = deque([seq[i:i+k_size] for i in range(w +1)])
+    curr_min = max(window_kmers)
+    minimizers = [ (curr_min, list(window_kmers).index(curr_min)) ]
+
+    for i in range(w+1,len(seq) - k_size):
+        new_kmer = seq[i:i+k_size]
+        # updateing window
+        discarded_kmer = window_kmers.popleft()
+        window_kmers.append(new_kmer)
+
+        # we have discarded previous windows minimizer, look for new minimizer brute force
+        if curr_min == discarded_kmer: 
+            curr_min = max(window_kmers)
+            minimizers.append( (curr_min, list(window_kmers).index(curr_min) + i - w ) )
+
+        # Previous minimizer still in window, we only need to compare with the recently added kmer 
+        elif new_kmer > curr_min:
+            curr_min = new_kmer
+            minimizers.append( (curr_min, i) )
+
+    return minimizers
+
 
 def get_minimizers_and_positions(reads, w, k, hash_fcn):
     # 1. homopolymenr compress read and obtain minimizers
     M = {}
+    compressed_DBG = defaultdict(list)
     for r_id in reads:
         (acc, seq, qual) = reads[r_id]
 
         seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
-        minimizers = get_kmer_minimizers(seq_hpol_comp, k, w)
-        
-        # 2. Find the homopolymer compressed error rate (else statement is the only one active in single core mode)
+
+        if hash_fcn == "lex":
+            minimizers = get_kmer_minimizers(seq_hpol_comp, k, w)
+        elif hash_fcn == "rev_lex":
+            minimizers = get_kmer_maximizers(seq_hpol_comp, k, w)
+
+
         indices = [i for i, (n1,n2) in enumerate(zip(seq[:-1],seq[1:])) if n1 != n2] # indicies we want to take quality values from to get quality string of homopolymer compressed read 
         indices.append(len(seq) - 1)
         positions_in_non_compressed_sring = [(m, indices[p]) for m, p in minimizers ]
         M[r_id] = positions_in_non_compressed_sring
 
-    return M
+        hpol_kmers = [seq_hpol_comp[i:i+k] for i in range(len(seq_hpol_comp) - k +1)]
+        # print(hpol_kmers, indices)        
+        # print(len(hpol_kmers), len(indices))
+        assert len(hpol_kmers) == len(indices) - k + 1
+        for kmer, i in zip(hpol_kmers, indices[:-k+1]):
+            compressed_DBG[kmer].append( (r_id, i))
+
+
+    return M, compressed_DBG
 
 
 def minimizers_comb_iterator(minimizers, k, x):
@@ -83,7 +121,7 @@ def minimizers_comb_iterator(minimizers, k, x):
     # return m1, m2
 
 
-def get_relavant_reads(position_DBG, m1, p1, m2, p2, k, w):
+def get_relevant_reads(position_DBG, m1, p1, m2, p2, k, x):
     reads_left = defaultdict(list)
     for key, val in position_DBG[m1]:
         reads_left[key].append(val)
@@ -101,15 +139,15 @@ def get_relavant_reads(position_DBG, m1, p1, m2, p2, k, w):
         # print(r_id, sorted(left_anchor_positions_pos[r_id].keys()), sorted(right_anchor_positions_pos[r_id].keys()))
         for l_pos in sorted(reads_left[r_id]):
             for r_pos in sorted(reads_right[r_id]):
-                if k < r_pos - l_pos < w +3*k:
+                if k < r_pos - l_pos < x:
                     relevant_reads[r_id].append((l_pos, r_pos))
                 elif l_pos > r_pos:
-                    continue
+                    break
 
     # print(relevant_reads)
-    bug in getting all positions: 
-    185 196 defaultdict(<class 'list'>, {0: [(185, 207)], 2: [(169, 189)], 5: [(173, 196)], 6: [(173, 190)], 7: [(175, 193)], 25: [(83, 110), (92, 110)], 34: [(64, 89)]})
-AGTGT AGAGT
+#     bug in getting all positions: 
+#     185 196 defaultdict(<class 'list'>, {0: [(185, 207)], 2: [(169, 189)], 5: [(173, 196)], 6: [(173, 190)], 7: [(175, 193)], 25: [(83, 110), (92, 110)], 34: [(64, 89)]})
+# AGTGT AGAGT
 
     return relevant_reads
 
@@ -133,38 +171,75 @@ def main(args):
         # print("ITERATION", iteration)
         # args.iteration = iteration
 
-        for hash_fcn in ["lexicographical"]: # add four others
-            M = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
+        for hash_fcn in ["lex", "rev_lex"]: # add four others
+            M, hpol_DBG  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
 
-            for r_id in reads:
-                # if r_id == 0:
-                #     continue
+            for r_id in sorted(reads):
+                corr_pos = []
+                if r_id != 0:
+                    continue
                 (acc, seq, qual) = reads[r_id]
-                print("read", r_id, M[r_id])
+                # print("read", r_id, M[r_id])
                 # print(M[r_id])
                 # sys.exit()
-                for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, w):
+                for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, 25):
+                    if p2 > 250:
+                        sys.exit()
+                    # if p1 == 185 and p2 == 196:
+                    #     print(position_DBG[m1])
+                    #     print(position_DBG[m2])
+                    #     print(hpol_DBG[m1])
+                    #     print(hpol_DBG[m2])
+                    #     sys.exit()
 
                     # find the reads where this minimizer pair occurs (witin the same range) in other reads (at least 2 additional reads required)
                     # print(position_DBG[m1], position_DBG[m2])
-                    relevant_reads = get_relavant_reads(position_DBG, m1, p1, m2, p2, k_size, w)
+                    relevant_reads = get_relevant_reads(hpol_DBG, m1, p1, m2, p2, k_size, 25)
                     if relevant_reads:
-                        print(p1, p2, relevant_reads)
-                        print(m1,m2)
-                        print(r_id, seq[p1:p2+ k_size])
+                        seqs = { "ref" : seq[p1:p2]}
+                        seqs_to_id = { seq[p1:p2] : ["ref"]}
+
+                        # print(p1, p2) #, relevant_reads)
+                        # print(m1,m2)
+                        # print(r_id, seq[p1:p2])
                         for rel_id, ll_ in relevant_reads.items():
+                            if r_id  == rel_id:
+                                continue
                             for (pos1, pos2) in ll_:
-                                s_rel = reads[rel_id][1][pos1: pos2+k_size]
-                                print(rel_id, s_rel)
-                        continue
+                                s_rel = reads[rel_id][1][pos1: pos2]
+                                if s_rel[:k_size] ==  seq[p1:p1+k_size] and reads[rel_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
+                                    seqs[rel_id] = s_rel
+                                    if s_rel in seqs_to_id:
+                                        seqs_to_id[s_rel].append(rel_id)
+                                    else:
+                                        seqs_to_id[s_rel] = [rel_id]
+
+                                # print(rel_id, s_rel)
                     else:
-                        print(p1, p2)
-                        continue
+                        # print(p1, p2)
+                        pass
+
+                    # print(p1, p2, seqs)
 
                     # find count most common string, and count of current string
+                    
                     # if curr_str_count == 1 and max_str_count > 2 and edlib(curr_str, max_str):
                         # replace string
-                    
+                    max_str, max_r_ids = max(seqs_to_id.items(), key = lambda x: len(x[1]) )
+                    max_str_count = len(max_r_ids)
+                    if  len(seqs_to_id[ seqs["ref"] ]) == 1 and max_str_count > 1 :
+                        print(p1, p2, seqs["ref"], max_str, max_str_count)
+                        corr_pos.append( (p1, p2, max_str ))
+
+                new_seq = [seq[:corr_pos[0][0]]]
+                for j, (p1, p2, new_str) in enumerate(corr_pos):
+                    # if p1 >= corr_pos[j-1][1]:
+                    new_seq.append(new_str)
+                    if j < len(corr_pos) - 1:
+                        new_seq.append(seq[p2:corr_pos[j+1][0]])
+                new_seq.append(seq[p2:len(seq)])
+                print("".join([s for s in new_seq]))
+
                     # get current path score
 
 
@@ -174,15 +249,14 @@ def main(args):
 
                     # repalace if suitable
                     # if 
-                    path_max, score_max  = get_heaviest_path(DBG, position_DBG)
-
-                    curr_path = seq[p1:p2+ k_size + 1]
-                    curr_path_score = sum([DBG[curr_path[i:i+k_size]] for i in range(len(curr_path))])
-                    print(p1,p2,curr_path, curr_path_score)
+                    # path_max, score_max  = get_heaviest_path(DBG, position_DBG)
+                    # curr_path = seq[p1:p2+ k_size + 1]
+                    # curr_path_score = sum([DBG[curr_path[i:i+k_size]] for i in range(len(curr_path))])
+                    # print(p1,p2,curr_path, curr_path_score)
 
                     # if edlib(path, curr_path) < 0.8*len(path) and curr_path_score < 0.8*score_max:
 
-                sys.exit()
+            sys.exit()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -194,8 +268,8 @@ if __name__ == '__main__':
     parser.add_argument('--ont', action="store_true", help='Clustering of ONT transcript reads.')
     parser.add_argument('--isoseq', action="store_true", help='Clustering of PacBio Iso-Seq reads.')
 
-    parser.add_argument('--k', type=int, default=5, help='Kmer size')
-    parser.add_argument('--w', type=int, default=15, help='Window size')
+    parser.add_argument('--k', type=int, default=4, help='Kmer size')
+    parser.add_argument('--w', type=int, default=6, help='Window size')
     parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
     # parser.add_argument('--pickled_subreads', type=str, help='Path to an already parsed subreads file in pickle format')
     # parser.set_defaults(which='main')
