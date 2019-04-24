@@ -142,6 +142,8 @@ def get_relevant_reads(position_DBG, m1, p1, m2, p2, k, x):
                 if k < r_pos - l_pos < x:
                     relevant_reads[r_id].append((l_pos, r_pos))
                 elif l_pos > r_pos:
+                    continue
+                elif r_pos > l_pos + x:
                     break
 
     # print(relevant_reads)
@@ -161,6 +163,21 @@ def main(args):
     # sys.exit()
 
     seq_to_index = get_seq_to_index(reads)
+
+    # ref_file_isocon = os.path.join(args.outfolder, "reference.fa")
+    # dot_graph_path = os.path.join(args.outfolder, "graph_isocon.dot")
+    # isocon_out_file = os.path.join(args.outfolder, "reads_out.fa")
+    # reference_seq, msa = create_augmented_reference.run_spoa_convex(args.fastq, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
+    # reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)    
+    # k_count, k_count_pos = create_augmented_reference.kmer_counter(reads, 9)
+    # for i, m in enumerate(msa):
+    #     k_abundance = [k_count[reads[i][1][j:j+9]] for j in range(50)]
+    #     # print(k_abundance)
+    #     print(m[0:250])
+    #     # print(reads[i][2][750:1000])
+    #     # print()
+    # print("spoa_convex longest path:", reference_seq_longest_path)
+    # print("spoa_convex:", reference_seq)
 
     print("Correcting {0} reads.".format(len(reads)))
     start = time()
@@ -182,9 +199,9 @@ def main(args):
                 # print("read", r_id, M[r_id])
                 # print(M[r_id])
                 # sys.exit()
-                for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, 25):
-                    if p2 > 250:
-                        sys.exit()
+                for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, 15):
+                    # if p2 > 250:
+                    #     sys.exit()
                     # if p1 == 185 and p2 == 196:
                     #     print(position_DBG[m1])
                     #     print(position_DBG[m2])
@@ -194,10 +211,10 @@ def main(args):
 
                     # find the reads where this minimizer pair occurs (witin the same range) in other reads (at least 2 additional reads required)
                     # print(position_DBG[m1], position_DBG[m2])
-                    relevant_reads = get_relevant_reads(hpol_DBG, m1, p1, m2, p2, k_size, 25)
+                    relevant_reads = get_relevant_reads(hpol_DBG, m1, p1, m2, p2, k_size, 15)
                     if relevant_reads:
                         seqs = { "ref" : seq[p1:p2]}
-                        seqs_to_id = { seq[p1:p2] : ["ref"]}
+                        seqs_to_id = { seq[p1:p2] : [ ("ref",p1, p2)]}
 
                         # print(p1, p2) #, relevant_reads)
                         # print(m1,m2)
@@ -210,9 +227,9 @@ def main(args):
                                 if s_rel[:k_size] ==  seq[p1:p1+k_size] and reads[rel_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
                                     seqs[rel_id] = s_rel
                                     if s_rel in seqs_to_id:
-                                        seqs_to_id[s_rel].append(rel_id)
+                                        seqs_to_id[s_rel].append( (rel_id, pos1, pos2 ) )
                                     else:
-                                        seqs_to_id[s_rel] = [rel_id]
+                                        seqs_to_id[s_rel] = [(rel_id, pos1, pos2 )]
 
                                 # print(rel_id, s_rel)
                     else:
@@ -228,17 +245,33 @@ def main(args):
                     max_str, max_r_ids = max(seqs_to_id.items(), key = lambda x: len(x[1]) )
                     max_str_count = len(max_r_ids)
                     if  len(seqs_to_id[ seqs["ref"] ]) == 1 and max_str_count > 1 :
-                        print(p1, p2, seqs["ref"], max_str, max_str_count)
+                        print(p1, p2, seqs["ref"], max_str, max_str_count, max_r_ids)
                         corr_pos.append( (p1, p2, max_str ))
 
-                new_seq = [seq[:corr_pos[0][0]]]
+                clust = []
+                cl_id = 1
                 for j, (p1, p2, new_str) in enumerate(corr_pos):
-                    # if p1 >= corr_pos[j-1][1]:
-                    new_seq.append(new_str)
-                    if j < len(corr_pos) - 1:
-                        new_seq.append(seq[p2:corr_pos[j+1][0]])
-                new_seq.append(seq[p2:len(seq)])
-                print("".join([s for s in new_seq]))
+                    if j == 0:
+                        clust.append( (p1, p2, new_str) )
+                    elif p1 < corr_pos[j-1][1]:
+                        clust.append( (p1, p2, new_str) )                        
+                    else:
+                        print("cluster", cl_id, len(clust), clust[0][0], clust[-1][1])
+                        clust = [(p1, p2, new_str)]
+                        cl_id +=1
+                        start_p = p1
+
+
+
+
+                # new_seq = [seq[:corr_pos[0][0]]]
+                # for j, (p1, p2, new_str) in enumerate(corr_pos):
+                #     # if p1 >= corr_pos[j-1][1]:
+                #     new_seq.append(new_str)
+                #     if j < len(corr_pos) - 1:
+                #         new_seq.append(seq[p2:corr_pos[j+1][0]])
+                # new_seq.append(seq[p2:len(seq)])
+                # print("".join([s for s in new_seq]))
 
                     # get current path score
 
@@ -268,8 +301,8 @@ if __name__ == '__main__':
     parser.add_argument('--ont', action="store_true", help='Clustering of ONT transcript reads.')
     parser.add_argument('--isoseq', action="store_true", help='Clustering of PacBio Iso-Seq reads.')
 
-    parser.add_argument('--k', type=int, default=4, help='Kmer size')
-    parser.add_argument('--w', type=int, default=6, help='Window size')
+    parser.add_argument('--k', type=int, default=5, help='Kmer size')
+    parser.add_argument('--w', type=int, default=5, help='Window size')
     parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
     # parser.add_argument('--pickled_subreads', type=str, help='Path to an already parsed subreads file in pickle format')
     # parser.set_defaults(which='main')
