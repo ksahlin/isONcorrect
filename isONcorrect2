@@ -120,6 +120,19 @@ def minimizers_comb_iterator(minimizers, k, x):
                 yield (m1,p1), (m2, p2)
     # return m1, m2
 
+def time_test(sorted_left_reads, sorted_right_reads, relevant_reads, r_id, k, x):
+    curr_min_r_pos = 0
+    for l_pos in sorted_left_reads:
+        tmp_add = 0
+        for j, r_pos in enumerate(sorted_right_reads[curr_min_r_pos:]):
+            if k < r_pos - l_pos < x:
+                relevant_reads[r_id].append((l_pos, r_pos))
+            elif l_pos > r_pos:
+                tmp_add = j 
+                continue
+            elif r_pos > l_pos + x:
+                break
+        curr_min_r_pos += tmp_add   
 
 def get_relevant_reads(position_DBG, m1, p1, m2, p2, k, x):
     reads_left = defaultdict(list)
@@ -136,15 +149,22 @@ def get_relevant_reads(position_DBG, m1, p1, m2, p2, k, x):
 
     relevant_reads = defaultdict(list)
     for r_id in set(reads_left) & set(reads_right):
+        # print(len(reads_left[r_id]), len(reads_right[r_id]))
+        sorted_right_reads = sorted(reads_right[r_id])
+        sorted_left_reads = sorted(reads_left[r_id])
         # print(r_id, sorted(left_anchor_positions_pos[r_id].keys()), sorted(right_anchor_positions_pos[r_id].keys()))
-        for l_pos in sorted(reads_left[r_id]):
-            for r_pos in sorted(reads_right[r_id]):
-                if k < r_pos - l_pos < x:
-                    relevant_reads[r_id].append((l_pos, r_pos))
-                elif l_pos > r_pos:
-                    continue
-                elif r_pos > l_pos + x:
-                    break
+        time_test(sorted_left_reads, sorted_right_reads, relevant_reads, r_id, k, x)
+        # for l_pos in sorted(reads_left[r_id]):
+        #     tmp_add = 0
+        #     for j, r_pos in enumerate(sorted_right_reads[curr_min_r_pos:]):
+        #         if k < r_pos - l_pos < x:
+        #             relevant_reads[r_id].append((l_pos, r_pos))
+        #         elif l_pos > r_pos:
+        #             tmp_add = j 
+        #             continue
+        #         elif r_pos > l_pos + x:
+        #             break
+        #     curr_min_r_pos += tmp_add
 
     # print(relevant_reads)
 #     bug in getting all positions: 
@@ -200,8 +220,8 @@ def main(args):
                 # print(M[r_id])
                 # sys.exit()
                 for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, 15):
-                    # if p2 > 250:
-                    #     sys.exit()
+                    if p2 > 500:
+                        break
                     # if p1 == 185 and p2 == 196:
                     #     print(position_DBG[m1])
                     #     print(position_DBG[m2])
