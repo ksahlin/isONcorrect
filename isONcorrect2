@@ -112,12 +112,23 @@ def get_minimizers_and_positions(reads, w, k, hash_fcn):
 
     return M, compressed_DBG
 
+def get_minimizers_comb(reads, M, k, x):
+    M2 = {}
+    for r_id in M:
+        M2[r_id] = defaultdict(list)
+        minimizers = M[r_id]
+        for (m1,p1), (m2, p2) in  minimizers_comb_iterator(minimizers, k, x):
+            M2[r_id][(m1, m2)].append((p1,p2))  
+    return M2
+
 
 def minimizers_comb_iterator(minimizers, k, x):
     for i, (m1, p1) in enumerate(minimizers[:-1]):
         for j, (m2, p2) in enumerate(minimizers[i+1:]):
             if k < p2 - p1 <= x:
                 yield (m1,p1), (m2, p2)
+            elif p2 - p1 > x:
+                break
     # return m1, m2
 
 def time_test(sorted_left_reads, sorted_right_reads, relevant_reads, r_id, k, x):
@@ -210,6 +221,11 @@ def main(args):
 
         for hash_fcn in ["lex", "rev_lex"]: # add four others
             M, hpol_DBG  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
+            M2 = get_minimizers_comb(reads, M, k_size, 15)
+            print("done createng minimizer combinations")
+
+            print( [ (xx, len(M2[xx])) for xx in M2 ])
+            sys.exit()
 
             for r_id in sorted(reads):
                 corr_pos = []
@@ -219,6 +235,9 @@ def main(args):
                 # print("read", r_id, M[r_id])
                 # print(M[r_id])
                 # sys.exit()
+
+
+
                 for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, 15):
                     if p2 > 500:
                         break
