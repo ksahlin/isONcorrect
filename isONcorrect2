@@ -113,13 +113,16 @@ def get_minimizers_and_positions(reads, w, k, hash_fcn):
     return M, compressed_DBG
 
 def get_minimizers_comb(reads, M, k, x):
-    M2 = {}
+    reads_to_M2 = {}
+    M2 = defaultdict(lambda: defaultdict(list))
     for r_id in M:
-        M2[r_id] = defaultdict(list)
+        reads_to_M2[r_id] = [] # defaultdict(list)
         minimizers = M[r_id]
         for (m1,p1), (m2, p2) in  minimizers_comb_iterator(minimizers, k, x):
-            M2[r_id][(m1, m2)].append((p1,p2))  
-    return M2
+            # reads_to_M2[r_id][(m1, m2)].append((p1,p2))
+            reads_to_M2[r_id].append( ((m1,p1), (m2,p2)) )
+            M2[(m1, m2)][r_id].append((p1,p2))
+    return reads_to_M2, M2
 
 
 def minimizers_comb_iterator(minimizers, k, x):
@@ -136,7 +139,7 @@ def time_test(sorted_left_reads, sorted_right_reads, relevant_reads, r_id, k, x)
     for l_pos in sorted_left_reads:
         tmp_add = 0
         for j, r_pos in enumerate(sorted_right_reads[curr_min_r_pos:]):
-            if k < r_pos - l_pos < x:
+            if k < r_pos - l_pos <= x:
                 relevant_reads[r_id].append((l_pos, r_pos))
             elif l_pos > r_pos:
                 tmp_add = j 
@@ -184,6 +187,15 @@ def get_relevant_reads(position_DBG, m1, p1, m2, p2, k, x):
 
     return relevant_reads
 
+
+def get_relevant_reads2(M2, m1, p1, m2, p2):
+    # relevant_reads = defaultdict(list)
+    # print((m1,m2), (p1,p2), M2[(m1,m2)])
+    # sys.exit()
+    # for r_id in M2[(m1,m2)]:
+    #     relevant_reads
+    return M2[(m1,m2)]
+
 def get_heaviest_path(DBG, position_DBG):
     return path
 
@@ -221,11 +233,11 @@ def main(args):
 
         for hash_fcn in ["lex", "rev_lex"]: # add four others
             M, hpol_DBG  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
-            M2 = get_minimizers_comb(reads, M, k_size, 15)
-            print("done createng minimizer combinations")
+            reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, 15)
+            print("done creating minimizer combinations")
 
-            print( [ (xx, len(M2[xx])) for xx in M2 ])
-            sys.exit()
+            print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
+            # sys.exit()
 
             for r_id in sorted(reads):
                 corr_pos = []
@@ -238,9 +250,10 @@ def main(args):
 
 
 
-                for (m1,p1), (m2,p2) in  minimizers_comb_iterator(M[r_id], k_size, 15):
-                    if p2 > 500:
-                        break
+                for (m1,p1), (m2,p2) in  reads_to_M2[r_id]: # minimizers_comb_iterator(M[r_id], k_size, 15):
+
+                    # if p2 > 500:
+                    #     break
                     # if p1 == 185 and p2 == 196:
                     #     print(position_DBG[m1])
                     #     print(position_DBG[m2])
@@ -250,7 +263,27 @@ def main(args):
 
                     # find the reads where this minimizer pair occurs (witin the same range) in other reads (at least 2 additional reads required)
                     # print(position_DBG[m1], position_DBG[m2])
-                    relevant_reads = get_relevant_reads(hpol_DBG, m1, p1, m2, p2, k_size, 15)
+
+                    relevant_reads = get_relevant_reads2(M2, m1,p1, m2,p2 )
+
+                    # relevant_reads = get_relevant_reads(hpol_DBG, m1, p1, m2, p2, k_size, 15)
+                    # print(relevant_reads)
+                    # relevant_reads2 = get_relevant_reads2(M2, m1,p1, m2,p2 )
+                    # if relevant_reads != relevant_reads2:
+                    #     print((m1,p1), (m2,p2))
+                    #     for idxx in relevant_reads:
+                    #         ll_ = relevant_reads[idxx]
+                    #         if idxx not in relevant_reads2 or  relevant_reads[idxx] != relevant_reads2[idxx]:
+                    #             for (pos1, pos2) in ll_:
+                    #                 print(idxx, reads[idxx][1][pos1: pos2 + k_size], pos1, pos2, len(reads[idxx][1]), reads[idxx][1][pos1:])
+                    #         else:
+                    #             for (pos1, pos2) in ll_:
+                    #                 print(idxx, reads[idxx][1][pos1: pos2 + k_size], "IDENTICAL")
+                    #             # print(relevant_reads)
+                    #             # print(relevant_reads2)
+                    #     print()
+                    #     # sys.exit()
+
                     if relevant_reads:
                         seqs = { "ref" : seq[p1:p2]}
                         seqs_to_id = { seq[p1:p2] : [ ("ref",p1, p2)]}
