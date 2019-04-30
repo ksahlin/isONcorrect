@@ -252,8 +252,8 @@ def main(args):
 
                 for (m1,p1), (m2,p2) in  reads_to_M2[r_id]: # minimizers_comb_iterator(M[r_id], k_size, 15):
 
-                    # if p2 > 500:
-                    #     break
+                    if p2 > 500:
+                        break
                     # if p1 == 185 and p2 == 196:
                     #     print(position_DBG[m1])
                     #     print(position_DBG[m2])
@@ -285,8 +285,8 @@ def main(args):
                     #     # sys.exit()
 
                     if relevant_reads:
-                        seqs = { "ref" : seq[p1:p2]}
-                        seqs_to_id = { seq[p1:p2] : [ ("ref",p1, p2)]}
+                        seqs = { "ref" : seq[p1 + k_size : p2]}
+                        seqs_to_id = { seq[p1+k_size : p2] : [ ("ref",p1, p2)]}
 
                         # print(p1, p2) #, relevant_reads)
                         # print(m1,m2)
@@ -295,13 +295,13 @@ def main(args):
                             if r_id  == rel_id:
                                 continue
                             for (pos1, pos2) in ll_:
-                                s_rel = reads[rel_id][1][pos1: pos2]
-                                if s_rel[:k_size] ==  seq[p1:p1+k_size] and reads[rel_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
+                                s_rel = reads[rel_id][1][pos1+ k_size: pos2]
+                                if reads[rel_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[rel_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
                                     seqs[rel_id] = s_rel
                                     if s_rel in seqs_to_id:
-                                        seqs_to_id[s_rel].append( (rel_id, pos1, pos2 ) )
+                                        seqs_to_id[s_rel].append( (rel_id, pos1 + k_size, pos2 ) )
                                     else:
-                                        seqs_to_id[s_rel] = [(rel_id, pos1, pos2 )]
+                                        seqs_to_id[s_rel] = [(rel_id, pos1 + k_size, pos2 )]
 
                                 # print(rel_id, s_rel)
                     else:
@@ -317,23 +317,53 @@ def main(args):
                     max_str, max_r_ids = max(seqs_to_id.items(), key = lambda x: len(x[1]) )
                     max_str_count = len(max_r_ids)
                     if  len(seqs_to_id[ seqs["ref"] ]) == 1 and max_str_count > 1 :
-                        print(p1, p2, seqs["ref"], max_str, max_str_count, max_r_ids)
-                        corr_pos.append( (p1, p2, max_str ))
+                        print(p1 + k_size, p2, seqs["ref"], max_str, max_str_count, max_r_ids)
+                        corr_pos.append( (p1 + k_size, p2, max_str, max_r_ids ))
 
+                instances_to_correct = {}
                 clust = []
                 cl_id = 1
-                for j, (p1, p2, new_str) in enumerate(corr_pos):
+                for j, (p1, p2, new_str, max_r_ids) in enumerate(corr_pos):
                     if j == 0:
-                        clust.append( (p1, p2, new_str) )
+                        clust.append( (p1, p2, new_str, max_r_ids) )
                     elif p1 < corr_pos[j-1][1]:
-                        clust.append( (p1, p2, new_str) )                        
+                        clust.append( (p1, p2, new_str, max_r_ids) )                        
                     else:
                         print("cluster", cl_id, len(clust), clust[0][0], clust[-1][1])
-                        clust = [(p1, p2, new_str)]
+                        instances_to_correct[cl_id] = clust
+                        clust = [(p1, p2, new_str, max_r_ids)]
                         cl_id +=1
                         start_p = p1
 
+                print("Correcting read", r_id)
+                s_new = []
+                for cl_id, cluster in instances_to_correct.items():
+                    read_to_str = {}
+                    for ref_p1, ref_p2, new_str, max_r_ids in cluster: # sorted according to ref_start_pos
+                        for tmp_r_id, read_pos1, read_pos2 in max_r_ids:
 
+                            bug: need to check that read positions add up, because we can have that different regions form the same read
+                            spans the region!  See read nr 5 here:
+214 217 GGC AGGAGGC 2 [(5, 203, 210), (7, 200, 207)]
+215 219 GCTA TGTGGC 2 [(4, 279, 285), (5, 289, 295)]
+217 222 TACTG TACTGAG 2 [(5, 210, 217), (7, 207, 214)]
+
+                            if tmp_r_id in read_to_str:
+                                read_to_str[tmp_r_id][0] += 1
+                                old_end_pos = read_to_str[tmp_r_id][3]
+                                if ref_p2 > old_end_pos:
+                                    read_to_str[tmp_r_id][1] = read_to_str[tmp_r_id][1] + new_str[- (ref_p2 - old_end_pos):]
+                                    read_to_str[tmp_r_id][3] = ref_p2
+                            else:
+                                read_to_str[tmp_r_id] = [1, new_str, ref_p1, ref_p2 ] # read weight, read_seq, ref_start, ref_end
+                    
+                    print(cluster)
+                    print(read_to_str)
+                    print()
+                    # pass 
+
+                print("Old:", seq)
+                print("New:", seq)
 
 
                 # new_seq = [seq[:corr_pos[0][0]]]
