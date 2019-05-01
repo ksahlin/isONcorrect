@@ -252,8 +252,8 @@ def main(args):
 
                 for (m1,p1), (m2,p2) in  reads_to_M2[r_id]: # minimizers_comb_iterator(M[r_id], k_size, 15):
 
-                    if p2 > 500:
-                        break
+                    # if p2 > 500:
+                    #     break
                     # if p1 == 185 and p2 == 196:
                     #     print(position_DBG[m1])
                     #     print(position_DBG[m2])
@@ -337,61 +337,102 @@ def main(args):
 
                 print("Correcting read", r_id)
                 s_new = []
+                prev_end = 0
                 for cl_id, cluster in instances_to_correct.items():
-                    read_to_str = {}
-                    for ref_p1, ref_p2, new_str, max_r_ids in cluster: # sorted according to ref_start_pos
-                        for tmp_r_id, read_pos1, read_pos2 in max_r_ids:
+                    highest_weighted_str, weight, start_pos, end_pos = get_optimal_solution(cluster)
+                    print(seq[start_pos: end_pos], highest_weighted_str, weight, start_pos, end_pos)
 
-                            bug: need to check that read positions add up, because we can have that different regions form the same read
-                            spans the region!  See read nr 5 here:
-214 217 GGC AGGAGGC 2 [(5, 203, 210), (7, 200, 207)]
-215 219 GCTA TGTGGC 2 [(4, 279, 285), (5, 289, 295)]
-217 222 TACTG TACTGAG 2 [(5, 210, 217), (7, 207, 214)]
+                    s_new.append(seq[prev_end : start_pos])
+                    s_new.append(highest_weighted_str)
+                    prev_end = end_pos
 
-                            if tmp_r_id in read_to_str:
-                                read_to_str[tmp_r_id][0] += 1
-                                old_end_pos = read_to_str[tmp_r_id][3]
-                                if ref_p2 > old_end_pos:
-                                    read_to_str[tmp_r_id][1] = read_to_str[tmp_r_id][1] + new_str[- (ref_p2 - old_end_pos):]
-                                    read_to_str[tmp_r_id][3] = ref_p2
-                            else:
-                                read_to_str[tmp_r_id] = [1, new_str, ref_p1, ref_p2 ] # read weight, read_seq, ref_start, ref_end
-                    
-                    print(cluster)
-                    print(read_to_str)
-                    print()
-                    # pass 
+                s_new.append(seq[prev_end :])
 
                 print("Old:", seq)
-                print("New:", seq)
-
-
-                # new_seq = [seq[:corr_pos[0][0]]]
-                # for j, (p1, p2, new_str) in enumerate(corr_pos):
-                #     # if p1 >= corr_pos[j-1][1]:
-                #     new_seq.append(new_str)
-                #     if j < len(corr_pos) - 1:
-                #         new_seq.append(seq[p2:corr_pos[j+1][0]])
-                # new_seq.append(seq[p2:len(seq)])
-                # print("".join([s for s in new_seq]))
-
-                    # get current path score
-
-
-                    # find max score from the local DBG from the region in the reads in containig the minimizer pair range
-
-
-
-                    # repalace if suitable
-                    # if 
-                    # path_max, score_max  = get_heaviest_path(DBG, position_DBG)
-                    # curr_path = seq[p1:p2+ k_size + 1]
-                    # curr_path_score = sum([DBG[curr_path[i:i+k_size]] for i in range(len(curr_path))])
-                    # print(p1,p2,curr_path, curr_path_score)
+                print("New:", "".join(s for s in s_new))
 
                     # if edlib(path, curr_path) < 0.8*len(path) and curr_path_score < 0.8*score_max:
 
             sys.exit()
+
+
+def get_optimal_solution(cluster):
+    curr_active_solutions = {} # str : (weight, ref_start, ref_stop)
+    curr_pos = -1
+    # initialization
+    ref_p1, ref_p2, new_str, max_r_ids = cluster[0]
+    weight = len(max_r_ids)
+    curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
+
+    final_solutions = {}
+    for ref_p1, ref_p2, new_str, max_r_ids in cluster[1:]: # sorted according to ref_start_pos
+        weight = len(max_r_ids)
+        print( "cand", new_str)
+        for s, (w, p1, p2) in list(curr_active_solutions.items()):
+            assert p1 <= ref_p1
+            # print("curr", s, curr_active_solutions)
+            if p2 <= ref_p1:
+                final_solutions[s] = (w, p1, p2)
+                del curr_active_solutions[s]
+            
+            elif ref_p2 > p2:
+                if s[ref_p1 - p1 :  ] == new_str[ : - (ref_p2 - p2) ]: # compatible extension
+                    concat = s + new_str[ - (ref_p2 - p2) :]
+                    curr_active_solutions[concat] = (w + weight, p1, ref_p2)
+                else:
+                    # print("not compatible", s, p1, p2, new_str, ref_p1, ref_p2)
+                    # print(s[ref_p1 - p1 : ], new_str[ : p2 - ref_p1 ])
+                    curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
+
+            elif ref_p2 == p2:
+                if s[ref_p1 - p1 :  ] == new_str[ : ]: # compatible extension
+                    curr_active_solutions[s] = (w + weight, p1, p2)
+                else:
+                    # print("not compatible", s, p1, p2, new_str, ref_p1, ref_p2)
+                    # print(s[ref_p1 - p1 : ], new_str[ : p2 - ref_p1 ])
+                    curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
+
+            elif ref_p2 < p2:
+                if s[ref_p1 - p1 : - (p2 - ref_p2)  ] == new_str[ : ]: # compatible extension
+                    curr_active_solutions[s] = (w + weight, p1, p2)
+                else:
+                    # print("not compatible", s, p1, p2, new_str, ref_p1, ref_p2)
+                    # print(s[ref_p1 - p1 : ], new_str[ : p2 - ref_p1 ])
+                    curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
+
+    for s in curr_active_solutions:
+        w, p1, p2 = curr_active_solutions[s]
+        final_solutions[s] = (w, p1, p2)
+    # print(final_solutions)
+    # find highest scorint solution
+    sorted_solutions =sorted(final_solutions.items(), key = lambda x: x[1][0], reverse = True)
+    best_solution = sorted_solutions[0]
+    highest_weighted_str, highest_weight, start_pos, end_pos = best_solution[0], best_solution[1][0], best_solution[1][1], best_solution[1][2]
+    # sys.exit()
+    return highest_weighted_str, highest_weight, start_pos, end_pos
+
+def get_optimal_solution_old(cluster):
+    read_to_str = {}
+    for ref_p1, ref_p2, new_str, max_r_ids in cluster: # sorted according to ref_start_pos
+        for tmp_r_id, read_pos1, read_pos2 in max_r_ids:
+            if tmp_r_id in read_to_str:
+                read_to_str[tmp_r_id][0] += 1
+                old_end_pos = read_to_str[tmp_r_id][3]
+                if ref_p2 > old_end_pos:
+                    read_to_str[tmp_r_id][1] = read_to_str[tmp_r_id][1] + new_str[- (ref_p2 - old_end_pos):]
+                    read_to_str[tmp_r_id][3] = ref_p2
+            else:
+                read_to_str[tmp_r_id] = [1, new_str, ref_p1, ref_p2 ] # read weight, read_seq, ref_start, ref_end
+    
+    print(cluster)
+    print(read_to_str)
+    print()
+#   bug: need to check that read positions add up, because we can have that different regions form the same read
+#   spans the region!  See read nr 5 here:
+# 214 217 GGC AGGAGGC 2 [(5, 203, 210), (7, 200, 207)]
+# 215 219 GCTA TGTGGC 2 [(4, 279, 285), (5, 289, 295)]
+# 217 222 TACTG TACTGAG 2 [(5, 210, 217), (7, 207, 214)]
+    return best_str, ref_start, ref_end
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
