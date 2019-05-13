@@ -1,6 +1,6 @@
 #!/bin/bash
 
-outbase="/Users/kxs624/tmp/ISONCORRECT/SIMULATED_DATA/3_bp_exons_convex_20seq_cons"
+outbase="/Users/kxs624/tmp/ISONCORRECT/SIMULATED_DATA/3_bp_exons_isoncorrect2"
 mkdir -p $outbase
 results_file=$outbase/"results.tsv"
 plot_file=$outbase/"results.pdf"
@@ -14,20 +14,24 @@ echo -n  "id"$'\t'"p"$'\t'"tot"$'\t'"err"$'\t'"subs"$'\t'"ins"$'\t'"del"$'\t'"ra
 for id in $(seq 1 1 2) 
 do
     # which python
-    python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --sim_genome_len 150 --coords 0 50 100 150 --outfolder $outbase/$id/ --probs 1.0 $p 1.0  --nr_reads 100
-    for p in $(seq 0.1 0.1 0.2)
+    python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --sim_genome_len 150 --coords 0 50 100 150 --outfolder $outbase/$id/ --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
+    for p in $(seq 1 0.1 1.0)  # $(seq 0.1 0.1 0.2)
     do
-        # echo $id $p
         python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --ref $outbase/$id/reference.fa  --coords 0 50 100 150 --outfolder $outbase/$id/$p --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
-        python /Users/kxs624/Documents/workspace/isONcorrect/isONcorrect --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ > /dev/null
-        python /Users/kxs624/Documents/workspace/isONcorrect/scripts/evaluate_simulated_reads.py  $outbase/$id/$p/isoncorrect/corrected_reads_parasail_1.fasta  $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation > /dev/null
+
+        python /Users/kxs624/Documents/workspace/isONcorrect/isONcorrect2 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ > /dev/null
+        python /Users/kxs624/Documents/workspace/isONcorrect/scripts/evaluate_simulated_reads.py  $outbase/$id/$p/isoncorrect/corrected_reads_parasail_1.fasta  $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation  #> /dev/null
         echo -n  $id$'\t'$p$'\t'&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv 
         echo -n  $id$'\t'$p$'\t' >> $results_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv >> $results_file
 
-        python /Users/kxs624/Documents/workspace/isONcorrect/scripts/evaluate_simulated_reads.py  $outbase/$id/$p/isoncorrect/spoa_ref.fa  $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation_spoa > /dev/null
-        echo -n  $id$'\t'$p$'\t'&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation_spoa/results.tsv 
-        echo -n  $id$'\t'$p$'\t' >> $results_spoa_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation_spoa/results.tsv >> $results_spoa_file
+        # python /Users/kxs624/Documents/workspace/isONcorrect/scripts/evaluate_simulated_reads.py  $outbase/$id/$p/isoncorrect/spoa_ref.fa  $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation_spoa > /dev/null
+        # echo -n  $id$'\t'$p$'\t'&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation_spoa/results.tsv 
+        # echo -n  $id$'\t'$p$'\t' >> $results_spoa_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation_spoa/results.tsv >> $results_spoa_file
 
+        fastq2fasta $outbase/$id/$p/reads.fq $outbase/$id/$p/reads.fa
+        python /Users/kxs624/Documents/workspace/isONcorrect/scripts/evaluate_simulated_reads.py   $outbase/$id/$p/reads.fa $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation_reads #> /dev/null
+        echo -n  $id$'\t'$p$'\t'&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation_reads/results.tsv 
+        echo -n  $id$'\t'$p$'\t' >> $results_spoa_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation_spoa/results.tsv >> $results_spoa_file
 
         # head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv 
         # ( head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv  && $id && $p ) | cat

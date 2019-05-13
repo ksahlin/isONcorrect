@@ -14,6 +14,7 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import Counter
+import parasail
 # try:
 #     import matplotlib
 #     matplotlib.use('agg')
@@ -355,7 +356,7 @@ def get_minimizers_2set_simple(querys, targets):
     for acc1, seq1 in querys.items():
         best_ed = len(seq1)
         for acc2, seq2 in targets.items():
-            edit_distance = edlib_ed(seq1, seq2, mode="NW", k = len(seq1)) # seq1 = query, seq2 = target
+            edit_distance = edlib_ed(seq1, seq2, mode="NW", k = 2*len(seq1)) # seq1 = query, seq2 = target
             if 0 <= edit_distance < best_ed:
                 best_ed = edit_distance
                 best_edit_distances[acc1] = {}
@@ -363,9 +364,72 @@ def get_minimizers_2set_simple(querys, targets):
             elif edit_distance == best_ed:
                 best_edit_distances[acc1][acc2] = best_ed
         # print(best_ed)
+        # print(seq2)
+        # print(seq1)
+        # print()
 
 
     return best_edit_distances
+
+
+
+def cigar_to_seq(cigar, query, ref):
+    cigar_tuples = []
+    result = re.split(r'[=DXSMI]+', cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = cigar[i]
+        i += 1
+        cigar_tuples.append((int(length), type_ ))
+
+    r_index = 0
+    q_index = 0
+    q_aln = []
+    r_aln = []
+    for length_ , type_ in cigar_tuples:
+        if type_ == "=" or type_ == "X":
+            q_aln.append(query[q_index : q_index + length_])
+            r_aln.append(ref[r_index : r_index + length_])
+
+            r_index += length_
+            q_index += length_
+        
+        elif  type_ == "I":
+            # insertion w.r.t. reference
+            r_aln.append('-' * length_)
+            q_aln.append(query[q_index: q_index + length_])
+            #  only query index change
+            q_index += length_
+
+        elif type_ == 'D':
+            # deletion w.r.t. reference
+            r_aln.append(ref[r_index: r_index + length_])
+            q_aln.append('-' * length_)
+            #  only ref index change
+            r_index += length_
+        
+        else:
+            print("error")
+            print(cigar)
+            sys.exit()
+
+    return  "".join([s for s in q_aln]), "".join([s for s in r_aln])
+
+
+def parasail_alignment(read, reference, x_acc = "", y_acc = "", match_score = 2, mismatch_penalty = -2, opening_penalty = 2, gap_ext = 1, ends_discrepancy_threshold = 0):
+    user_matrix = parasail.matrix_create("ACGT", match_score, mismatch_penalty)
+    result = parasail.sg_trace_scan_16(read, reference, opening_penalty, gap_ext, user_matrix)
+    if result.saturated:
+        print("SATURATED!")
+        result = parasail.sg_trace_scan_32(read, reference, opening_penalty, gap_ext, user_matrix)
+    if sys.version_info[0] < 3:
+        cigar_string = str(result.cigar.decode).decode('utf-8')
+    else:
+        cigar_string = str(result.cigar.decode, 'utf-8')
+    
+    read_alignment, ref_alignment = cigar_to_seq(cigar_string, read, reference)
+    return read_alignment, ref_alignment
 
 def get_ssw_alignments(best_edit_distances, querys, targets):
     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
@@ -379,10 +443,21 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
         for acc2 in best_edit_distances[acc1]:
             seq2 = targets[acc2]
             r_aligned, q_aligned, stats = ssw_alignment( acc1, acc2, seq1, seq2, 1111,1111 )
-            if stats:
-                matches, mismatches, indels, deletions, insertions, match_line = stats
-            else:
-                continue
+            
+            read_alignment, ref_alignment = parasail_alignment(seq1, seq2)
+            insertions = r_aligned.count("-")
+            deletions = q_aligned.count("-")
+            indels =  insertions + deletions
+            mismatches = len([1 for n1, n2 in zip(read_alignment, ref_alignment) if n1 != n2 and n1 != "-" and n2 != "-"] )
+            # mismatches = , indels, deletions, insertions, match_line
+
+            # print(read_alignment)
+            # print(ref_alignment)
+            # if stats:
+            #     matches, mismatches, indels, deletions, insertions, match_line = stats
+            # else:
+            #     continue
+
             # result = aligner.align(seq1, seq2, revcomp=False)
             # seq2_aln, match_line, seq1_aln = result.alignment
             # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
@@ -392,10 +467,10 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
             sw_ed = mismatches + indels
             if sw_ed < best_ed:
                 best_edit_distances_ssw[acc1] = {}
-                best_edit_distances_ssw[acc1][acc2] = (deletions, insertions, mismatches, match_line)
+                best_edit_distances_ssw[acc1][acc2] = (deletions, insertions, mismatches)
                 best_ed = sw_ed
             elif sw_ed == best_ed:
-                best_edit_distances_ssw[acc1][acc2] = (deletions, insertions, mismatches, match_line)
+                best_edit_distances_ssw[acc1][acc2] = (deletions, insertions, mismatches)
 
             # seq1_aln, match_line, seq2_aln = result.alignment
 
@@ -456,9 +531,8 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
             fewest_errors = len(q_seq)
             best_mismatches, best_insertions, best_deletions = len(q_seq), len(q_seq), len(q_seq)
             for j, (r_acc, r_seq) in enumerate(minimizer_graph_c_to_t[q_acc].items()):
-                deletions, insertions, mismatches, match_line = minimizer_graph_c_to_t[q_acc][r_acc]
+                deletions, insertions, mismatches = minimizer_graph_c_to_t[q_acc][r_acc]
                 edit_distance =  deletions + insertions + mismatches
-                print(match_line)
                 if edit_distance < best_ed:
                     best_ed = edit_distance
                     r_acc_max_id = r_acc
@@ -489,7 +563,7 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
 
     # total discoveries, total perfect matches (1.0 identity), errors for each consensus
     # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(nr_unique_refs, q_acc, best_match_container[q_acc], errors_container[q_acc], identity_container[q_acc], *error_types_container[q_acc]))
-
+    print("errors", sorted([ ed for acc, ed in errors_container.items()]))
     print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
     tot_errors = sum([ ed for acc, ed in errors_container.items()])
     all_errors = [error_types_container[acc] for acc in error_types_container]
