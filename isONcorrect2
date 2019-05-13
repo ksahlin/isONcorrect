@@ -8,7 +8,7 @@ import errno
 from time import time
 import itertools
 
-# import math
+import math
 import re
 from collections import deque
 from collections import defaultdict
@@ -82,6 +82,11 @@ def get_kmer_maximizers(seq, k_size, w_size):
     return minimizers
 
 
+def get_kmer_all(seq, k_size, w_size):
+    kmers = [seq[i:i+k_size] for i in range(len(seq)-k_size) ]
+    minimizers = [ (kmer, i) for i, kmer in enumerate(kmers)]
+    return minimizers
+
 def get_minimizers_and_positions(reads, w, k, hash_fcn):
     # 1. homopolymenr compress read and obtain minimizers
     M = {}
@@ -95,19 +100,21 @@ def get_minimizers_and_positions(reads, w, k, hash_fcn):
             minimizers = get_kmer_minimizers(seq_hpol_comp, k, w)
         elif hash_fcn == "rev_lex":
             minimizers = get_kmer_maximizers(seq_hpol_comp, k, w)
+        elif hash_fcn == "full":
+            minimizers = get_kmer_all(seq, k, w)
 
+        if hash_fcn == "full":
+            M[r_id] = minimizers
+        else:
+            indices = [i for i, (n1,n2) in enumerate(zip(seq[:-1],seq[1:])) if n1 != n2] # indicies we want to take quality values from to get quality string of homopolymer compressed read 
+            indices.append(len(seq) - 1)
+            positions_in_non_compressed_sring = [(m, indices[p]) for m, p in minimizers ]
+            M[r_id] = positions_in_non_compressed_sring
 
-        indices = [i for i, (n1,n2) in enumerate(zip(seq[:-1],seq[1:])) if n1 != n2] # indicies we want to take quality values from to get quality string of homopolymer compressed read 
-        indices.append(len(seq) - 1)
-        positions_in_non_compressed_sring = [(m, indices[p]) for m, p in minimizers ]
-        M[r_id] = positions_in_non_compressed_sring
-
-        hpol_kmers = [seq_hpol_comp[i:i+k] for i in range(len(seq_hpol_comp) - k +1)]
-        # print(hpol_kmers, indices)        
-        # print(len(hpol_kmers), len(indices))
-        assert len(hpol_kmers) == len(indices) - k + 1
-        for kmer, i in zip(hpol_kmers, indices[:-k+1]):
-            compressed_DBG[kmer].append( (r_id, i))
+        # hpol_kmers = [seq_hpol_comp[i:i+k] for i in range(len(seq_hpol_comp) - k +1)]
+        # assert len(hpol_kmers) == len(indices) - k + 1
+        # for kmer, i in zip(hpol_kmers, indices[:-k+1]):
+        #     compressed_DBG[kmer].append( (r_id, i))
 
 
     return M, compressed_DBG
@@ -116,6 +123,7 @@ def get_minimizers_comb(reads, M, k, x):
     reads_to_M2 = {}
     M2 = defaultdict(lambda: defaultdict(list))
     for r_id in M:
+        # print(reads[r_id][1])
         reads_to_M2[r_id] = [] # defaultdict(list)
         minimizers = M[r_id]
         for (m1,p1), (m2, p2) in  minimizers_comb_iterator(minimizers, k, x):
@@ -126,11 +134,17 @@ def get_minimizers_comb(reads, M, k, x):
 
 
 def minimizers_comb_iterator(minimizers, k, x):
+    # print("read")
     for i, (m1, p1) in enumerate(minimizers[:-1]):
+        tmp = 0
         for j, (m2, p2) in enumerate(minimizers[i+1:]):
-            if k < p2 - p1 <= x:
+            if k < p2 - p1 and (p2 - p1 <= x or tmp < 10):
+                tmp +=1
                 yield (m1,p1), (m2, p2)
             elif p2 - p1 > x:
+                # print(tmp)
+                # if tmp < 6:
+                #     print(, p1)
                 break
     # return m1, m2
 
@@ -199,6 +213,39 @@ def get_relevant_reads2(M2, m1, p1, m2, p2):
 def get_heaviest_path(DBG, position_DBG):
     return path
 
+
+def commonOverlapIndexOf(text1, text2):  
+  # Cache the text lengths to prevent multiple calls.  
+  text1_length = len(text1)  
+  text2_length = len(text2)  
+  # Eliminate the null case.  
+  if text1_length == 0 or text2_length == 0:  
+    return 0  
+  # Truncate the longer string.  
+  if text1_length > text2_length:  
+    text1 = text1[-text2_length:]  
+  elif text1_length < text2_length:  
+    text2 = text2[:text1_length]  
+  # Quick check for the worst case.  
+  if text1 == text2:  
+    return min(text1_length, text2_length)  
+   
+  # Start by looking for a single character match  
+  # and increase length until no match is found.  
+  best = 0  
+  length = 1  
+  while True:  
+    pattern = text1[-length:]  
+    found = text2.find(pattern)  
+    if found == -1:  
+      return best  
+    length += found  
+    if text1[-length:] == text2[:length]:  
+      best = length  
+      length += 1 
+
+
+
 def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
@@ -224,6 +271,7 @@ def main(args):
 
     print("Correcting {0} reads.".format(len(reads)))
     start = time()
+    corrected_reads = {}
     for k_size in range(args.k, args.k +1):
         DBG, position_DBG = create_augmented_reference.kmer_counter(reads, k_size)
         print("done createng DB")
@@ -231,9 +279,10 @@ def main(args):
         # print("ITERATION", iteration)
         # args.iteration = iteration
 
-        for hash_fcn in ["lex", "rev_lex"]: # add four others
+        for hash_fcn in ["full"]: # ["lex"]: #  add "rev_lex" # add four others
             M, hpol_DBG  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
             reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, 15)
+            # print(M)
             print("done creating minimizer combinations")
 
             print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
@@ -241,9 +290,10 @@ def main(args):
 
             for r_id in sorted(reads):
                 corr_pos = []
-                if r_id != 0:
-                    continue
+                # if r_id != 0:
+                #     continue
                 (acc, seq, qual) = reads[r_id]
+                print("starting correcting:", seq)
                 # print("read", r_id, M[r_id])
                 # print(M[r_id])
                 # sys.exit()
@@ -283,7 +333,7 @@ def main(args):
                     #             # print(relevant_reads2)
                     #     print()
                     #     # sys.exit()
-
+                    # print(relevant_reads)
                     if relevant_reads:
                         seqs = { "ref" : seq[p1 + k_size : p2]}
                         seqs_to_id = { seq[p1+k_size : p2] : [ ("ref",p1, p2)]}
@@ -296,6 +346,7 @@ def main(args):
                                 continue
                             for (pos1, pos2) in ll_:
                                 s_rel = reads[rel_id][1][pos1+ k_size: pos2]
+                                # print(seq[p1+k_size : p2], s_rel, p1, p2, pos1, pos2, reads[rel_id][1][pos1 : pos1 + k_size ], seq[p1:p1+k_size], reads[rel_id][1][pos2 : pos2 +k_size],  seq[p2:p2+k_size])
                                 if reads[rel_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[rel_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
                                     seqs[rel_id] = s_rel
                                     if s_rel in seqs_to_id:
@@ -312,12 +363,13 @@ def main(args):
 
                     # find count most common string, and count of current string
                     
-                    # if curr_str_count == 1 and max_str_count > 2 and edlib(curr_str, max_str):
+                    # if curr_str_count == 1 and max_str_count > 5 and edlib(curr_str, max_str):
                         # replace string
                     max_str, max_r_ids = max(seqs_to_id.items(), key = lambda x: len(x[1]) )
                     max_str_count = len(max_r_ids)
-                    if  len(seqs_to_id[ seqs["ref"] ]) == 1 and max_str_count > 1 :
-                        print(p1 + k_size, p2, seqs["ref"], max_str, max_str_count, max_r_ids)
+                    # print(p1, p2, len(seqs_to_id[ seqs["ref"] ]), max_str_count, seqs_to_id)
+                    if  len(seqs_to_id[ seqs["ref"] ]) < max_str_count and math.fabs(len(seqs["ref"]) - len(max_str)) < 10:
+                        # print(p1 + k_size, p2, seq[p1 : p1 + k_size], seq[p2 : p2 + k_size ], seqs["ref"], max_str, max_str_count, max_r_ids)
                         corr_pos.append( (p1 + k_size, p2, max_str, max_r_ids ))
 
                 instances_to_correct = {}
@@ -339,40 +391,132 @@ def main(args):
                 s_new = []
                 prev_end = 0
                 for cl_id, cluster in instances_to_correct.items():
-                    highest_weighted_str, weight, start_pos, end_pos = get_optimal_solution(cluster)
-                    print(seq[start_pos: end_pos], highest_weighted_str, weight, start_pos, end_pos)
+                    best_solutions = get_optimal_solution(cluster)
+                    # best_solutions = get_optimal_solution2(cluster)
+                    for start_pos, end_pos, weight, highest_weighted_str in best_solutions:
 
-                    s_new.append(seq[prev_end : start_pos])
-                    s_new.append(highest_weighted_str)
-                    prev_end = end_pos
+                    # highest_weighted_str, weight, start_pos, end_pos = get_optimal_solution(cluster)
+                        print(seq[start_pos: end_pos], highest_weighted_str, weight, start_pos, end_pos)
+
+                        # only change string if weight larger than W (=5) and edlib(highest_weighted_str, old_str) < d
+                        if weight > 5:
+                            s_new.append(seq[prev_end : start_pos])
+                            s_new.append(highest_weighted_str)
+                            prev_end = end_pos
 
                 s_new.append(seq[prev_end :])
 
                 print("Old:", seq)
                 print("New:", "".join(s for s in s_new))
+                # if r_id == 98:
+                #     print(reads_to_M2[r_id])
+                #     print("old:", seq)
+                #     sys.exit()
+
+                corrected_reads[acc] = "".join(s for s in s_new)
 
                     # if edlib(path, curr_path) < 0.8*len(path) and curr_path_score < 0.8*score_max:
 
-            sys.exit()
+            # sys.exit()
+    outfile = open(os.path.join(args.outfolder, "corrected_reads_parasail_1.fasta"), "w")
+    print( len(corrected_reads))
+    for acc, seq in corrected_reads.items():
+        outfile.write(">{0}\n{1}\n".format(acc, seq))
+    outfile.close()
+
+
+from modules import weighted_interval_scheduling as wis
+def WIS(sorted_solutions):
+    i = wis.WeightedIntervalProblem('startnode')
+    # for x in sorted_solutions: i.add_interval(x)
+    for seq, (w, start, stop) in sorted_solutions:
+        # print(w)
+        i_object = wis.Interval(start,stop, w, seq)
+        # print(i_object)
+        # print(i_object.weight, i_object.start, i_object.end)
+        i.add_interval( i_object )
+    
+    answer = i.weighted_interval_scheduling(1)
+    print(answer)
+    # if len(answer) > 1:
+    #     sys.exit()  
+    return answer
+
+def get_optimal_solution2(cluster):
+    curr_active_solutions = {} # str : (weight, ref_start, ref_stop)
+    curr_pos = -1
+
+    # initialization
+    ref_p1, ref_p2, new_str, max_r_ids = cluster[0]
+    weight = len(max_r_ids)
+    curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
+    # wrong in logic when checking overlaps between paths
+    final_solutions = {}
+    for ref_p1, ref_p2, new_str, max_r_ids in cluster[1:]: # sorted according to ref_start_pos
+        weight = len(max_r_ids)
+        # print( "cand", new_str)
+        for s, (w, p1, p2) in list(curr_active_solutions.items()):
+            substr_pos = s.find(new_str)
+            substr_pos2 = new_str.find(s)
+            if substr_pos >= 0:
+                curr_active_solutions[s] = (w + weight, p1, p2)      
+            elif substr_pos2 >= 0:
+                curr_active_solutions[new_str] = (w + weight, p1, ref_p2)      
+            else:
+                ovlp = commonOverlapIndexOf(s, new_str)
+                if ovlp > 2:
+                    concat = s[:-ovlp] + new_str
+                    curr_active_solutions[concat] = (w + weight, p1, ref_p2)
+                else:
+                    curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
+
+            assert p1 <= ref_p1
+
+    for s in curr_active_solutions:
+        w, p1, p2 = curr_active_solutions[s]
+        final_solutions[s] = (w, p1, p2)
+    # print(final_solutions)
+    # find highest scorint solution
+    sorted_solutions =sorted(final_solutions.items(), key = lambda x: x[1][0], reverse = True)
+    # print(sorted_solutions)
+    best_solution = sorted_solutions[0]
+    print(best_solution)
+    if best_solution == ('CAGACTCAAG', (6, 6, 13)):
+        sys.exit()
+
+    sorted_solutions = sorted(final_solutions.items(), key = lambda x: x[1][1], reverse = True)
+
+    weighted_interval_solutions = WIS(sorted_solutions)
+    best_solutions = sorted(weighted_interval_solutions, key = lambda x: x[0] )
+    print("get_optimal_solution2", best_solutions)
+    return best_solutions
+
 
 
 def get_optimal_solution(cluster):
+    # s1 = "AGCTGGCTAG"
+    # s2 = "CTGG"
+    # ovlp1 = commonOverlapIndexOf(s1, s2)
+    # print(ovlp1, s1.find(s2))
+    # sys.exit()
+
     curr_active_solutions = {} # str : (weight, ref_start, ref_stop)
     curr_pos = -1
     # initialization
     ref_p1, ref_p2, new_str, max_r_ids = cluster[0]
     weight = len(max_r_ids)
     curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
-
+    # wrong in logic when checking overlaps between paths
     final_solutions = {}
     for ref_p1, ref_p2, new_str, max_r_ids in cluster[1:]: # sorted according to ref_start_pos
         weight = len(max_r_ids)
-        print( "cand", new_str)
+        # print( "cand", new_str)
         for s, (w, p1, p2) in list(curr_active_solutions.items()):
             assert p1 <= ref_p1
-            # print("curr", s, curr_active_solutions)
+            # print(new_str, "curr", s, curr_active_solutions)
             if p2 <= ref_p1:
                 final_solutions[s] = (w, p1, p2)
+                # print(final_solutions, p2, ref_p1)
                 del curr_active_solutions[s]
             
             elif ref_p2 > p2:
@@ -384,6 +528,7 @@ def get_optimal_solution(cluster):
                     # print(s[ref_p1 - p1 : ], new_str[ : p2 - ref_p1 ])
                     curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
 
+
             elif ref_p2 == p2:
                 if s[ref_p1 - p1 :  ] == new_str[ : ]: # compatible extension
                     curr_active_solutions[s] = (w + weight, p1, p2)
@@ -392,13 +537,18 @@ def get_optimal_solution(cluster):
                     # print(s[ref_p1 - p1 : ], new_str[ : p2 - ref_p1 ])
                     curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
 
+
             elif ref_p2 < p2:
-                if s[ref_p1 - p1 : - (p2 - ref_p2)  ] == new_str[ : ]: # compatible extension
+                if s[ref_p1 - p1 : - (p2 - ref_p2) - 1  ] == new_str[ : ]: # compatible extension
+                    # if new_str == "TCTTTCTC":
+                    #     print(s[ref_p1 - p1 : - (p2 - ref_p2)  ], new_str[ : ])
                     curr_active_solutions[s] = (w + weight, p1, p2)
                 else:
                     # print("not compatible", s, p1, p2, new_str, ref_p1, ref_p2)
                     # print(s[ref_p1 - p1 : ], new_str[ : p2 - ref_p1 ])
+                    # print(curr_active_solutions)
                     curr_active_solutions[new_str] = (weight, ref_p1, ref_p2)
+
 
     for s in curr_active_solutions:
         w, p1, p2 = curr_active_solutions[s]
@@ -406,10 +556,25 @@ def get_optimal_solution(cluster):
     # print(final_solutions)
     # find highest scorint solution
     sorted_solutions =sorted(final_solutions.items(), key = lambda x: x[1][0], reverse = True)
+    # print(sorted_solutions)
     best_solution = sorted_solutions[0]
-    highest_weighted_str, highest_weight, start_pos, end_pos = best_solution[0], best_solution[1][0], best_solution[1][1], best_solution[1][2]
+    print(best_solution)
+    if best_solution == ('CAGACTCAAG', (6, 6, 13)):
+        sys.exit()
+
+    sorted_solutions = sorted(final_solutions.items(), key = lambda x: x[1][1], reverse = True)
+
+    weighted_interval_solutions = WIS(sorted_solutions)
+    best_solutions = sorted(weighted_interval_solutions, key = lambda x: x[0] )
+    print("get_optimal_solution", best_solutions)
+    # if len(best_solutions) > 1:
+    #     sys.exit()
+    # Produce weighted interval scheduling with these final paths
+
+    # highest_weighted_str, highest_weight, start_pos, end_pos = best_solution[0], best_solution[1][0], best_solution[1][1], best_solution[1][2]
     # sys.exit()
-    return highest_weighted_str, highest_weight, start_pos, end_pos
+    # return highest_weighted_str, highest_weight, start_pos, end_pos
+    return best_solutions
 
 def get_optimal_solution_old(cluster):
     read_to_str = {}
