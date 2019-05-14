@@ -1,0 +1,409 @@
+#! /usr/bin/env python
+
+from __future__ import print_function
+import os,sys
+import argparse
+
+import errno
+from time import time
+import itertools
+
+import math
+import re
+from collections import deque
+from collections import defaultdict
+
+import edlib
+
+from modules import correct_seqs, create_augmented_reference, align, help_functions
+
+
+
+def get_seq_to_index(S):
+    seq_to_index = {}
+    for i, (acc, seq, qual) in S.items():
+        if seq in seq_to_index:
+            seq_to_index[seq].append(i)
+        else: 
+            seq_to_index[seq] = []
+            seq_to_index[seq] = [i]
+
+    unique_seq_to_index = {seq: acc_list[0] for seq, acc_list in  seq_to_index.items() if len(acc_list) == 1 } 
+    print("Non-converged (unique) sequences left:", len(unique_seq_to_index))
+    return seq_to_index
+
+
+def get_kmer_minimizers(seq, k_size, w_size):
+    # kmers = [seq[i:i+k_size] for i in range(len(seq)-k_size) ]
+    w = w_size - k_size
+    window_kmers = deque([seq[i:i+k_size] for i in range(w +1)])
+    curr_min = min(window_kmers)
+    minimizers = [ (curr_min, list(window_kmers).index(curr_min)) ]
+
+    for i in range(w+1,len(seq) - k_size):
+        new_kmer = seq[i:i+k_size]
+        # updateing window
+        discarded_kmer = window_kmers.popleft()
+        window_kmers.append(new_kmer)
+
+        # we have discarded previous windows minimizer, look for new minimizer brute force
+        if curr_min == discarded_kmer: 
+            curr_min = min(window_kmers)
+            minimizers.append( (curr_min, list(window_kmers).index(curr_min) + i - w ) )
+
+        # Previous minimizer still in window, we only need to compare with the recently added kmer 
+        elif new_kmer < curr_min:
+            curr_min = new_kmer
+            minimizers.append( (curr_min, i) )
+
+    return minimizers
+
+def get_kmer_maximizers(seq, k_size, w_size):
+    # kmers = [seq[i:i+k_size] for i in range(len(seq)-k_size) ]
+    w = w_size - k_size
+    window_kmers = deque([seq[i:i+k_size] for i in range(w +1)])
+    curr_min = max(window_kmers)
+    minimizers = [ (curr_min, list(window_kmers).index(curr_min)) ]
+
+    for i in range(w+1,len(seq) - k_size):
+        new_kmer = seq[i:i+k_size]
+        # updateing window
+        discarded_kmer = window_kmers.popleft()
+        window_kmers.append(new_kmer)
+
+        # we have discarded previous windows minimizer, look for new minimizer brute force
+        if curr_min == discarded_kmer: 
+            curr_min = max(window_kmers)
+            minimizers.append( (curr_min, list(window_kmers).index(curr_min) + i - w ) )
+
+        # Previous minimizer still in window, we only need to compare with the recently added kmer 
+        elif new_kmer > curr_min:
+            curr_min = new_kmer
+            minimizers.append( (curr_min, i) )
+
+    return minimizers
+
+
+def get_kmer_all(seq, k_size, w_size):
+    kmers = [seq[i:i+k_size] for i in range(len(seq)-k_size) ]
+    minimizers = [ (kmer, i) for i, kmer in enumerate(kmers)]
+    return minimizers
+
+def get_minimizers_and_positions(reads, w, k, hash_fcn):
+    # 1. homopolymenr compress read and obtain minimizers
+    M = {}
+    compressed_DBG = defaultdict(list)
+    for r_id in reads:
+        (acc, seq, qual) = reads[r_id]
+
+        seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
+
+        if hash_fcn == "lex":
+            minimizers = get_kmer_minimizers(seq_hpol_comp, k, w)
+        elif hash_fcn == "rev_lex":
+            minimizers = get_kmer_maximizers(seq_hpol_comp, k, w)
+        elif hash_fcn == "full":
+            minimizers = get_kmer_all(seq, k, w)
+
+        if hash_fcn == "full":
+            M[r_id] = minimizers
+        else:
+            indices = [i for i, (n1,n2) in enumerate(zip(seq[:-1],seq[1:])) if n1 != n2] # indicies we want to take quality values from to get quality string of homopolymer compressed read 
+            indices.append(len(seq) - 1)
+            positions_in_non_compressed_sring = [(m, indices[p]) for m, p in minimizers ]
+            M[r_id] = positions_in_non_compressed_sring
+
+        # hpol_kmers = [seq_hpol_comp[i:i+k] for i in range(len(seq_hpol_comp) - k +1)]
+        # assert len(hpol_kmers) == len(indices) - k + 1
+        # for kmer, i in zip(hpol_kmers, indices[:-k+1]):
+        #     compressed_DBG[kmer].append( (r_id, i))
+
+
+    return M, compressed_DBG
+
+def get_minimizers_comb(reads, M, k, x):
+    reads_to_M2 = {}
+    M2 = defaultdict(lambda: defaultdict(list))
+    for r_id in M:
+        # print(reads[r_id][1])
+        reads_to_M2[r_id] = [] # defaultdict(list)
+        minimizers = M[r_id]
+        for (m1,p1), (m2, p2) in  minimizers_comb_iterator(minimizers, k, x):
+            # reads_to_M2[r_id][(m1, m2)].append((p1,p2))
+            reads_to_M2[r_id].append( ((m1,p1), (m2,p2)) )
+            M2[(m1, m2)][r_id].append((p1,p2))
+    return reads_to_M2, M2
+
+
+# def minimizers_comb_iterator(minimizers, k, x):
+#     # print("read")
+#     for i, (m1, p1) in enumerate(minimizers[:-1]):
+#         tmp = 0
+#         for j, (m2, p2) in enumerate(minimizers[i+1:]):
+#             if k < p2 - p1 and (p2 - p1 <= x or tmp < 10):
+#                 tmp +=1
+#                 yield (m1,p1), (m2, p2)
+#             elif p2 - p1 > x:
+#                 break
+
+def minimizers_comb_iterator(minimizers, k, x):
+    # print("read")
+    for i, (m1, p1) in enumerate(minimizers[:-1]):
+        for j, (m2, p2) in enumerate(minimizers[i+1:]):
+            if 2*k < p2 - p1 and p2 - p1 <= x:
+                yield (m1,p1), (m2, p2)
+            elif p2 - p1 > x:
+                break
+
+
+def time_test(sorted_left_reads, sorted_right_reads, relevant_reads, r_id, k, x):
+    curr_min_r_pos = 0
+    for l_pos in sorted_left_reads:
+        tmp_add = 0
+        for j, r_pos in enumerate(sorted_right_reads[curr_min_r_pos:]):
+            if k < r_pos - l_pos <= x:
+                relevant_reads[r_id].append((l_pos, r_pos))
+            elif l_pos > r_pos:
+                tmp_add = j 
+                continue
+            elif r_pos > l_pos + x:
+                break
+        curr_min_r_pos += tmp_add   
+
+
+def get_relevant_reads2(M2, m1, p1, m2, p2):
+    return M2[(m1,m2)]
+
+
+# def commonOverlapIndexOf(text1, text2):  
+#   # Cache the text lengths to prevent multiple calls.  
+#   text1_length = len(text1)  
+#   text2_length = len(text2)  
+#   # Eliminate the null case.  
+#   if text1_length == 0 or text2_length == 0:  
+#     return 0  
+#   # Truncate the longer string.  
+#   if text1_length > text2_length:  
+#     text1 = text1[-text2_length:]  
+#   elif text1_length < text2_length:  
+#     text2 = text2[:text1_length]  
+#   # Quick check for the worst case.  
+#   if text1 == text2:  
+#     return min(text1_length, text2_length)  
+   
+#   # Start by looking for a single character match  
+#   # and increase length until no match is found.  
+#   best = 0  
+#   length = 1  
+#   while True:  
+#     pattern = text1[-length:]  
+#     found = text2.find(pattern)  
+#     if found == -1:  
+#       return best  
+#     length += found  
+#     if text1[-length:] == text2[:length]:  
+#       best = length  
+#       length += 1 
+
+
+def edlib_alignment(x, y, k):
+    # if i == 100 and j % 1000 == 0:
+    #     print("Edlib processed alignments: {0}".format(j+1))
+
+    result = edlib.align(x,y, "NW", 'distance', k) # , task="path")
+    ed = result["editDistance"]
+    return ed
+
+def main(args):
+    start = time()
+    reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
+    # kmer_counter(reads)
+    # sys.exit()
+
+    seq_to_index = get_seq_to_index(reads)
+
+    # ref_file_isocon = os.path.join(args.outfolder, "reference.fa")
+    # dot_graph_path = os.path.join(args.outfolder, "graph_isocon.dot")
+    # isocon_out_file = os.path.join(args.outfolder, "reads_out.fa")
+
+    # reference_seq, msa = create_augmented_reference.run_spoa_convex(args.fastq, ref_file_isocon, isocon_out_file, "spoa_convex", dot_graph_path)
+    # reference_seq_longest_path = create_augmented_reference.longest_path(dot_graph_path)    
+
+    # k_count, k_count_pos = create_augmented_reference.kmer_counter(reads, 9)
+    # for i, m in enumerate(msa):
+    #     k_abundance = [k_count[reads[i][1][j:j+9]] for j in range(50)]
+    #     # print(k_abundance)
+    #     print(m[0:250])
+    #     # print(reads[i][2][750:1000])
+    #     # print()
+
+    # print("spoa_convex longest path:", reference_seq_longest_path)
+    # print("spoa_convex:", reference_seq)
+
+    print("Correcting {0} reads.".format(len(reads)))
+    start = time()
+    corrected_reads = {}
+    for k_size in range(args.k, args.k +1):
+        DBG, position_DBG = create_augmented_reference.kmer_counter(reads, k_size)
+        print("done createng DB")
+        w = args.w
+        # print("ITERATION", iteration)
+        # args.iteration = iteration
+
+        for hash_fcn in ["full"]: # ["lex"]: #  add "rev_lex" # add four others
+            M, hpol_DBG  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
+            reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, 40)
+            # print(M)
+            print("done creating minimizer combinations")
+
+            print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
+            # sys.exit()
+
+            for r_id in sorted(reads):
+                corr_pos = []
+                (acc, seq, qual) = reads[r_id]
+                print("starting correcting:", seq)
+                
+
+                curr_m_pos = reads_to_M2[r_id][0][1]
+                curr_best_seqs = {}
+                curr_best_seqs_to_id = {}
+
+                for (m1,p1), (m2,p2) in  reads_to_M2[r_id]: # minimizers_comb_iterator(M[r_id], k_size, 15):
+                    relevant_reads = get_relevant_reads2(M2, m1,p1, m2,p2 )
+
+                    if len(relevant_reads) > 2:
+                        ref_seq = seq[p1 + k_size : p2]
+                        seqs = { "ref" : ref_seq}
+                        seqs_to_id = { ref_seq : [ ("ref",p1, p2)]}
+
+                        # print(p1, p2) #, relevant_reads)
+                        # print(m1,m2)
+                        # print(r_id, seq[p1:p2])
+                        for relevant_read_id, ll_ in relevant_reads.items():
+                            if r_id  == relevant_read_id:
+                                continue
+                            for (pos1, pos2) in ll_:
+                                read_seq = reads[relevant_read_id][1][pos1+ k_size: pos2]
+                                # print(seq[p1+k_size : p2], read_seq, p1, p2, pos1, pos2, reads[relevant_read_id][1][pos1 : pos1 + k_size ], seq[p1:p1+k_size], reads[relevant_read_id][1][pos2 : pos2 +k_size],  seq[p2:p2+k_size])
+                                # print(edlib_alignment(ref_seq, read_seq, len(ref_seq)),  ref_seq, read_seq, (pos1, pos2), (p1,p2), relevant_read_id)
+                                if edlib_alignment(ref_seq, read_seq, 0.4*len(ref_seq)) > 0:   
+                                # if reads[relevant_read_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[relevant_read_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
+                                    seqs[relevant_read_id] = read_seq
+                                    if read_seq in seqs_to_id:
+                                        seqs_to_id[read_seq].append( (relevant_read_id, pos1 + k_size, pos2 ) )
+                                    else:
+                                        seqs_to_id[read_seq] = [(relevant_read_id, pos1 + k_size, pos2 )]
+
+                                # print(relevant_read_id, read_seq)
+                        print(p1,p2, len(seqs))
+
+                    else:
+                        # print(p1, p2)
+                        pass
+
+                    if p1 == curr_m_pos:
+                        if len(seqs) > len(curr_best_seqs):
+                            curr_best_seqs = seqs
+                            curr_best_seqs_to_id = seqs_to_id
+                    else:
+                        if len(curr_best_seqs) > 0:
+                            print("Best at window startpoint:", curr_m_pos)
+                            print(len(curr_best_seqs)) #,curr_best_seqs_to_id)
+                            print()
+                        curr_m_pos = p1
+                        curr_best_seqs = {}
+                        curr_best_seqs_to_id = {}
+
+                # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to solve Spoa in
+
+                # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions
+                print("Correcting read", r_id)
+
+
+
+                sys.exit()
+
+
+                s_new = []
+                prev_end = 0
+                for cl_id, cluster in instances_to_correct.items():
+                    best_solutions = get_optimal_solution(cluster)
+                    # best_solutions = get_optimal_solution2(cluster)
+                    for start_pos, end_pos, weight, highest_weighted_str in best_solutions:
+
+                    # highest_weighted_str, weight, start_pos, end_pos = get_optimal_solution(cluster)
+                        print(seq[start_pos: end_pos], highest_weighted_str, weight, start_pos, end_pos)
+
+                        # only change string if weight larger than W (=5) and edlib(highest_weighted_str, old_str) < d
+                        if weight > 5:
+                            s_new.append(seq[prev_end : start_pos])
+                            s_new.append(highest_weighted_str)
+                            prev_end = end_pos
+
+                s_new.append(seq[prev_end :])
+
+                print("Old:", seq)
+                print("New:", "".join(s for s in s_new))
+                # if r_id == 98:
+                #     print(reads_to_M2[r_id])
+                #     print("old:", seq)
+                #     sys.exit()
+
+                corrected_reads[acc] = "".join(s for s in s_new)
+
+                    # if edlib(path, curr_path) < 0.8*len(path) and curr_path_score < 0.8*score_max:
+
+            # sys.exit()
+    outfile = open(os.path.join(args.outfolder, "corrected_reads_parasail_1.fasta"), "w")
+    print( len(corrected_reads))
+    for acc, seq in corrected_reads.items():
+        outfile.write(">{0}\n{1}\n".format(acc, seq))
+    outfile.close()
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.2')
+
+    parser.add_argument('--fastq', type=str,  default=False, help='Path to input fastq file with reads')
+    # parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
+
+    parser.add_argument('--ont', action="store_true", help='Clustering of ONT transcript reads.')
+    parser.add_argument('--isoseq', action="store_true", help='Clustering of PacBio Iso-Seq reads.')
+
+    parser.add_argument('--k', type=int, default=7, help='Kmer size')
+    parser.add_argument('--w', type=int, default=7, help='Window size')
+    parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
+    # parser.add_argument('--pickled_subreads', type=str, help='Path to an already parsed subreads file in pickle format')
+    # parser.set_defaults(which='main')
+    args = parser.parse_args()
+
+
+
+
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit()
+    if not args.fastq and not args.flnc and not  args.ccs:
+        parser.print_help()
+        sys.exit()
+
+
+    if args.outfolder and not os.path.exists(args.outfolder):
+        os.makedirs(args.outfolder)
+
+
+    # edlib_module = 'edlib'
+    parasail_module = 'parasail'
+    # if edlib_module not in sys.modules:
+    #     print('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment.'.format(edlib_module))
+    if parasail_module not in sys.modules:
+        print('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment!'.format(parasail_module))
+        sys.exit(1)
+    if 100 < args.w or args.w < args.k:
+        print('Please specify a window of size larger or equal to k, and smaller than 100.')
+        sys.exit(1)
+
+    main(args)
+
