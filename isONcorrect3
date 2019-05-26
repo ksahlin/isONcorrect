@@ -306,17 +306,45 @@ def main(args):
                         if len(seqs) > len(curr_best_seqs):
                             curr_best_seqs = seqs
                             curr_best_seqs_to_id = seqs_to_id
+        
+                        ##### TMP
+                        ##### TMP
+                        r_seq = curr_best_seqs["ref"]
+                        print(r_seq)
+                        partition = {"ref" : (0, r_seq, r_seq, 1)}
+                        for q_id, s_tmp in curr_best_seqs.items():
+                            if s_tmp == r_seq:
+                                continue
+                            res = edlib.align(s_tmp, r_seq, task="path", mode="NW")
+                            # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
+                            # print(result_read_to_ref)
+                            cigar_string = res["cigar"]
+                            read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, s_tmp, r_seq)
+                            partition[s_tmp] = (res["editDistance"], ref_alignment, read_alignment, 1)
+                            print(read_alignment, ref_alignment)
+                        alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
+                        print(alignment_matrix)
+                        sys.exit()
+                        ##### TMP
+                        ##### TMP
+
                     else:
                         if len(curr_best_seqs) > 0:
                             print("Best at window startpoint:", curr_m_pos)
-                            print(len(curr_best_seqs)) #,curr_best_seqs_to_id)
+                            print(len(curr_best_seqs),curr_best_seqs ) #,curr_best_seqs_to_id)
                             print()
                         curr_m_pos = p1
                         curr_best_seqs = {}
                         curr_best_seqs_to_id = {}
 
+    
                 # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to solve Spoa in
 
+                # Correct the region from matrix of pairwise alignments to reference
+                for q_id, s_tmp in curr_best_seqs.items():
+                    print(q_id, s_tmp)
+                sys.exit()
+                alignment_matrix = create_multialignment_matrix(partition)
                 # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions
                 print("Correcting read", r_id)
 
