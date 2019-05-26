@@ -214,6 +214,38 @@ def edlib_alignment(x, y, k):
     ed = result["editDistance"]
     return ed
 
+def get_best_correction(curr_best_seqs):
+    r_seq = curr_best_seqs["ref"]
+    print(r_seq)
+    partition = {"ref" : (0, r_seq, r_seq, 1)}
+    for q_id, s_tmp in curr_best_seqs.items():
+        if s_tmp == r_seq:
+            continue
+        res = edlib.align(s_tmp, r_seq, task="path", mode="NW")
+        # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
+        # print(result_read_to_ref)
+        cigar_string = res["cigar"]
+        read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, s_tmp, r_seq)
+        partition[s_tmp] = (res["editDistance"], ref_alignment, read_alignment, 1)
+        print(read_alignment, ref_alignment)
+    alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
+    print(alignment_matrix)
+    for r_tmp, aln_list in alignment_matrix.items():
+        print(aln_list)
+    nr_columns = len(alignment_matrix["ref"])
+    PFM = [{"A": 0, "C": 0, "G": 0, "T": 0, "U" : 0, "-": 0} for j in range(nr_columns)]
+    for r_tmp, aln_list in alignment_matrix.items():
+        for j, n in enumerate(aln_list):
+            PFM[j][n] += 1
+    # print(PFM)
+    corr = []
+    for d in PFM:
+        n_max, count = max(d.items(), key = lambda x: x[1])
+        corr.append(n_max)
+    corr = "".join([n for n in corr if n != "-"])
+    return corr
+
+
 def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
@@ -264,8 +296,12 @@ def main(args):
                 (acc, seq, qual) = reads[r_id]
                 print("starting correcting:", seq)
                 
-
-                curr_m_pos = reads_to_M2[r_id][0][1]
+                all_intervals = []
+                # print(reads_to_M2[r_id][0])
+                curr_m_pos = reads_to_M2[r_id][0][0][1]
+                curr_m_pos2 = reads_to_M2[r_id][0][1][1]
+                # print(curr_m_pos, curr_m_pos2)
+                # sys.exit()
                 curr_best_seqs = {}
                 curr_best_seqs_to_id = {}
 
@@ -306,34 +342,20 @@ def main(args):
                         if len(seqs) > len(curr_best_seqs):
                             curr_best_seqs = seqs
                             curr_best_seqs_to_id = seqs_to_id
+                            curr_best_stop = p2
+
         
-                        ##### TMP
-                        ##### TMP
-                        r_seq = curr_best_seqs["ref"]
-                        print(r_seq)
-                        partition = {"ref" : (0, r_seq, r_seq, 1)}
-                        for q_id, s_tmp in curr_best_seqs.items():
-                            if s_tmp == r_seq:
-                                continue
-                            res = edlib.align(s_tmp, r_seq, task="path", mode="NW")
-                            # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
-                            # print(result_read_to_ref)
-                            cigar_string = res["cigar"]
-                            read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, s_tmp, r_seq)
-                            partition[s_tmp] = (res["editDistance"], ref_alignment, read_alignment, 1)
-                            print(read_alignment, ref_alignment)
-                        alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
-                        print(alignment_matrix)
-                        sys.exit()
-                        ##### TMP
-                        ##### TMP
+                        # best_corr = get_best_correction(curr_best_seqs)
+
 
                     else:
                         if len(curr_best_seqs) > 0:
+                            all_intervals.append( (curr_m_pos, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
                             print("Best at window startpoint:", curr_m_pos)
-                            print(len(curr_best_seqs),curr_best_seqs ) #,curr_best_seqs_to_id)
+                            # print(len(curr_best_seqs),curr_best_seqs ) #,curr_best_seqs_to_id)
                             print()
                         curr_m_pos = p1
+                        curr_m_pos2 = p2
                         curr_best_seqs = {}
                         curr_best_seqs_to_id = {}
 
@@ -341,14 +363,45 @@ def main(args):
                 # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to solve Spoa in
 
                 # Correct the region from matrix of pairwise alignments to reference
-                for q_id, s_tmp in curr_best_seqs.items():
-                    print(q_id, s_tmp)
-                sys.exit()
-                alignment_matrix = create_multialignment_matrix(partition)
+                # for q_id, s_tmp in curr_best_seqs.items():
+                #     print(q_id, s_tmp)
+                # sys.exit()
+                # alignment_matrix = create_multialignment_matrix(partition)
                 # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions
                 print("Correcting read", r_id)
 
 
+                ####### TMP
+                ####### TMP
+                current_active_solutions = {}
+                all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
+                p_j = []
+                for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
+                    if j == 0:
+                        p_j.append(0)
+                        continue
+
+                    k = j - 1
+                    while k >= 0:
+                        print(k)
+                        if all_intervals_sorted_by_finish[k][1] <= start:
+                            break
+                        k -= 1
+                    p_j.append(max(0,k))
+
+                assert len(p_j) == len(all_intervals_sorted_by_finish)
+                for i, interval in enumerate(all_intervals_sorted_by_finish):
+                    print(i, p_j[i], interval[0], interval[1], interval[2])
+
+                OPT = [0]
+                for j in range(1, len(all_intervals_sorted_by_finish)):
+                    v_j = all_intervals_sorted_by_finish[j][2]
+                    OPT.append( max(v_j + OPT[ p_j[j] ], OPT[j-1] ) )
+                print(OPT, OPT[-1])
+
+                # Find solution
+                ####### TMP
+                ####### TMP
 
                 sys.exit()
 
