@@ -375,10 +375,11 @@ def main(args):
                 ####### TMP
                 current_active_solutions = {}
                 all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
-                p_j = []
+                p = []
+                v = [w for (start, stop, w, _) in all_intervals_sorted_by_finish]
                 for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
                     if j == 0:
-                        p_j.append(0)
+                        p.append(0)
                         continue
 
                     k = j - 1
@@ -387,19 +388,29 @@ def main(args):
                         if all_intervals_sorted_by_finish[k][1] <= start:
                             break
                         k -= 1
-                    p_j.append(max(0,k))
+                    p.append(max(0,k))
 
-                assert len(p_j) == len(all_intervals_sorted_by_finish)
+                assert len(p) == len(all_intervals_sorted_by_finish)
                 for i, interval in enumerate(all_intervals_sorted_by_finish):
-                    print(i, p_j[i], interval[0], interval[1], interval[2])
+                    print(i, p[i], interval[0], interval[1], interval[2])
 
                 OPT = [0]
                 for j in range(1, len(all_intervals_sorted_by_finish)):
-                    v_j = all_intervals_sorted_by_finish[j][2]
-                    OPT.append( max(v_j + OPT[ p_j[j] ], OPT[j-1] ) )
+                    OPT.append( max(v[j] + OPT[ p[j] ], OPT[j-1] ) )
                 print(OPT, OPT[-1])
 
                 # Find solution
+                def find_solution(j): 
+                    if j == 0:
+                        return
+                    elif v[j] + OPT[p[j]] > OPT[j-1]:
+                        print(j)
+                        find_solution( p[j] ) 
+                    else:
+                        find_solution(j-1) 
+
+                find_solution(len(all_intervals_sorted_by_finish)-1)
+
                 ####### TMP
                 ####### TMP
 
