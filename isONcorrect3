@@ -217,15 +217,28 @@ def edlib_alignment(x, y, k):
 def get_best_correction(curr_best_seqs):
     r_seq = curr_best_seqs["ref"]
     print(r_seq)
-    partition = {"ref" : (0, r_seq, r_seq, 1)}
+
+    #### TMP
+    #### TMP
+    reads_path = open("/Users/kxs624/tmp/tmp_isoncorrect2/test/1/isoncorrect/reads_tmp.fa", "w")
+    for acc, seq in curr_best_seqs.items():
+        reads_path.write(">{0}\n{1}\n".format(acc, seq))
+    reads_path.close()
+    spoa_ref, msa = create_augmented_reference.run_spoa(reads_path.name, "/dev/null", "/Users/kxs624/tmp/tmp_isoncorrect2/test/1/isoncorrect/spoa_tmp.fa", "spoa", "/dev/null")
+    print(spoa_ref)
+    #### TMP
+    #### TMP
+
+    partition = {"ref" : (0, spoa_ref, spoa_ref, 1)}
+    # partition = {"ref" : (0, r_seq, r_seq, 1)}
     for q_id, s_tmp in curr_best_seqs.items():
-        if s_tmp == r_seq:
-            continue
-        res = edlib.align(s_tmp, r_seq, task="path", mode="NW")
+        # if s_tmp == r_seq:
+        #     continue
+        res = edlib.align(s_tmp, spoa_ref, task="path", mode="NW")
         # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
         # print(result_read_to_ref)
         cigar_string = res["cigar"]
-        read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, s_tmp, r_seq)
+        read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, s_tmp, spoa_ref)
         partition[s_tmp] = (res["editDistance"], ref_alignment, read_alignment, 1)
         print(read_alignment, ref_alignment)
     alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
@@ -235,16 +248,63 @@ def get_best_correction(curr_best_seqs):
     nr_columns = len(alignment_matrix["ref"])
     PFM = [{"A": 0, "C": 0, "G": 0, "T": 0, "U" : 0, "-": 0} for j in range(nr_columns)]
     for r_tmp, aln_list in alignment_matrix.items():
+        if r_tmp == "ref":
+            continue
         for j, n in enumerate(aln_list):
             PFM[j][n] += 1
     # print(PFM)
     corr = []
     for d in PFM:
-        n_max, count = max(d.items(), key = lambda x: x[1])
+        n_max, count_max = max(d.items(), key = lambda x: x[1])
+        if n_max == "-":
+            c, n_max2 = max([(c,n) for n,c in d.items() if n != "-"])
+        if c > 0.4*count_max:
+            print(c, count_max)
+            n_max = n_max2
         corr.append(n_max)
     corr = "".join([n for n in corr if n != "-"])
+    print(corr)
+    sys.exit()
+
     return corr
 
+def solve_WIS(all_intervals_sorted_by_finish):
+    p = []
+    v = [w for (start, stop, w, _) in all_intervals_sorted_by_finish]
+    for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
+        if j == 0:
+            p.append(0)
+            continue
+
+        k = j - 1
+        while k >= 0:
+            if all_intervals_sorted_by_finish[k][1] <= start:
+                break
+            k -= 1
+        p.append(max(0,k))
+
+    assert len(p) == len(all_intervals_sorted_by_finish)
+    for i, interval in enumerate(all_intervals_sorted_by_finish):
+        print(i, p[i], interval[0], interval[1], interval[2])
+
+    OPT = [0]
+    for j in range(1, len(all_intervals_sorted_by_finish)):
+        OPT.append( max(v[j] + OPT[ p[j] ], OPT[j-1] ) )
+    print(OPT, OPT[-1])
+
+    # Find solution
+    def find_solution(j, opt_indicies): 
+        if j == 0:
+            return 
+        elif v[j] + OPT[p[j]] > OPT[j-1]:
+            print(j)
+            opt_indicies.append(j)
+            find_solution( p[j], opt_indicies ) 
+        else:
+            find_solution(j-1, opt_indicies) 
+    opt_indicies = []
+    find_solution(len(all_intervals_sorted_by_finish)-1, opt_indicies)
+    return opt_indicies
 
 def main(args):
     start = time()
@@ -284,7 +344,7 @@ def main(args):
 
         for hash_fcn in ["full"]: # ["lex"]: #  add "rev_lex" # add four others
             M, hpol_DBG  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
-            reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, 40)
+            reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, 30)
             # print(M)
             print("done creating minimizer combinations")
 
@@ -344,13 +404,9 @@ def main(args):
                             curr_best_seqs_to_id = seqs_to_id
                             curr_best_stop = p2
 
-        
-                        # best_corr = get_best_correction(curr_best_seqs)
-
-
                     else:
-                        if len(curr_best_seqs) > 0:
-                            all_intervals.append( (curr_m_pos, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
+                        if len(curr_best_seqs) > 2:
+                            all_intervals.append( (curr_m_pos + k_size, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
                             print("Best at window startpoint:", curr_m_pos)
                             # print(len(curr_best_seqs),curr_best_seqs ) #,curr_best_seqs_to_id)
                             print()
@@ -358,6 +414,7 @@ def main(args):
                         curr_m_pos2 = p2
                         curr_best_seqs = {}
                         curr_best_seqs_to_id = {}
+                        seqs = {}
 
     
                 # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to solve Spoa in
@@ -369,51 +426,21 @@ def main(args):
                 # alignment_matrix = create_multialignment_matrix(partition)
                 # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions
                 print("Correcting read", r_id)
-
-
-                ####### TMP
-                ####### TMP
-                current_active_solutions = {}
+                # for tmp_, inT_ in enumerate(all_intervals):
+                #     print(tmp_, inT_)
+                # SYS.EXIT()
                 all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
-                p = []
-                v = [w for (start, stop, w, _) in all_intervals_sorted_by_finish]
-                for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
-                    if j == 0:
-                        p.append(0)
-                        continue
-
-                    k = j - 1
-                    while k >= 0:
-                        print(k)
-                        if all_intervals_sorted_by_finish[k][1] <= start:
-                            break
-                        k -= 1
-                    p.append(max(0,k))
-
-                assert len(p) == len(all_intervals_sorted_by_finish)
-                for i, interval in enumerate(all_intervals_sorted_by_finish):
-                    print(i, p[i], interval[0], interval[1], interval[2])
-
-                OPT = [0]
-                for j in range(1, len(all_intervals_sorted_by_finish)):
-                    OPT.append( max(v[j] + OPT[ p[j] ], OPT[j-1] ) )
-                print(OPT, OPT[-1])
-
-                # Find solution
-                def find_solution(j): 
-                    if j == 0:
-                        return
-                    elif v[j] + OPT[p[j]] > OPT[j-1]:
-                        print(j)
-                        find_solution( p[j] ) 
-                    else:
-                        find_solution(j-1) 
-
-                find_solution(len(all_intervals_sorted_by_finish)-1)
-
-                ####### TMP
-                ####### TMP
-
+                opt_indicies = solve_WIS(all_intervals_sorted_by_finish)
+                corr_seq = []
+                print(opt_indicies)
+                for j in opt_indicies:
+                    print(all_intervals_sorted_by_finish[j])
+                    start, stop, wieghts, instance = all_intervals_sorted_by_finish[j]
+                    best_corr = get_best_correction(instance)
+                    print(seq[start: stop],  best_corr)
+                    corr_seq.append((start,stop, best_corr))
+                print(corr_seq)
+                print(seq)
                 sys.exit()
 
 
