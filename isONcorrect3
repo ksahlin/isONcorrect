@@ -264,7 +264,7 @@ def get_best_correction(curr_best_seqs):
         corr.append(n_max)
     corr = "".join([n for n in corr if n != "-"])
     print(corr)
-    sys.exit()
+    # sys.exit()
 
     return corr
 
@@ -439,8 +439,27 @@ def main(args):
                     best_corr = get_best_correction(instance)
                     print(seq[start: stop],  best_corr)
                     corr_seq.append((start,stop, best_corr))
-                print(corr_seq)
-                print(seq)
+                corr_seq = corr_seq[::-1]
+                print(corr_seq, len(seq))
+                tmp = [seq[0 : corr_seq[0][0]] ]
+                for cnt, (start_, stop_, seq_segment) in enumerate(corr_seq):
+                    tmp.append(seq_segment)
+                    print(tmp)
+
+                    if cnt == len(corr_seq) - 1:
+                        tmp.append( seq[ stop_ : ] )
+                    else:
+                        print(cnt)
+                        tmp.append( seq[ stop_ : corr_seq[cnt+1][0]] )
+                print(seq) 
+                print("".join([s for s in tmp]))
+                corr = "".join([s for s in tmp])
+                true = "AGCAATCAGACTCAAGCATTAAAATACCCGCCCAGAATATGCCATCAAACTGCCTGGCCCGACAAATTAATGCTGAAATTGTTAACTGACCGGAGGTCGACGTACCGACACTAGGAGGAGCGGGACTGTAGGAAAACCACTATCCTTTTC"
+                r = edlib.align(true, corr, task="path", mode="NW")
+                print(r["cigar"])
+                read_alignment, ref_alignment = help_functions.cigar_to_seq(r["cigar"], true, corr)
+                print(read_alignment)
+                print(ref_alignment)
                 sys.exit()
 
 
