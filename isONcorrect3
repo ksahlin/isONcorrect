@@ -214,10 +214,11 @@ def edlib_alignment(x, y, k):
     ed = result["editDistance"]
     return ed
 
-def get_best_correction(curr_best_seqs):
-    r_seq = curr_best_seqs["ref"][0]
-    print(r_seq)
-
+def get_best_correction(curr_best_seqs, k_size):
+    r_seq = curr_best_seqs["curr_read"][0]
+    # print(r_seq)
+    # print(curr_best_seqs)
+    # sys.exit()
     #### TMP
     #### TMP
     reads_path = open("/Users/kxs624/tmp/tmp_isoncorrect2/test/1/isoncorrect/reads_tmp.fa", "w")
@@ -239,7 +240,7 @@ def get_best_correction(curr_best_seqs):
         # print(result_read_to_ref)
         cigar_string = res["cigar"]
         read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, s_tmp, spoa_ref)
-        partition[s_tmp] = (res["editDistance"], ref_alignment, read_alignment, 1)
+        partition[q_id] = (res["editDistance"], ref_alignment, read_alignment, 1)
         # print(read_alignment, ref_alignment)
     alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
     # print(alignment_matrix)
@@ -265,8 +266,7 @@ def get_best_correction(curr_best_seqs):
     corr = "".join([n for n in corr if n != "-"])
     # print(corr)
     # sys.exit()
-
-    return corr
+    return corr[k_size:-k_size]
 
 def solve_WIS(all_intervals_sorted_by_finish):
     p = [None]
@@ -376,12 +376,12 @@ def main(args):
                     relevant_reads = get_relevant_reads2(M2, m1,p1, m2,p2 )
                     seqs = {}
                     if len(relevant_reads) > 2:
-                        ref_seq = seq[p1 + k_size : p2]
-                        ref_qual = qual[p1 + k_size : p2]
+                        ref_seq = seq[p1  : p2 + k_size]
+                        ref_qual = qual[p1 : p2 + k_size]
                         p_error_ref =  sum([D[char_] for char_ in ref_qual])/len(ref_qual) 
 
-                        seqs["ref"] = (ref_seq, ref_qual)
-                        seqs_to_id = { ref_seq : [ ("ref",p1, p2)]}
+                        seqs["curr_read"] = (ref_seq, ref_qual)
+                        seqs_to_id = { ref_seq : [ ("curr_read",p1, p2)]}
 
                         # print(p1, p2) #, relevant_reads)
                         # print(m1,m2)
@@ -390,8 +390,8 @@ def main(args):
                             if r_id  == relevant_read_id:
                                 continue
                             for (pos1, pos2) in ll_:
-                                read_seq = reads[relevant_read_id][1][pos1+ k_size: pos2]
-                                read_qual = reads[relevant_read_id][2][pos1+ k_size: pos2]
+                                read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
+                                read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
                                 # print(seq[p1+k_size : p2], read_seq, p1, p2, pos1, pos2, reads[relevant_read_id][1][pos1 : pos1 + k_size ], seq[p1:p1+k_size], reads[relevant_read_id][1][pos2 : pos2 +k_size],  seq[p2:p2+k_size])
                                 # print(edlib_alignment(ref_seq, read_seq, len(ref_seq)),  ref_seq, read_seq, (pos1, pos2), (p1,p2), relevant_read_id)
                                 p_error_sum_thresh = p_error_ref + sum([D[char_] for char_ in read_qual])/len(read_qual) + 0.1
@@ -455,7 +455,7 @@ def main(args):
                 for j in opt_indicies:
                     # print(all_intervals_sorted_by_finish[j])
                     start, stop, wieghts, instance = all_intervals_sorted_by_finish[j]
-                    best_corr = get_best_correction(instance)
+                    best_corr = get_best_correction(instance, k_size)
                     # print(seq[start: stop],  best_corr)
                     corr_seq.append((start,stop, best_corr))
                 corr_seq = corr_seq[::-1]
@@ -552,7 +552,7 @@ if __name__ == '__main__':
     parser.add_argument('--isoseq', action="store_true", help='Clustering of PacBio Iso-Seq reads.')
 
     parser.add_argument('--k', type=int, default=7, help='Kmer size')
-    parser.add_argument('--w', type=int, default=10, help='Window size')
+    parser.add_argument('--w', type=int, default=7, help='Window size')
     parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
     # parser.add_argument('--pickled_subreads', type=str, help='Path to an already parsed subreads file in pickle format')
     # parser.set_defaults(which='main')
