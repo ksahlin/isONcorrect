@@ -3,6 +3,7 @@ import random
 import itertools
 import argparse
 import errno
+import math
 # from collections import deque
 
 '''
@@ -68,34 +69,69 @@ def simulate_reads( args, ref ):
     print(exons_probs)
     # sys.exit()
     reads = {}
+    error_lvls = [0.6, 0.7, 0.8, 0.9, 0.92, 0.94, 0.96,0.98, 0.99, 0.995]
     for i in range(args.nr_reads):
         read = []
+        qual = []
         for j, e in enumerate(exons):
             r = random.uniform(0,1)
             if r > exons_probs[j]:
                 continue
             for n in e:
+                p_correct_reading = random.choice(error_lvls)
+                p_error = 1.0 - p_correct_reading
+                # print(round(10**(-math.log(p_correct_reading))), p_error, -math.log(p_error,10)*10)
+
                 r = random.uniform(0,1)
-                if r < 0.84:
-                    read.append(n)
-                elif 0.84 <= r <= 0.96:
-                    pass 
+                if r > p_correct_reading:
+                    error = True
+                else:
+                    error = False
+
+                if error:
+                    r = random.uniform(0,1)
+                    if r < 0.6: #deletion
+                        pass 
+                    elif 0.6 <= r < 0.9:
+                        read.append(random.choice("ACGT"))
+                        qual.append( round(-math.log(p_error,10)*10) )
+
+                    else:
+                        r_ins = random.uniform(0,1)
+                        while r_ins >= 0.7:
+                            read.append(random.choice("ACGT"))
+                            r_ins = random.uniform(0,1)
+                            qual.append( round(-math.log(p_error,10)*10) )
+
+                    # if r < 0.84:
+                    #     read.append(n)
+                    # elif 0.84 <= r <= 0.96:
+                    #     pass 
+                    # else:
+                    #     read.append(n)
+                    #     read.append(random.choice("ACGT"))
+                    #     r_ins = random.uniform(0,1)
+                    #     while r_ins >= 0.96:
+                    #         read.append(random.choice("ACGT"))
+                    #         r_ins = random.uniform(0,1)
                 else:
                     read.append(n)
-                    read.append(random.choice("ACGT"))
-                    r_ins = random.uniform(0,1)
-                    while r_ins >= 0.96:
-                        read.append(random.choice("ACGT"))
-                        r_ins = random.uniform(0,1)
+                    qual.append( round(-math.log(p_error,10)*10) )
+
+
+
         if not read:
             continue
         read_seq = "".join([n for n in read])
         reads[str(i)] = read_seq
+        qual_seq = "".join([chr(q + 33) for q in qual])
+        print(read_seq)
+        print(qual_seq)
 
 
     if is_fastq:
         for acc, read_seq in sorted(reads.items(), key = lambda x: len(x[1]), reverse = True):
-            outfile.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, read_seq, "+", "+"*len(read_seq)))
+            outfile.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, read_seq, "+", qual_seq))
     else:
         for acc, read_seq in sorted(reads.items(), key = lambda x: len(x[1]), reverse = True):
             outfile.write(">{0}\n{1}\n".format(acc, read_seq))
