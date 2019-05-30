@@ -215,13 +215,13 @@ def edlib_alignment(x, y, k):
     return ed
 
 def get_best_correction(curr_best_seqs):
-    r_seq = curr_best_seqs["ref"]
+    r_seq = curr_best_seqs["ref"][0]
     print(r_seq)
 
     #### TMP
     #### TMP
     reads_path = open("/Users/kxs624/tmp/tmp_isoncorrect2/test/1/isoncorrect/reads_tmp.fa", "w")
-    for acc, seq in curr_best_seqs.items():
+    for acc, (seq, qual) in curr_best_seqs.items():
         reads_path.write(">{0}\n{1}\n".format(acc, seq))
     reads_path.close()
     spoa_ref, msa = create_augmented_reference.run_spoa(reads_path.name, "/dev/null", "/Users/kxs624/tmp/tmp_isoncorrect2/test/1/isoncorrect/spoa_tmp.fa", "spoa", "/dev/null")
@@ -231,7 +231,7 @@ def get_best_correction(curr_best_seqs):
 
     partition = {"ref" : (0, spoa_ref, spoa_ref, 1)}
     # partition = {"ref" : (0, r_seq, r_seq, 1)}
-    for q_id, s_tmp in curr_best_seqs.items():
+    for q_id, (s_tmp, s_qual) in curr_best_seqs.items():
         # if s_tmp == r_seq:
         #     continue
         res = edlib.align(s_tmp, spoa_ref, task="path", mode="NW")
@@ -307,6 +307,9 @@ def solve_WIS(all_intervals_sorted_by_finish):
     find_solution(len(all_intervals_sorted_by_finish), opt_indicies)
     return opt_indicies
 
+D = {chr(i) : min( 10**( - (ord(chr(i)) - 33)/10.0 ), 0.79433)  for i in range(128)}
+
+
 def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
@@ -345,7 +348,7 @@ def main(args):
 
         for hash_fcn in ["full"]: # ["lex"]: #  add "rev_lex" # add four others
             M, hpol_DBG  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
-            reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, 40)
+            reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, 60)
             # print(M)
             print("done creating minimizer combinations")
 
@@ -374,7 +377,10 @@ def main(args):
                     seqs = {}
                     if len(relevant_reads) > 2:
                         ref_seq = seq[p1 + k_size : p2]
-                        seqs["ref"] = ref_seq
+                        ref_qual = qual[p1 + k_size : p2]
+                        p_error_ref =  sum([D[char_] for char_ in ref_qual])/len(ref_qual) 
+
+                        seqs["ref"] = (ref_seq, ref_qual)
                         seqs_to_id = { ref_seq : [ ("ref",p1, p2)]}
 
                         # print(p1, p2) #, relevant_reads)
@@ -385,11 +391,14 @@ def main(args):
                                 continue
                             for (pos1, pos2) in ll_:
                                 read_seq = reads[relevant_read_id][1][pos1+ k_size: pos2]
+                                read_qual = reads[relevant_read_id][2][pos1+ k_size: pos2]
                                 # print(seq[p1+k_size : p2], read_seq, p1, p2, pos1, pos2, reads[relevant_read_id][1][pos1 : pos1 + k_size ], seq[p1:p1+k_size], reads[relevant_read_id][1][pos2 : pos2 +k_size],  seq[p2:p2+k_size])
                                 # print(edlib_alignment(ref_seq, read_seq, len(ref_seq)),  ref_seq, read_seq, (pos1, pos2), (p1,p2), relevant_read_id)
-                                if edlib_alignment(ref_seq, read_seq, 0.4*len(ref_seq)) > 0:   
+                                p_error_sum_thresh = p_error_ref + sum([D[char_] for char_ in read_qual])/len(read_qual) + 0.1
+                                # print("p_error_sum", p_error_sum)
+                                if edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) > 0:   
                                 # if reads[relevant_read_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[relevant_read_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
-                                    seqs[relevant_read_id] = read_seq
+                                    seqs[relevant_read_id] = (read_seq, read_qual)
                                     if read_seq in seqs_to_id:
                                         seqs_to_id[read_seq].append( (relevant_read_id, pos1 + k_size, pos2 ) )
                                     else:
@@ -463,7 +472,7 @@ def main(args):
                         tmp.append( seq[ stop_ : corr_seq[cnt+1][0]] )
                                 
                 corr = "".join([s for s in tmp])
-                corrected_reads[r_id] = (acc, corr, qual)
+                corrected_reads[r_id] = (acc, corr)
 
 
                 # print(seq) 
@@ -480,6 +489,7 @@ def main(args):
                 print(read_alignment, r1["editDistance"])
                 print(ref_alignment2)
                 print(read_orig_alignment, r2["editDistance"])
+                print(qual)
 
                 # r = edlib.align(seq, corr, task="path", mode="NW")
                 # read_alignment, corr_alignment = help_functions.cigar_to_seq(r["cigar"], seq, corr)
@@ -542,7 +552,7 @@ if __name__ == '__main__':
     parser.add_argument('--isoseq', action="store_true", help='Clustering of PacBio Iso-Seq reads.')
 
     parser.add_argument('--k', type=int, default=7, help='Kmer size')
-    parser.add_argument('--w', type=int, default=7, help='Window size')
+    parser.add_argument('--w', type=int, default=10, help='Window size')
     parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
     # parser.add_argument('--pickled_subreads', type=str, help='Path to an already parsed subreads file in pickle format')
     # parser.set_defaults(which='main')

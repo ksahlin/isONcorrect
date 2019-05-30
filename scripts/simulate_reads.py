@@ -77,6 +77,7 @@ def simulate_reads( args, ref ):
             r = random.uniform(0,1)
             if r > exons_probs[j]:
                 continue
+            was_del = False
             for n in e:
                 p_correct_reading = random.choice(error_lvls)
                 p_error = 1.0 - p_correct_reading
@@ -91,6 +92,7 @@ def simulate_reads( args, ref ):
                 if error:
                     r = random.uniform(0,1)
                     if r < 0.6: #deletion
+                        was_del = p_error
                         pass 
                     elif 0.6 <= r < 0.9:
                         read.append(random.choice("ACGT"))
@@ -115,25 +117,31 @@ def simulate_reads( args, ref ):
                     #         read.append(random.choice("ACGT"))
                     #         r_ins = random.uniform(0,1)
                 else:
-                    read.append(n)
-                    qual.append( round(-math.log(p_error,10)*10) )
+                    if was_del: # adding uncertainty from prevous deleted base
+                        read.append(n)
+                        qual.append( round(-math.log(was_del,10)*10) )
+                    else:
+                        read.append(n)
+                        qual.append( round(-math.log(p_error,10)*10) )
+                    was_del = False
 
 
 
         if not read:
             continue
         read_seq = "".join([n for n in read])
-        reads[str(i)] = read_seq
         qual_seq = "".join([chr(q + 33) for q in qual])
-        print(read_seq)
-        print(qual_seq)
+        reads[str(i)] = (read_seq, qual_seq)
+
+        # print(read_seq)
+        # print(qual_seq)
 
 
     if is_fastq:
-        for acc, read_seq in sorted(reads.items(), key = lambda x: len(x[1]), reverse = True):
+        for acc, (read_seq,qual_seq) in sorted(reads.items(), key = lambda x: len(x[1]), reverse = True):
             outfile.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, read_seq, "+", qual_seq))
     else:
-        for acc, read_seq in sorted(reads.items(), key = lambda x: len(x[1]), reverse = True):
+        for acc, (read_seq,qual_seq) in sorted(reads.items(), key = lambda x: len(x[1]), reverse = True):
             outfile.write(">{0}\n{1}\n".format(acc, read_seq))
     
     outfile.close()
