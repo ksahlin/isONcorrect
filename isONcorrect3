@@ -225,7 +225,7 @@ def get_best_correction(curr_best_seqs):
         reads_path.write(">{0}\n{1}\n".format(acc, seq))
     reads_path.close()
     spoa_ref, msa = create_augmented_reference.run_spoa(reads_path.name, "/dev/null", "/Users/kxs624/tmp/tmp_isoncorrect2/test/1/isoncorrect/spoa_tmp.fa", "spoa", "/dev/null")
-    print(spoa_ref)
+    # print(spoa_ref)
     #### TMP
     #### TMP
 
@@ -240,11 +240,11 @@ def get_best_correction(curr_best_seqs):
         cigar_string = res["cigar"]
         read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, s_tmp, spoa_ref)
         partition[s_tmp] = (res["editDistance"], ref_alignment, read_alignment, 1)
-        print(read_alignment, ref_alignment)
+        # print(read_alignment, ref_alignment)
     alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
-    print(alignment_matrix)
-    for r_tmp, aln_list in alignment_matrix.items():
-        print(aln_list)
+    # print(alignment_matrix)
+    # for r_tmp, aln_list in alignment_matrix.items():
+    #     print(aln_list)
     nr_columns = len(alignment_matrix["ref"])
     PFM = [{"A": 0, "C": 0, "G": 0, "T": 0, "U" : 0, "-": 0} for j in range(nr_columns)]
     for r_tmp, aln_list in alignment_matrix.items():
@@ -259,18 +259,18 @@ def get_best_correction(curr_best_seqs):
         if n_max == "-":
             c, n_max2 = max([(c,n) for n,c in d.items() if n != "-"])
         if c > 0.4*count_max:
-            print(c, count_max)
+            # print(c, count_max)
             n_max = n_max2
         corr.append(n_max)
     corr = "".join([n for n in corr if n != "-"])
-    print(corr)
+    # print(corr)
     # sys.exit()
 
     return corr
 
 def solve_WIS(all_intervals_sorted_by_finish):
-    p = []
-    v = [w for (start, stop, w, _) in all_intervals_sorted_by_finish]
+    p = [None]
+    v = [None] + [w for (start, stop, w, _) in all_intervals_sorted_by_finish]
     for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
         if j == 0:
             p.append(0)
@@ -283,27 +283,28 @@ def solve_WIS(all_intervals_sorted_by_finish):
             k -= 1
         p.append(max(0,k))
 
-    assert len(p) == len(all_intervals_sorted_by_finish)
-    for i, interval in enumerate(all_intervals_sorted_by_finish):
-        print(i, p[i], interval[0], interval[1], interval[2])
+    # for i, interval in enumerate(all_intervals_sorted_by_finish):
+    #     print(i, p[i], interval[0], interval[1], interval[2])
 
     OPT = [0]
-    for j in range(1, len(all_intervals_sorted_by_finish)):
+    for j in range(1, len(all_intervals_sorted_by_finish) +1):
         OPT.append( max(v[j] + OPT[ p[j] ], OPT[j-1] ) )
-    print(OPT, OPT[-1])
+    # print(OPT, OPT[-1], all_intervals_sorted_by_finish)
+
+    assert len(p) == len(all_intervals_sorted_by_finish) + 1 == len(v) == len(OPT)
 
     # Find solution
     def find_solution(j, opt_indicies): 
         if j == 0:
             return 
         elif v[j] + OPT[p[j]] > OPT[j-1]:
-            print(j)
-            opt_indicies.append(j)
+            # print(j)
+            opt_indicies.append(j - 1) # we have shifted all indices forward by one so we neew to reduce to j -1 because of indexing in python works
             find_solution( p[j], opt_indicies ) 
         else:
             find_solution(j-1, opt_indicies) 
     opt_indicies = []
-    find_solution(len(all_intervals_sorted_by_finish)-1, opt_indicies)
+    find_solution(len(all_intervals_sorted_by_finish), opt_indicies)
     return opt_indicies
 
 def main(args):
@@ -344,17 +345,20 @@ def main(args):
 
         for hash_fcn in ["full"]: # ["lex"]: #  add "rev_lex" # add four others
             M, hpol_DBG  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
-            reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, 30)
+            reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, 40)
             # print(M)
             print("done creating minimizer combinations")
 
-            print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
+            # print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
             # sys.exit()
-
-            for r_id in sorted(reads):
+            corrected_reads = {}
+            tot_before = 0
+            tot_after = 0
+            tot_corr = 0
+            for r_id in sorted(reads, reverse=True):
                 corr_pos = []
                 (acc, seq, qual) = reads[r_id]
-                print("starting correcting:", seq)
+                # print("starting correcting:", seq)
                 
                 all_intervals = []
                 # print(reads_to_M2[r_id][0])
@@ -367,10 +371,10 @@ def main(args):
 
                 for (m1,p1), (m2,p2) in  reads_to_M2[r_id]: # minimizers_comb_iterator(M[r_id], k_size, 15):
                     relevant_reads = get_relevant_reads2(M2, m1,p1, m2,p2 )
-
+                    seqs = {}
                     if len(relevant_reads) > 2:
                         ref_seq = seq[p1 + k_size : p2]
-                        seqs = { "ref" : ref_seq}
+                        seqs["ref"] = ref_seq
                         seqs_to_id = { ref_seq : [ ("ref",p1, p2)]}
 
                         # print(p1, p2) #, relevant_reads)
@@ -392,7 +396,7 @@ def main(args):
                                         seqs_to_id[read_seq] = [(relevant_read_id, pos1 + k_size, pos2 )]
 
                                 # print(relevant_read_id, read_seq)
-                        print(p1,p2, len(seqs))
+                        # print(p1,p2, len(seqs))
 
                     else:
                         # print(p1, p2)
@@ -407,9 +411,9 @@ def main(args):
                     else:
                         if len(curr_best_seqs) > 2:
                             all_intervals.append( (curr_m_pos + k_size, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
-                            print("Best at window startpoint:", curr_m_pos)
+                            # print("Best at window startpoint:", curr_m_pos)
                             # print(len(curr_best_seqs),curr_best_seqs ) #,curr_best_seqs_to_id)
-                            print()
+                            # print()
                         curr_m_pos = p1
                         curr_m_pos2 = p2
                         curr_best_seqs = {}
@@ -429,73 +433,100 @@ def main(args):
                 # for tmp_, inT_ in enumerate(all_intervals):
                 #     print(tmp_, inT_)
                 # SYS.EXIT()
+                if not all_intervals:
+                    print("Found nothing to correct")
+                    corrected_reads[r_id] = (acc, seq, qual)
+                    continue
+
                 all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
+                # print(all_intervals_sorted_by_finish)
                 opt_indicies = solve_WIS(all_intervals_sorted_by_finish)
                 corr_seq = []
-                print(opt_indicies)
+                # print(opt_indicies)
                 for j in opt_indicies:
-                    print(all_intervals_sorted_by_finish[j])
+                    # print(all_intervals_sorted_by_finish[j])
                     start, stop, wieghts, instance = all_intervals_sorted_by_finish[j]
                     best_corr = get_best_correction(instance)
-                    print(seq[start: stop],  best_corr)
+                    # print(seq[start: stop],  best_corr)
                     corr_seq.append((start,stop, best_corr))
                 corr_seq = corr_seq[::-1]
-                print(corr_seq, len(seq))
+                # print(corr_seq, len(seq))
                 tmp = [seq[0 : corr_seq[0][0]] ]
                 for cnt, (start_, stop_, seq_segment) in enumerate(corr_seq):
                     tmp.append(seq_segment)
-                    print(tmp)
+                    # print(tmp)
 
                     if cnt == len(corr_seq) - 1:
                         tmp.append( seq[ stop_ : ] )
                     else:
                         print(cnt)
                         tmp.append( seq[ stop_ : corr_seq[cnt+1][0]] )
-                print(seq) 
-                print("".join([s for s in tmp]))
+                                
                 corr = "".join([s for s in tmp])
+                corrected_reads[r_id] = (acc, corr, qual)
+
+
+                # print(seq) 
+                # print("".join([s for s in tmp]))
+
                 true = "AGCAATCAGACTCAAGCATTAAAATACCCGCCCAGAATATGCCATCAAACTGCCTGGCCCGACAAATTAATGCTGAAATTGTTAACTGACCGGAGGTCGACGTACCGACACTAGGAGGAGCGGGACTGTAGGAAAACCACTATCCTTTTC"
-                r = edlib.align(true, corr, task="path", mode="NW")
-                print(r["cigar"])
-                read_alignment, ref_alignment = help_functions.cigar_to_seq(r["cigar"], true, corr)
-                print(read_alignment)
-                print(ref_alignment)
-                sys.exit()
+                r1 = edlib.align(true, corr, task="path", mode="NW")
+                ref_alignment1, read_alignment = help_functions.cigar_to_seq(r1["cigar"], true, corr)
+                r2 = edlib.align(true, seq, task="path", mode="NW")
+                ref_alignment2, read_orig_alignment = help_functions.cigar_to_seq(r2["cigar"], true, seq)
+                tot_before += r2["editDistance"]
+                tot_after += r1["editDistance"]
+                print(ref_alignment1)
+                print(read_alignment, r1["editDistance"])
+                print(ref_alignment2)
+                print(read_orig_alignment, r2["editDistance"])
+
+                # r = edlib.align(seq, corr, task="path", mode="NW")
+                # read_alignment, corr_alignment = help_functions.cigar_to_seq(r["cigar"], seq, corr)
+                # tot_corr += r["editDistance"]
+
+                # print(read_alignment)
+                # print(corr_alignment)
+                # print(tot_corr)
+                # print()
+                # sys.exit()
 
 
-                s_new = []
-                prev_end = 0
-                for cl_id, cluster in instances_to_correct.items():
-                    best_solutions = get_optimal_solution(cluster)
-                    # best_solutions = get_optimal_solution2(cluster)
-                    for start_pos, end_pos, weight, highest_weighted_str in best_solutions:
+                # s_new = []
+                # prev_end = 0
+                # for cl_id, cluster in instances_to_correct.items():
+                #     best_solutions = get_optimal_solution(cluster)
+                #     # best_solutions = get_optimal_solution2(cluster)
+                #     for start_pos, end_pos, weight, highest_weighted_str in best_solutions:
 
-                    # highest_weighted_str, weight, start_pos, end_pos = get_optimal_solution(cluster)
-                        print(seq[start_pos: end_pos], highest_weighted_str, weight, start_pos, end_pos)
+                #     # highest_weighted_str, weight, start_pos, end_pos = get_optimal_solution(cluster)
+                #         print(seq[start_pos: end_pos], highest_weighted_str, weight, start_pos, end_pos)
 
-                        # only change string if weight larger than W (=5) and edlib(highest_weighted_str, old_str) < d
-                        if weight > 5:
-                            s_new.append(seq[prev_end : start_pos])
-                            s_new.append(highest_weighted_str)
-                            prev_end = end_pos
+                #         # only change string if weight larger than W (=5) and edlib(highest_weighted_str, old_str) < d
+                #         if weight > 5:
+                #             s_new.append(seq[prev_end : start_pos])
+                #             s_new.append(highest_weighted_str)
+                #             prev_end = end_pos
 
-                s_new.append(seq[prev_end :])
+                # s_new.append(seq[prev_end :])
 
-                print("Old:", seq)
-                print("New:", "".join(s for s in s_new))
-                # if r_id == 98:
-                #     print(reads_to_M2[r_id])
-                #     print("old:", seq)
-                #     sys.exit()
+                # print("Old:", seq)
+                # print("New:", "".join(s for s in s_new))
+                # # if r_id == 98:
+                # #     print(reads_to_M2[r_id])
+                # #     print("old:", seq)
+                # #     sys.exit()
 
-                corrected_reads[acc] = "".join(s for s in s_new)
+                # corrected_reads[acc] = "".join(s for s in s_new)
 
                     # if edlib(path, curr_path) < 0.8*len(path) and curr_path_score < 0.8*score_max:
 
             # sys.exit()
+    print("tot_before:", tot_before)
+    print("tot_after:", tot_after)
     outfile = open(os.path.join(args.outfolder, "corrected_reads_parasail_1.fasta"), "w")
     print( len(corrected_reads))
-    for acc, seq in corrected_reads.items():
+    for r_id, (acc, seq, qual) in corrected_reads.items():
         outfile.write(">{0}\n{1}\n".format(acc, seq))
     outfile.close()
 
