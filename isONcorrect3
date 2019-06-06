@@ -226,7 +226,8 @@ def get_best_correction(curr_best_seqs, k_size):
         reads_path.write(">{0}\n{1}\n".format(acc, seq))
     reads_path.close()
     spoa_ref, msa = create_augmented_reference.run_spoa(reads_path.name, "/dev/null", "/Users/kxs624/tmp/tmp_isoncorrect2/test/1/isoncorrect/spoa_tmp.fa", "spoa", "/dev/null")
-    # print(spoa_ref)
+    print()
+    print(spoa_ref)
     #### TMP
     #### TMP
 
@@ -283,8 +284,8 @@ def solve_WIS(all_intervals_sorted_by_finish):
             k -= 1
         p.append(max(0,k))
 
-    # for i, interval in enumerate(all_intervals_sorted_by_finish):
-    #     print(i, p[i], interval[0], interval[1], interval[2])
+    for i, interval in enumerate(all_intervals_sorted_by_finish):
+        print(i, p[i], interval[0], interval[1], interval[2])
 
     OPT = [0]
     for j in range(1, len(all_intervals_sorted_by_finish) +1):
@@ -451,10 +452,11 @@ def main(args):
                 # print(all_intervals_sorted_by_finish)
                 opt_indicies = solve_WIS(all_intervals_sorted_by_finish)
                 corr_seq = []
-                # print(opt_indicies)
+                print(opt_indicies)
                 for j in opt_indicies:
                     # print(all_intervals_sorted_by_finish[j])
-                    start, stop, wieghts, instance = all_intervals_sorted_by_finish[j]
+                    start, stop, weights, instance = all_intervals_sorted_by_finish[j]
+                    print(start, stop, weights)
                     best_corr = get_best_correction(instance, k_size)
                     # print(seq[start: stop],  best_corr)
                     corr_seq.append((start,stop, best_corr))
@@ -472,7 +474,7 @@ def main(args):
                         tmp.append( seq[ stop_ : corr_seq[cnt+1][0]] )
                                 
                 corr = "".join([s for s in tmp])
-                corrected_reads[r_id] = (acc, corr)
+                corrected_reads[r_id] = (acc, corr, "+"*len(corr))
 
 
                 # print(seq) 
@@ -486,7 +488,7 @@ def main(args):
                 tot_before += r2["editDistance"]
                 tot_after += r1["editDistance"]
                 print(ref_alignment1)
-                print(read_alignment, r1["editDistance"])
+                print(read_alignment, r1["editDistance"], [p for p, (n1,n2) in enumerate(zip(read_alignment, ref_alignment1)) if n1 != n2 ])
                 print(ref_alignment2)
                 print(read_orig_alignment, r2["editDistance"])
                 print(qual)
@@ -534,10 +536,10 @@ def main(args):
             # sys.exit()
     print("tot_before:", tot_before)
     print("tot_after:", tot_after)
-    outfile = open(os.path.join(args.outfolder, "corrected_reads_parasail_1.fasta"), "w")
+    outfile = open(os.path.join(args.outfolder, "corrected_reads2.fastq"), "w")
     print( len(corrected_reads))
     for r_id, (acc, seq, qual) in corrected_reads.items():
-        outfile.write(">{0}\n{1}\n".format(acc, seq))
+        outfile.write("@{0}\n{1}\n+\n{2}\n".format(acc, seq, qual))
     outfile.close()
 
 
