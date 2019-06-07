@@ -129,6 +129,61 @@ def cigar_to_seq_mm2(read, full_r_seq, full_q_seq):
 
     return "".join([s for s in r_line]), "".join([s for s in m_line]), "".join([s for s in q_line])
 
+def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
+    # print()
+    r_index = 0
+    q_index = 0
+    r_seq = full_r_seq[read.reference_start: read.reference_end + 1]
+    q_seq = full_q_seq[read.query_alignment_start: read.query_alignment_end + 1]
+    r_line, m_line, q_line = [], [], []
+
+    cigar_tuples = read.cigartuples
+    r_end, m_end, q_end = "", "", ""
+    ins, del_, subs, matches = 0, 0, 0, 0
+    for (op_type, op_len) in cigar_tuples:
+        # op_len = int(op_len)
+        if op_type == 0:
+            ref_piece = r_seq[r_index: r_index + op_len]
+            query_peace = q_seq[q_index: q_index + op_len]
+            # print(ref_piece)
+            # print(query_peace)
+
+            r_line.append(ref_piece)
+            q_line.append(query_peace)
+            match_seq = ''.join(['|' if r_base.upper() == q_base.upper() else '*' for (r_base, q_base) in zip(ref_piece, query_peace)]) # faster with "".join([list of str]) instead of +=
+            subs += match_seq.count("*") 
+            matches += match_seq.count("|") 
+            m_line.append(match_seq)
+            r_index += op_len
+            q_index += op_len
+
+        elif op_type == 1:
+            # insertion into reference
+            r_line.append('-' * op_len)
+            m_line.append(' ' * op_len)
+            q_line.append(q_seq[q_index: q_index + op_len])
+            #  only query index change
+            q_index += op_len
+            ins += op_len
+        elif op_type == 2 or op_type == 3:
+            # deletion from reference
+            r_line.append(r_seq[r_index: r_index + op_len])
+            m_line.append(' ' * op_len)
+            q_line.append('-' * op_len)
+            #  only ref index change
+            r_index += op_len
+            # print("here", r_index)
+            if op_type == 2:
+                del_ += op_len
+        elif op_type == 4:
+            # softclip
+            pass
+
+    r_line.append(r_end)
+    m_line.append(m_end)
+    q_line.append(q_end)    
+
+    return "".join([s for s in r_line]), "".join([s for s in m_line]), "".join([s for s in q_line]), ins, del_, subs, matches
 
 
 def get_aln_stats_per_read(sam_file, reads, refs):
@@ -136,55 +191,65 @@ def get_aln_stats_per_read(sam_file, reads, refs):
     references = SAM_file.references
     alignments = {}
     for read in SAM_file.fetch(until_eof=True):
-        if read.is_secondary:
-            print("secondary", read.reference_name) 
-        # read_index = reads_acc_to_index[read.qname]
-        else:
-            print("primary", read.reference_name) 
+        if read.flag == 0 or read.flag == 16:
+            print(read.query_name, "primary", read.flag, read.reference_name) 
+            print(read.is_reverse)
             print(read.cigartuples)
             read_seq = reads[read.query_name]
             ref_seq = refs[read.reference_name]
-            ref_alignment, m_line, read_alignment = cigar_to_seq_mm2(read, ref_seq, read_seq)
+            ref_alignment, m_line, read_alignment, ins, del_, subs, matches = cigar_to_seq_mm2_local(read, ref_seq, read_seq)
             print(ref_alignment)
             print(m_line)
             print(read_alignment)
+            if read.query_name in alignments:
+                print("BUG")
+                sys.exit()
+            
+            alignments[read.query_name] = (ins, del_, subs, matches)
+            print(ins, del_, subs, matches)
             print()
-
-    #     if read.is_reverse:
-    #         continue
-    #     if read.is_unmapped:
-    #         acc, read_seq, qual = reads[read_index]
-    #         print(read.qname, "is umapped", len(read_seq))
-    #         alignments[read_index] = (acc, "unaligned", "unaligned", [])
-    #         continue
-
-
-    #     acc, read_seq, qual = reads[read_index]
-    #     # cigar = read.cigarstring
-    #     # print(read.qname, len(read_seq))
-    #     match_id = math.floor((1.0 - 0.16) * args.k)
-    #     block_coverage = get_block_coverage(read_alignment, ref_alignment, k, match_id)
-
-    #     # print(ref_alignment)
-    #     # print(read_alignment)
-    #     # print(block_coverage)
-    #     alignments[read_index] = (acc, read_alignment, ref_alignment, block_coverage)
-    # return alignments
+            # return
+        else:
+            print("secondary", read.flag, read.reference_name) 
     return alignments
+
+def get_summary_stats(reads):
+    tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
+
+    for acc in reads:
+
+        (ins, del_, subs, matches) = reads[acc]
+
+        tot_ins += ins
+        tot_del += del_
+        tot_subs += subs
+        tot_match += matches
+
+    return tot_ins, tot_del, tot_subs, tot_match
+
 
 def main(args):
     reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
+    corr_reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
     refs = { acc : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
     # print(refs)
     orig = get_aln_stats_per_read(args.orig_sam, reads, refs)
-    corr = get_aln_stats_per_read(args.corr_sam, reads, refs)
+    corr = get_aln_stats_per_read(args.corr_sam, corr_reads, refs)
 
     orig_stats = get_summary_stats(orig)
-    corr_stats = get_summary_stats(corr)
+    sum_aln_orig_bases = orig_stats[0] + orig_stats[2] + orig_stats[3] 
+    print("Original reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*orig_stats), "tot aligned bases (ins+subs+match):", sum_aln_orig_bases )
+    print("Original reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/sum_aln_orig_bases , 1) for s in orig_stats]))
 
-    print( "Num_aligned_reads", "Aligned bases, tot_errors", "avg_error_rate", "median_read_error_rate", "upper_25_quant", "lower_25_quant")
-    print(",".join([s for s in orig_stats]))
-    print(",".join([s for s in corr_stats]))
+    corr_stats = get_summary_stats(corr)
+    sum_aln_corr_bases = corr_stats[0] + corr_stats[2] + corr_stats[3] 
+    print("Corrected reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*corr_stats), "tot aligned bases (ins+subs+match):", sum_aln_corr_bases)
+    print("Corrected reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/sum_aln_corr_bases , 1) for s in corr_stats]))
+
+
+    print( "Num_aligned_reads", "Aligned bases", "tot_errors", "avg_error_rate", "median_read_error_rate", "upper_25_quant", "lower_25_quant")
+    # print(",".join([s for s in orig_stats]))
+    # print(",".join([s for s in corr_stats]))
 
 
 
@@ -193,6 +258,7 @@ if __name__ == '__main__':
     parser.add_argument('orig_sam', type=str, help='Path to the original read file')
     parser.add_argument('corr_sam', type=str, help='Path to the corrected read file')
     parser.add_argument('reads', type=str, help='Path to the read file')
+    parser.add_argument('corr_reads', type=str, help='Path to the corrected read file')
     parser.add_argument('refs', type=str, help='Path to the refs file')
     parser.add_argument('outfolder', type=str, help='Output path of results')
 
