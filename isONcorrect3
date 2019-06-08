@@ -111,47 +111,60 @@ def get_minimizers_and_positions(reads, w, k, hash_fcn):
     return M
 
 
-def get_minimizers_comb(reads, M, k, x):
-    reads_to_M2 = {}
+# def get_minimizers_comb(reads, M, k, x):
+#     reads_to_minimizer_combinations_database = {}
+#     M2 = defaultdict(lambda: defaultdict(list))
+#     for r_id in M:
+#         # print(reads[r_id][1])
+#         reads_to_M2[r_id] = [] # defaultdict(list)
+#         minimizers = M[r_id]
+#         for (m1,p1), (m2, p2) in  minimizers_comb_iterator(minimizers, k, x):
+#             # reads_to_M2[r_id][(m1, m2)].append((p1,p2))
+#             reads_to_M2[r_id].append( ((m1,p1), (m2,p2)) )
+#             M2[(m1, m2)][r_id].append((p1,p2))
+#     return reads_to_M2, M2
+
+def get_minimizer_combinations_database(reads, M, k, x):
     M2 = defaultdict(lambda: defaultdict(list))
     for r_id in M:
-        # print(reads[r_id][1])
-        reads_to_M2[r_id] = [] # defaultdict(list)
         minimizers = M[r_id]
-        for (m1,p1), (m2, p2) in  minimizers_comb_iterator(minimizers, k, x):
-            # reads_to_M2[r_id][(m1, m2)].append((p1,p2))
-            reads_to_M2[r_id].append( ((m1,p1), (m2,p2)) )
-            M2[(m1, m2)][r_id].append((p1,p2))
-    return reads_to_M2, M2
+        for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizers, k, x):
+            for (m2, p2) in m1_curr_spans:
+                M2[m1][m2].append((r_id, p1, p2))
+    return M2
+
 
 
 def minimizers_comb_iterator(minimizers, k, x):
     # print("read")
     for i, (m1, p1) in enumerate(minimizers[:-1]):
+        m1_curr_spans = []
         for j, (m2, p2) in enumerate(minimizers[i+1:]):
             if 2*k < p2 - p1 and p2 - p1 <= x:
-                yield (m1,p1), (m2, p2)
+                m1_curr_spans.append( (m2, p2) )
+                # yield (m1,p1), (m2, p2) 
             elif p2 - p1 > x:
                 break
+        yield (m1, p1), m1_curr_spans
 
 
-def time_test(sorted_left_reads, sorted_right_reads, relevant_reads, r_id, k, x):
-    curr_min_r_pos = 0
-    for l_pos in sorted_left_reads:
-        tmp_add = 0
-        for j, r_pos in enumerate(sorted_right_reads[curr_min_r_pos:]):
-            if k < r_pos - l_pos <= x:
-                relevant_reads[r_id].append((l_pos, r_pos))
-            elif l_pos > r_pos:
-                tmp_add = j 
-                continue
-            elif r_pos > l_pos + x:
-                break
-        curr_min_r_pos += tmp_add   
+# def time_test(sorted_left_reads, sorted_right_reads, relevant_reads, r_id, k, x):
+#     curr_min_r_pos = 0
+#     for l_pos in sorted_left_reads:
+#         tmp_add = 0
+#         for j, r_pos in enumerate(sorted_right_reads[curr_min_r_pos:]):
+#             if k < r_pos - l_pos <= x:
+#                 relevant_reads[r_id].append((l_pos, r_pos))
+#             elif l_pos > r_pos:
+#                 tmp_add = j 
+#                 continue
+#             elif r_pos > l_pos + x:
+#                 break
+#         curr_min_r_pos += tmp_add   
 
 
-def get_relevant_reads(M2, m1, p1, m2, p2):
-    return M2[(m1,m2)]
+# def get_relevant_reads(M2, m1, m2):
+#     return M2[m1][m2]
 
 
 
@@ -275,6 +288,63 @@ def eval_sim(corr, seq, qual, tot_before, tot_after):
     print(qual)
     return tot_before, tot_after
 
+
+def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size):
+
+    # curr_m_pos = read_min_comb[0][0][1]
+    # curr_m_pos2 = read_min_comb[0][1][1]
+    acc, seq, qual = reads[r_id]
+    curr_best_seqs = {}
+    curr_best_seqs_to_id = {}
+    for (m2,p2) in m1_curr_spans:
+        relevant_reads = minimizer_combinations_database[m1][m2]
+        seqs = {}
+        if len(relevant_reads) >= max(3,len(curr_best_seqs)):
+            ref_seq = seq[p1  : p2 + k_size]
+            ref_qual = qual[p1 : p2 + k_size]
+            p_error_ref =  sum([D[char_] for char_ in ref_qual])/len(ref_qual) 
+
+            seqs["curr_read"] = (ref_seq, ref_qual)
+            seqs_to_id = { ref_seq : [ ("curr_read",p1, p2)]}
+
+            # print(p1, p2) #, relevant_reads)
+            # print(m1,m2)
+            # print(r_id, seq[p1:p2])
+            for relevant_read_id, pos1, pos2 in relevant_reads:
+                if r_id  == relevant_read_id:
+                    continue
+                read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
+                read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
+                # print(seq[p1+k_size : p2], read_seq, p1, p2, pos1, pos2, reads[relevant_read_id][1][pos1 : pos1 + k_size ], seq[p1:p1+k_size], reads[relevant_read_id][1][pos2 : pos2 +k_size],  seq[p2:p2+k_size])
+                # print(edlib_alignment(ref_seq, read_seq, len(ref_seq)),  ref_seq, read_seq, (pos1, pos2), (p1,p2), relevant_read_id)
+                p_error_sum_thresh = p_error_ref + sum([D[char_] for char_ in read_qual])/len(read_qual) + 0.1
+                # print("p_error_sum", p_error_sum)
+                if edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) > 0:   
+                # if reads[relevant_read_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[relevant_read_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
+                    seqs[relevant_read_id] = (read_seq, read_qual)
+                    if read_seq in seqs_to_id:
+                        seqs_to_id[read_seq].append( (relevant_read_id, pos1 + k_size, pos2 ) )
+                    else:
+                        seqs_to_id[read_seq] = [(relevant_read_id, pos1 + k_size, pos2 )]
+
+                    # print(relevant_read_id, read_seq)
+            # print(p1,p2, len(seqs))
+
+
+        if len(seqs) > len(curr_best_seqs):
+            curr_best_seqs = seqs
+            curr_best_seqs_to_id = seqs_to_id
+            curr_best_stop = p2
+
+
+    if len(curr_best_seqs) > 2:
+        all_intervals.append( (p1 + k_size, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
+        # print("Best at window startpoint:", curr_m_pos)
+        # print(len(curr_best_seqs),curr_best_seqs ) #,curr_best_seqs_to_id)
+            # print()
+
+
+
 def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
@@ -285,14 +355,16 @@ def main(args):
         # DBG, position_DBG = create_augmented_reference.kmer_counter(reads, k_size)
         # print("done createng DB")
         w = args.w
+        T = args.T
         for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
             if args.compression:
-                M  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
+                minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
             else:
-                M  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
+                minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
 
-            reads_to_M2, M2 = get_minimizers_comb(reads, M, k_size, args.T)
-            # print(M)
+            # reads_to_M2, M2 = get_minimizers_comb(reads, minimizer_database, k_size, args.T)
+            minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, T)
+            # print(minimizer_database)
             print("done creating minimizer combinations")
 
             # print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
@@ -302,75 +374,14 @@ def main(args):
             tot_after = 0
             tot_corr = 0
             for r_id in sorted(reads, reverse=True):
+                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, T)]
+
                 corr_pos = []
                 (acc, seq, qual) = reads[r_id]
                 # print("starting correcting:", seq)
-                
                 all_intervals = []
-                # print(reads_to_M2[r_id][0])
-                curr_m_pos = reads_to_M2[r_id][0][0][1]
-                curr_m_pos2 = reads_to_M2[r_id][0][1][1]
-                # print(curr_m_pos, curr_m_pos2)
-                # sys.exit()
-                curr_best_seqs = {}
-                curr_best_seqs_to_id = {}
-
-                for (m1,p1), (m2,p2) in  reads_to_M2[r_id]: 
-                    relevant_reads = get_relevant_reads(M2, m1,p1, m2,p2 )
-                    seqs = {}
-                    if len(relevant_reads) > 2:
-                        ref_seq = seq[p1  : p2 + k_size]
-                        ref_qual = qual[p1 : p2 + k_size]
-                        p_error_ref =  sum([D[char_] for char_ in ref_qual])/len(ref_qual) 
-
-                        seqs["curr_read"] = (ref_seq, ref_qual)
-                        seqs_to_id = { ref_seq : [ ("curr_read",p1, p2)]}
-
-                        # print(p1, p2) #, relevant_reads)
-                        # print(m1,m2)
-                        # print(r_id, seq[p1:p2])
-                        for relevant_read_id, ll_ in relevant_reads.items():
-                            if r_id  == relevant_read_id:
-                                continue
-                            for (pos1, pos2) in ll_:
-                                read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
-                                read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
-                                # print(seq[p1+k_size : p2], read_seq, p1, p2, pos1, pos2, reads[relevant_read_id][1][pos1 : pos1 + k_size ], seq[p1:p1+k_size], reads[relevant_read_id][1][pos2 : pos2 +k_size],  seq[p2:p2+k_size])
-                                # print(edlib_alignment(ref_seq, read_seq, len(ref_seq)),  ref_seq, read_seq, (pos1, pos2), (p1,p2), relevant_read_id)
-                                p_error_sum_thresh = p_error_ref + sum([D[char_] for char_ in read_qual])/len(read_qual) + 0.1
-                                # print("p_error_sum", p_error_sum)
-                                if edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) > 0:   
-                                # if reads[relevant_read_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[relevant_read_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
-                                    seqs[relevant_read_id] = (read_seq, read_qual)
-                                    if read_seq in seqs_to_id:
-                                        seqs_to_id[read_seq].append( (relevant_read_id, pos1 + k_size, pos2 ) )
-                                    else:
-                                        seqs_to_id[read_seq] = [(relevant_read_id, pos1 + k_size, pos2 )]
-
-                                # print(relevant_read_id, read_seq)
-                        # print(p1,p2, len(seqs))
-
-                    else:
-                        # print(p1, p2)
-                        pass
-
-                    if p1 == curr_m_pos:
-                        if len(seqs) > len(curr_best_seqs):
-                            curr_best_seqs = seqs
-                            curr_best_seqs_to_id = seqs_to_id
-                            curr_best_stop = p2
-
-                    else:
-                        if len(curr_best_seqs) > 2:
-                            all_intervals.append( (curr_m_pos + k_size, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
-                            # print("Best at window startpoint:", curr_m_pos)
-                            # print(len(curr_best_seqs),curr_best_seqs ) #,curr_best_seqs_to_id)
-                            # print()
-                        curr_m_pos = p1
-                        curr_m_pos2 = p2
-                        curr_best_seqs = {}
-                        curr_best_seqs_to_id = {}
-                        seqs = {}
+                for (m1,p1), m1_curr_spans in read_min_comb: 
+                    find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size )
 
     
 
