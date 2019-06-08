@@ -177,6 +177,7 @@ def edlib_alignment(x, y, k):
     return ed
 
 def get_best_corrections(curr_best_seqs, k_size):
+    weight = len(curr_best_seqs)
     # r_seq = curr_best_seqs["curr_read"][0]
     # print(r_seq)
     # print(curr_best_seqs)
@@ -243,7 +244,11 @@ def get_best_corrections(curr_best_seqs, k_size):
     for q_id in other_corrections:
         curr_read_corr = other_corrections[q_id]
         curr_read_corr = "".join([n for n in curr_read_corr if n != "-"])
-        other_corrections[q_id] = (curr_read_corr[k_size:-k_size],curr_best_seqs[q_id][2], curr_best_seqs[q_id][3] )
+        other_corrections[q_id] = (curr_read_corr[k_size:-k_size], curr_best_seqs[q_id][2] + k_size, curr_best_seqs[q_id][3], weight )
+        # if curr_read_corr[k_size:-k_size] == "ACTCAAGCATTA":
+        #     print(q_id, curr_best_seqs[q_id][2], curr_best_seqs[q_id][3])
+        #     print(curr_best_seqs[q_id][2], curr_best_seqs[q_id][3])
+        #     sys.exit()
     # print(curr_read_corr)
     # sys.exit()
     return curr_read_corr[k_size:-k_size], other_corrections
@@ -427,10 +432,13 @@ def main(args):
                 # print("starting correcting:", seq)
                 all_intervals = []
 
-                print(previously_corrected_regions[r_id])
-                
+                print(r_id, sorted(previously_corrected_regions[r_id], key=lambda x:x[1]))
+                all_prev_corrected_positions = set([tmp_pos for _, tmp_p1, tmp_p2, w_tmp in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
+                print(all_prev_corrected_positions)
                 for (m1,p1), m1_curr_spans in read_min_comb: 
-                    find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size )
+                    not_prev_corrected_spans = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in all_prev_corrected_positions and p2 - 1 in all_prev_corrected_positions) ]
+                    if not_prev_corrected_spans: # p1 + k_size not in all_prev_corrected_positions:
+                        find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size)
 
     
 
@@ -441,7 +449,7 @@ def main(args):
                 # SYS.EXIT()
                 if not all_intervals:
                     print("Found nothing to correct")
-                    corrected_reads[r_id] = (acc, seq, qual)
+                    corrected_seq = seq
                 else:
                     all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
                     # print(all_intervals_sorted_by_finish)
@@ -449,10 +457,10 @@ def main(args):
                     corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size)
                     
                     for other_r_id, corrected_regions in other_reads_corrected_regions.items():
-                        previously_corrected_regions[other_r_id].append(corrected_regions)
+                        for corr_region in corrected_regions:
+                            previously_corrected_regions[other_r_id].append(corr_region)
 
-                    corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
-
+                corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
                 tot_before, tot_after = eval_sim(corrected_seq, seq, qual, tot_before, tot_after)
                 # sys.exit()
 
