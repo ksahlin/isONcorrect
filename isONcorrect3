@@ -176,7 +176,7 @@ def edlib_alignment(x, y, k):
     ed = result["editDistance"]
     return ed
 
-def get_best_corrections(curr_best_seqs, k_size):
+def get_best_corrections(curr_best_seqs, k_size, v_depth_ratio_threshold = 0.4):
     weight = len(curr_best_seqs)
     # r_seq = curr_best_seqs["curr_read"][0]
     # print(r_seq)
@@ -221,26 +221,80 @@ def get_best_corrections(curr_best_seqs, k_size):
 
     other_corrections = defaultdict(list)
     # read_aln = alignment_matrix["curr_read"]
+
+    # get homopolymer adjustment
+    h_tmp = [len(list(_)) for ch, _ in itertools.groupby(spoa_ref) ]
+    # print(h_tmp)
+    # print(spoa_ref)
+    h_tmp2 = []
+    h_tmp2 = [c for c in h_tmp for i in range(c)]
+    # print(h_tmp2)
+    assert len(h_tmp2) == len(spoa_ref)
+    curr_pos = 0
+    h_pol_counts = []
+    n_cols = len(h_tmp2)
+    for nucl in alignment_matrix["ref"]:
+        # print(curr_pos, len(h_tmp2))
+        h_pol_counts.append(h_tmp2[min(n_cols - 1,curr_pos)])
+        if nucl != "-":
+            curr_pos += 1
+    # print(alignment_matrix["ref"])
+    # print(h_pol_counts)    
+    assert len(alignment_matrix["ref"]) == len(h_pol_counts)
+
+
     for i, d in enumerate(PFM):
         n_max, count_max = max(d.items(), key = lambda x: x[1])
-        # print(read_nucl, d[read_nucl], n_max, count_max)
+        variants = sorted(d.items(), key = lambda x: x[1])
+
         if n_max == "-":
             c, n_max2 = max([(c,n) for n,c in d.items() if n != "-"])
-            if c > 0.4*count_max:
-                n_max = n_max2
-                count_max = c
+        if c > 0.4*count_max:
+            # print(c, count_max)
+            n_max = n_max2 
+        # tot_depth = sum(d.values())
+        # del_ratio = v_depth_ratio_threshold*h_pol_counts[i]
+        # print(read_nucl, d[read_nucl], n_max, count_max)
+        
+        # if n_max == "-":
+        #     c, n_max2 = max([(c,n) for n,c in d.items() if n != "-"])
+        #     if c > count_max/float(h_pol_counts[i]):
+        #         n_max = n_max2
+        #         count_max = c
 
-        curr_read_corr = []
+        # curr_read_corr = []
         for q_id in alignment_matrix:
             if q_id == "ref":
                 continue
-            read_nucl = alignment_matrix[q_id][i]
-            read_nucl_count = d[read_nucl]
-            # curr_read_corr.append(n_max)
-            if read_nucl != "-" and read_nucl_count > 3 and read_nucl_count > 0.2 * count_max: # keeping variant
-                other_corrections[q_id].append(read_nucl)                
-            else:
-                other_corrections[q_id].append(n_max)
+            other_corrections[q_id].append(n_max)
+
+            # read_nucl = alignment_matrix[q_id][i]
+            # read_nucl_count = d[read_nucl]
+            # if n_max == "-":
+            #     # if read_nucl != "-":
+            #     #     print(read_nucl, read_nucl_count, count_max, weight )
+            #     other_corrections[q_id].append(n_max)
+
+            #     # print(read_nucl_count, tot_depth, h_pol_counts[i], count_max, n_max)
+            #     # if read_nucl_count < del_ratio*weight:
+            #     #     other_corrections[q_id].append(n_max)
+            #     # else:
+            #     #     other_corrections[q_id].append(read_nucl)
+            # else:
+            #     if read_nucl == "-":
+            #         other_corrections[q_id].append(n_max)
+
+            #     elif read_nucl_count < v_depth_ratio_threshold * count_max:
+
+            #     # # curr_read_corr.append(n_max)
+            #     # if read_nucl != "-" and read_nucl_count > 3 and read_nucl_count > 0.2 * count_max: # keeping variant
+            #     #     other_corrections[q_id].append(read_nucl)                
+            #     # else:
+            #         other_corrections[q_id].append(n_max)
+            #     else:
+            #         other_corrections[q_id].append(read_nucl)
+
+
     for q_id in other_corrections:
         curr_read_corr = other_corrections[q_id]
         curr_read_corr = "".join([n for n in curr_read_corr if n != "-"])
@@ -255,7 +309,7 @@ def get_best_corrections(curr_best_seqs, k_size):
 
 def solve_WIS(all_intervals_sorted_by_finish):
     p = [None]
-    v = [None] + [w for (start, stop, w, _) in all_intervals_sorted_by_finish]
+    v = [None] + [w*(stop-start) for (start, stop, w, _) in all_intervals_sorted_by_finish]
     for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
         if j == 0:
             p.append(0)
@@ -299,16 +353,32 @@ def eval_sim(corr, seq, qual, tot_before, tot_after):
     true = "AGCAATCAGACTCAAGCATTAAAATACCCGCCCAGAATATGCCATCAAACTGCCTGGCCCGACAAATTAATGCTGAAATTGTTAACTGACCGGAGGTCGACGTACCGACACTAGGAGGAGCGGGACTGTAGGAAAACCACTATCCTTTTC"
     r1 = edlib.align(true, corr, task="path", mode="NW")
     ref_alignment1, read_alignment = help_functions.cigar_to_seq(r1["cigar"], true, corr)
+
+    ins = len([1 for n in ref_alignment1[10:-10] if n == "-"])
+    del_ = len([1 for n in read_alignment[10:-10] if n == "-"])
+    subs =  len([p for p, (n1,n2) in enumerate(zip(read_alignment[10:-10], ref_alignment1[10:-10])) if n1 != "-" and n2 != "-" and n1 != n2 ])
+    tot_after["subs"] += subs
+    tot_after["ins"] += ins
+    tot_after["del"] += del_
+
     r2 = edlib.align(true, seq, task="path", mode="NW")
     ref_alignment2, read_orig_alignment = help_functions.cigar_to_seq(r2["cigar"], true, seq)
-    tot_before += r2["editDistance"]
-    tot_after += r1["editDistance"]
+
+    ins = len([1 for n in ref_alignment2 if n == "-"])
+    del_ = len([1 for n in read_orig_alignment if n == "-"])
+    subs =  r2["editDistance"] - ins - del_
+    tot_before["subs"] += subs
+    tot_before["ins"] += ins
+    tot_before["del"] += del_
+
+    # tot_before += r2["editDistance"]
+    # tot_after += r1["editDistance"]
     print(ref_alignment1)
     print(read_alignment, r1["editDistance"], [p for p, (n1,n2) in enumerate(zip(read_alignment, ref_alignment1)) if n1 != n2 ])
     print(ref_alignment2)
     print(read_orig_alignment, r2["editDistance"])
     print(qual)
-    return tot_before, tot_after
+    # return tot_before, tot_after
 
 
 def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size):
@@ -318,10 +388,12 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
     acc, seq, qual = reads[r_id]
     curr_best_seqs = {}
     curr_best_seqs_to_id = {}
+    # cnt = 0
     for (m2,p2) in m1_curr_spans:
         relevant_reads = minimizer_combinations_database[m1][m2]
         seqs = {}
-        if len(relevant_reads) >= max(3,len(curr_best_seqs)):
+        if len(relevant_reads) > max(3,len(curr_best_seqs)):
+            # cnt += 1
             ref_seq = seq[p1  : p2 + k_size]
             ref_qual = qual[p1 : p2 + k_size]
             p_error_ref =  sum([D[char_] for char_ in ref_qual])/len(ref_qual) 
@@ -363,8 +435,9 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         all_intervals.append( (p1 + k_size, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
         # print("Best at window startpoint:", curr_m_pos)
         # print(len(curr_best_seqs),curr_best_seqs ) #,curr_best_seqs_to_id)
-            # print()
+            # print()  
 
+    # print("CNT", cnt, p1)
 
 def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size):
     corr_seq = []
@@ -423,11 +496,11 @@ def main(args):
             # print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
             # sys.exit()
             corrected_reads = {}
-            tot_before = 0
-            tot_after = 0
+            tot_errors_before = {"subs" : 0, "del": 0, "ins": 0}
+            tot_errors_after = {"subs" : 0, "del": 0, "ins": 0}
             tot_corr = 0
             previously_corrected_regions = defaultdict(list)
-            for r_id in sorted(reads, reverse=True):
+            for r_id in sorted(reads): #, reverse=True):
                 read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, T)]
     
                 # previously_corrected_regions = defaultdict(list)
@@ -439,16 +512,20 @@ def main(args):
 
                 # print(r_id, sorted(previously_corrected_regions[r_id], key=lambda x:x[1]))
                 read_prev_corrected_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
+                # read_prev_corrected_positions = set([tmp_p1 for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id]])
                 # print(read_prev_corrected_positions)
                 for (m1,p1), m1_curr_spans in read_min_comb: 
                     not_prev_corrected_spans = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_prev_corrected_positions and p2 - 1 in read_prev_corrected_positions) ]
                     if not_prev_corrected_spans: # p1 + k_size not in read_prev_corrected_positions:
+                    # not_prev_corrected_spans = m1_curr_spans
+                    # if p1 not in read_prev_corrected_positions:
                         find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size)
 
     
 
-                
+                # sys.exit()
                 print("Correcting read", r_id)
+                print(previously_corrected_regions[r_id])
                 if previously_corrected_regions[r_id]: # add previously corrected regions in to the solver
                     all_intervals.extend(previously_corrected_regions[r_id])
                     del previously_corrected_regions[r_id]
@@ -470,11 +547,12 @@ def main(args):
                             previously_corrected_regions[other_r_id].append(corr_region)
 
                 corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
-                tot_before, tot_after = eval_sim(corrected_seq, seq, qual, tot_before, tot_after)
-                # sys.exit()
+                eval_sim(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
+                if r_id == 380:
+                    sys.exit()
 
-    print("tot_before:", tot_before)
-    print("tot_after:", tot_after)
+    print("tot_before:", tot_errors_before)
+    print("tot_after:", sum(tot_errors_after.values()), tot_errors_after)
     outfile = open(os.path.join(args.outfolder, "corrected_reads3.fastq"), "w")
     print( len(corrected_reads))
     for r_id, (acc, seq, qual) in corrected_reads.items():
