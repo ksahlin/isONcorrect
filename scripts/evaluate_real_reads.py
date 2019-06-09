@@ -192,25 +192,28 @@ def get_aln_stats_per_read(sam_file, reads, refs):
     alignments = {}
     for read in SAM_file.fetch(until_eof=True):
         if read.flag == 0 or read.flag == 16:
-            print(read.query_name, "primary", read.flag, read.reference_name) 
-            print(read.is_reverse)
-            print(read.cigartuples)
+            # print(read.is_reverse)
+            # print(read.cigartuples)
             read_seq = reads[read.query_name]
             ref_seq = refs[read.reference_name]
             ref_alignment, m_line, read_alignment, ins, del_, subs, matches = cigar_to_seq_mm2_local(read, ref_seq, read_seq)
-            print(ref_alignment)
-            print(m_line)
-            print(read_alignment)
+            if read.query_name == "4bc35255-317a-4e13-b285-ae44b922ccb2_runid=8c239806e6f576cd17d6b7d532976b1fe830f9c6_sampleid=pcs109_sirv_mix2_LC_read=121156_ch=54_start_time=2019-04-13T20:33:02Z_strand=-":
+                print(read.query_name, "primary", read.flag, read.reference_name) 
+                print(ref_alignment)
+                print(m_line)
+                print(read_alignment)
+                print(ins, del_, subs, matches)
+
             if read.query_name in alignments:
                 print("BUG")
                 sys.exit()
             
             alignments[read.query_name] = (ins, del_, subs, matches)
-            print(ins, del_, subs, matches)
-            print()
+            # print()
             # return
         else:
-            print("secondary", read.flag, read.reference_name) 
+            pass
+            # print("secondary", read.flag, read.reference_name) 
     return alignments
 
 def get_summary_stats(reads):
@@ -247,7 +250,9 @@ def main(args):
     print("Corrected reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/sum_aln_corr_bases , 1) for s in corr_stats]))
 
 
-    print( "Num_aligned_reads", "Aligned bases", "tot_errors", "avg_error_rate", "median_read_error_rate", "upper_25_quant", "lower_25_quant")
+    print( "Num_aligned_reads", "Aligned bases", "tot_errors", "avg_error_rate", "median_read_error_rate", "upper_25_quant", "lower_25_quant", "min", "max")
+    orig_sorted = sorted(orig.items(), key = lambda x: sum(x[1][0:3]))
+    # print(orig_sorted)
     # print(",".join([s for s in orig_stats]))
     # print(",".join([s for s in corr_stats]))
 
