@@ -412,7 +412,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                 # print(seq[p1+k_size : p2], read_seq, p1, p2, pos1, pos2, reads[relevant_read_id][1][pos1 : pos1 + k_size ], seq[p1:p1+k_size], reads[relevant_read_id][1][pos2 : pos2 +k_size],  seq[p2:p2+k_size])
                 # print(edlib_alignment(ref_seq, read_seq, len(ref_seq)),  ref_seq, read_seq, (pos1, pos2), (p1,p2), relevant_read_id)
                 p_error_sum_thresh = p_error_ref + sum([D[char_] for char_ in read_qual])/len(read_qual) + 0.1
-                # print("p_error_sum", p_error_sum)
+                # print("p_error_sum", p_error_sum_thresh)
                 if edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) > 0:   
                 # if reads[relevant_read_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[relevant_read_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
                     seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
@@ -548,12 +548,12 @@ def main(args):
 
                 corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
                 eval_sim(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
-                if r_id == 380:
-                    sys.exit()
+                # if r_id == 380:
+                #     sys.exit()
 
     print("tot_before:", tot_errors_before)
     print("tot_after:", sum(tot_errors_after.values()), tot_errors_after)
-    outfile = open(os.path.join(args.outfolder, "corrected_reads3.fastq"), "w")
+    outfile = open(os.path.join(args.outfolder, "corrected_reads.fastq"), "w")
     print( len(corrected_reads))
     for r_id, (acc, seq, qual) in corrected_reads.items():
         outfile.write("@{0}\n{1}\n+\n{2}\n".format(acc, seq, qual))

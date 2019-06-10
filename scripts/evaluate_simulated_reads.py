@@ -155,24 +155,61 @@ def ssw_alignment( x_acc, y_acc, x, y, i,j, max_discrepancy = 200):
         return (y_alignment, x_alignment, (matches, mismatches, indels, deletions, insertions, match_line)) 
 
 
-def read_fasta(fasta_file):
-    fasta_seqs = {}
-    k = 0
-    temp = ''
-    accession = ''
-    for line in fasta_file:
-        if line[0] == '>' and k == 0:
-            accession = line[1:].strip()
-            fasta_seqs[accession] = ''
-            k += 1
-        elif line[0] == '>':
-            yield accession, temp
-            temp = ''
-            accession = line[1:].strip()
-        else:
-            temp += line.strip().upper()
-    if accession:
-        yield accession, temp
+'''
+    Below code taken from https://github.com/lh3/readfq/blob/master/readfq.py
+'''
+def readfq(fp): # this is a generator function
+    last = None # this is a buffer keeping the last unprocessed line
+    while True: # mimic closure; is it a bad idea?
+        if not last: # the first record or a record following a fastq
+            for l in fp: # search for the start of the next record
+                if l[0] in '>@': # fasta/q header line
+                    last = l[:-1] # save this line
+                    break
+        if not last: break
+        name, seqs, last = last[1:].replace(" ", "_"), [], None
+        for l in fp: # read the sequence
+            if l[0] in '@+>':
+                last = l[:-1]
+                break
+            seqs.append(l[:-1])
+        if not last or last[0] != '+': # this is a fasta record
+            yield name, (''.join(seqs), None) # yield a fasta record
+            if not last: break
+        else: # this is a fastq record
+            seq, leng, seqs = ''.join(seqs), 0, []
+            for l in fp: # read the quality
+                seqs.append(l[:-1])
+                leng += len(l) - 1
+                if leng >= len(seq): # have read enough quality
+                    last = None
+                    yield name, (seq, ''.join(seqs)); # yield a fastq record
+                    break
+            if last: # reach EOF before reading enough quality
+                yield name, (seq, None) # yield a fasta record instead
+                break
+
+
+# def read_fasta(fasta_file):
+#     fasta_seqs = {}
+#     k = 0
+#     temp = ''
+#     accession = ''
+#     for line in fasta_file:
+#         if line[0] == '>' and k == 0:
+#             accession = line[1:].strip()
+#             fasta_seqs[accession] = ''
+#             k += 1
+#         elif line[0] == '>':
+#             yield accession, temp
+#             temp = ''
+#             accession = line[1:].strip()
+#         else:
+#             temp += line.strip().upper()
+#     if accession:
+#         yield accession, temp
+
+
 
 def histogram(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff=None, title=None):
     if x_cutoff: 
@@ -586,8 +623,8 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
 
 
 def main(args):
-    consensus_transcripts = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.consensus_transcripts, 'r'))}
-    reference_transcripts = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.reference_transcripts, 'r'))}
+    consensus_transcripts = {acc: seq.upper() for acc, (seq, _) in  readfq(open(args.consensus_transcripts, 'r'))}
+    reference_transcripts = {acc: seq.upper() for acc, (seq, _) in  readfq(open(args.reference_transcripts, 'r'))}
     
     sampled_dict = {}
     if args.transcripts_sampled:
@@ -601,7 +638,7 @@ def main(args):
     print("Number of consensus:", len(consensus_transcripts))
 
     # if args.only_exact:
-    #     consensus_seq_to_acc = {seq.upper(): acc for (acc, seq) in  read_fasta(open(args.consensus_transcripts, 'r'))}
+    #     consensus_seq_to_acc = {seq.upper(): acc for (acc, seq) in  readfq(open(args.consensus_transcripts, 'r'))}
     #     ref_set = set(list(reference_transcripts.values()))
     #     consensus_set = set(list(consensus_transcripts.values()))
     #     # assert len(consensus_set) == len(list(consensus_transcripts.keys()))
