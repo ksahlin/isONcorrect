@@ -472,10 +472,12 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
     aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
     best_edit_distances_ssw = {}
+    best_edit_distances_ssw_minus_ends = {}
     for acc1 in best_edit_distances:
         seq1 = querys[acc1]
         best_ed = len(seq1)
         best_edit_distances_ssw[acc1] = {}
+        best_edit_distances_ssw_minus_ends[acc1] = {}
 
         for acc2 in best_edit_distances[acc1]:
             seq2 = targets[acc2]
@@ -486,6 +488,12 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
             deletions = q_aligned.count("-")
             indels =  insertions + deletions
             mismatches = len([1 for n1, n2 in zip(read_alignment, ref_alignment) if n1 != n2 and n1 != "-" and n2 != "-"] )
+
+            insertions_minus_ends = r_aligned[20:-20].count("-")
+            deletions_minus_ends = q_aligned[20:-20].count("-")
+            indels_minus_ends =  insertions_minus_ends + deletions_minus_ends
+            mismatches_minus_ends = len([1 for n1, n2 in zip(read_alignment[20:-20], ref_alignment[20:-20]) if n1 != n2 and n1 != "-" and n2 != "-"] )
+
             # mismatches = , indels, deletions, insertions, match_line
 
             # print(read_alignment)
@@ -506,12 +514,16 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
                 best_edit_distances_ssw[acc1] = {}
                 best_edit_distances_ssw[acc1][acc2] = (deletions, insertions, mismatches)
                 best_ed = sw_ed
+                best_edit_distances_ssw_minus_ends[acc1] = {}
+                best_edit_distances_ssw_minus_ends[acc1][acc2] = (deletions_minus_ends, insertions_minus_ends, mismatches_minus_ends)
+
             elif sw_ed == best_ed:
                 best_edit_distances_ssw[acc1][acc2] = (deletions, insertions, mismatches)
+                best_edit_distances_ssw_minus_ends[acc1][acc2] = (deletions_minus_ends, insertions_minus_ends, mismatches_minus_ends)
 
             # seq1_aln, match_line, seq2_aln = result.alignment
 
-    return best_edit_distances_ssw
+    return best_edit_distances_ssw, best_edit_distances_ssw_minus_ends
 
 
 def get_best_match(consensus_transcripts, reference_transcripts, outfolder, transcript_abundances, transcript_copies, sampled_dict, params):
@@ -522,6 +534,7 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     errors_container = {}
     identity_container = {}
     error_types_container = {}
+    error_types_container_minus_ends = {}
     best_match_container = {}
     not_FN = set()
     # print(consensus_transcripts)
@@ -561,7 +574,7 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     else:
         print("Start1")
         best_edit_distances = get_minimizers_2set_simple(consensus_transcripts, reference_transcripts)
-        minimizer_graph_c_to_t = get_ssw_alignments(best_edit_distances, consensus_transcripts, reference_transcripts)
+        minimizer_graph_c_to_t, minimizer_graph_c_to_t_minus_ends = get_ssw_alignments(best_edit_distances, consensus_transcripts, reference_transcripts)
         for i, (q_acc, q_seq) in enumerate(minimizer_graph_c_to_t.items()): 
             best_ed = 200000
             r_acc_max_id = "NONE"
@@ -574,12 +587,15 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
                     best_ed = edit_distance
                     r_acc_max_id = r_acc
                     fewest_errors = edit_distance
-                    best_mismatches, best_insertions, best_deletions = mismatches, insertions, deletions    
+                    best_mismatches, best_insertions, best_deletions = mismatches, insertions, deletions  
+
+                    best_deletions_minus_ends, best_insertions_minus_ends, best_mismatches_minus_ends = minimizer_graph_c_to_t_minus_ends[q_acc][r_acc]
 
             errors_container[q_acc] = fewest_errors
             best_match_container[q_acc] = r_acc_max_id
             identity_container[q_acc] = 1.0 - (best_ed / float(max(len(q_seq), len(reference_transcripts[r_acc_max_id])) ))
             error_types_container[q_acc] = (best_mismatches, best_insertions, best_deletions)
+            error_types_container_minus_ends[q_acc] = best_mismatches_minus_ends,  best_insertions_minus_ends, best_deletions_minus_ends
             not_FN.add(r_acc_max_id)
 
         print("Stop1!")
@@ -607,17 +623,21 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     all_s = sum([s for s,i,d in all_errors])
     all_i = sum([i for s,i,d in all_errors])
     all_d = sum([d for s,i,d in all_errors])
-    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3)))
-    
-    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del"))
 
+    all_errors_minus_ends = sum([sum(error_types_container_minus_ends[acc]) for acc in error_types_container_minus_ends])
+
+
+    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3), all_errors_minus_ends))
+    
+
+    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del", "s_minus_end", "i_minus_end", "d_minus_end"))
     for q_acc in errors_container:
         # each ro displays values for a consensus transcript
         if  identity_container[q_acc] > params.sim_cutoff:
             ssw_stats = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])
             # print(ssw_stats, minimizer_graph_c_to_t[q_acc])
             # print()
-            out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc]))
+            out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc], *error_types_container_minus_ends[q_acc]))
 
     print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
 

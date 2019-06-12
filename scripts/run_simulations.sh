@@ -11,13 +11,13 @@ plot_spoa_file=$outbase/"results_spoa_ref.pdf"
 echo -n  "id"$'\t'"p"$'\t'"tot"$'\t'"err"$'\t'"subs"$'\t'"ins"$'\t'"del"$'\t'"rate"$'\n' > $results_file
 echo -n  "id"$'\t'"p"$'\t'"tot"$'\t'"err"$'\t'"subs"$'\t'"ins"$'\t'"del"$'\t'"rate"$'\n' > $results_spoa_file
 
-for id in $(seq 1 1 1) 
+for id in $(seq 1 1 5) 
 do
     # which python
-    python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --sim_genome_len 500 --coords 0 200 300 500 --outfolder $outbase/$id/ --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
-    for p in $(seq 0.1 0.1 1.0)  # $(seq 0.1 0.1 0.2)
+    python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --sim_genome_len 300 --coords 0 100 200 300 --outfolder $outbase/$id/ --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
+    for p in $(seq 0.1 0.2 1.0)  # $(seq 0.1 0.1 0.2)
     do
-        python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --ref $outbase/$id/reference.fa  --coords 0 200 300 500 --outfolder $outbase/$id/$p --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
+        python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --ref $outbase/$id/reference.fa  --coords 0 100 200 300 --outfolder $outbase/$id/$p --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
 
         python /Users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ > /dev/null
         # python /Users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/isoncorrect/corrected_reads_parasail_1.fasta   --outfolder $outbase/$id/$p/isoncorrect/ > /dev/null
