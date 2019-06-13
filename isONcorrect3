@@ -456,9 +456,12 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                 # print(edlib_alignment(ref_seq, read_seq, len(ref_seq)),  ref_seq, read_seq, (pos1, pos2), (p1,p2), relevant_read_id)
                 p_error_sum_thresh = p_error_ref + sum([D[char_] for char_ in read_qual])/len(read_qual) + 0.1
                 # print("p_error_sum", p_error_sum_thresh)
-                if edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) > 0:   
                 # if reads[relevant_read_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[relevant_read_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
+                if edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) >= 0:   
                     seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                # else:
+                #     ed = edlib_alignment(ref_seq, read_seq, 100)
+                #     print(ed, ref_seq, read_seq, p1,p2, pos1,pos2)
                     # if read_seq in seqs_to_id:
                     #     seqs_to_id[read_seq].append( (relevant_read_id, pos1 + k_size, pos2 ) )
                     # else:
