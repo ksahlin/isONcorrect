@@ -16,7 +16,7 @@
     "isoncorrect" : 
     {
         "jobname" : "isoncorrect",
-        "ntasks" : "2",
+        "ntasks" : "64",
         "Nodes" : 2,
         "runtime" : "1-00:00:00",
         "mail" : "ksahlin@kth.se",
