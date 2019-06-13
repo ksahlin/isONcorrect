@@ -346,21 +346,34 @@ def solve_WIS(all_intervals_sorted_by_finish):
     assert len(p) == len(all_intervals_sorted_by_finish) + 1 == len(v) == len(OPT)
 
     # Find solution
-    def find_solution(j, opt_indicies): 
-        if j == 0:
-            return 
-        elif v[j] + OPT[p[j]] > OPT[j-1]:
-            print(j)
-            opt_indicies.append(j - 1) # we have shifted all indices forward by one so we neew to reduce to j -1 because of indexing in python works
-            find_solution( p[j], opt_indicies ) 
-        else:
-            find_solution(j-1, opt_indicies) 
-    opt_indicies = []
-    print(len(all_intervals_sorted_by_finish), [sss[:3] for sss in all_intervals_sorted_by_finish])
-    print(len(OPT), OPT)
-    find_solution(len(all_intervals_sorted_by_finish), opt_indicies)
-    print( [ all_intervals_sorted_by_finish[ooo][:3] for ooo in opt_indicies])
+    # def find_solution(j, opt_indicies): 
+    #     if j == 0:
+    #         return 
+    #     elif v[j] + OPT[p[j]] > OPT[j-1]:
+    #         print(j)
+    #         opt_indicies.append(j - 1) # we have shifted all indices forward by one so we neew to reduce to j -1 because of indexing in python works
+    #         find_solution( p[j], opt_indicies ) 
+    #     else:
+    #         find_solution(j-1, opt_indicies) 
+    # opt_indicies = []
+    # find_solution(len(all_intervals_sorted_by_finish), opt_indicies)
+    # print("test",opt_indicies)
 
+    # Find solution
+    opt_indicies = []
+    j = len(all_intervals_sorted_by_finish)
+    while j >= 0:
+        if j == 0:
+            break
+        if v[j] + OPT[p[j]] > OPT[j-1]:
+            # print(j)
+            opt_indicies.append(j - 1) # we have shifted all indices forward by one so we neew to reduce to j -1 because of indexing in python works
+            j = p[j]
+            # find_solution( p[j], opt_indicies ) 
+        else:
+            j -= 1
+    # print( "hi", opt_indicies2)
+    # assert opt_indicies2 == opt_indicies
     return opt_indicies
 
 D = {chr(i) : min( 10**( - (ord(chr(i)) - 33)/10.0 ), 0.79433)  for i in range(128)}
