@@ -188,7 +188,7 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     for acc, (seq, qual, pos1, pos2) in curr_best_seqs.items():
         reads_path.write(">{0}\n{1}\n".format(acc, seq))
     reads_path.close()
-    spoa_ref, msa = create_augmented_reference.run_spoa(reads_path.name, "/dev/null", "/Users/kxs624/tmp/tmp_isoncorrect2/test/1/isoncorrect/spoa_tmp.fa", "spoa", "/dev/null")
+    spoa_ref, msa = create_augmented_reference.run_spoa(reads_path.name, "/dev/null", os.path.join(outfolder,"spoa_tmp.fa"), "spoa", "/dev/null")
     # print()
     # print(spoa_ref)
     #### TMP
@@ -274,7 +274,7 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
                     # print("here!!!!!!!!!", count_max, d[alignment_matrix[q_id][i]])
 
                 if n_max != alignment_matrix[q_id][i] and count_max * v_depth_ratio_threshold < d[alignment_matrix[q_id][i]]: # potential variant position
-                    print("SAVED varinant")
+                    # print("SAVED varinant")
                     other_corrections[q_id].append(alignment_matrix[q_id][i]) # preserve substitution
                 else:
                     other_corrections[q_id].append(n_max)
@@ -384,16 +384,27 @@ def eval_sim(corr, seq, qual, tot_before, tot_after):
     tot_before["ins"] += ins
     tot_before["del"] += del_
 
-    # tot_before += r2["editDistance"]
-    # tot_after += r1["editDistance"]
-    
-    # print(ref_alignment1)
-    # print(read_alignment, r1["editDistance"], [p for p, (n1,n2) in enumerate(zip(read_alignment, ref_alignment1)) if n1 != n2 ])
-    # print(ref_alignment2)
-    # print(read_orig_alignment, r2["editDistance"])
-    # print(qual)
-    
-    # return tot_before, tot_after
+def eval_sim2(corr, seq, qual, tot_before, tot_after):
+    true = "GCCAACGGCTTGGTGCCAAACACAATCGTCGTTGTCAATAACGCCTGCTAATCACTGCTTGGTGCGGCAGCTTGCTAACGATGAAAAGATTTGGATGGGTCCGATCTAATTACACGATAACGTGAGTCTAACCCTTAGTCTGTAAGAACT"
+    r1 = edlib.align(true, corr, task="path", mode="NW")
+    ref_alignment1, read_alignment = help_functions.cigar_to_seq(r1["cigar"], true, corr)
+
+    ins = len([1 for n in ref_alignment1 if n == "-"])
+    del_ = len([1 for n in read_alignment if n == "-"])
+    subs =  len([p for p, (n1,n2) in enumerate(zip(read_alignment, ref_alignment1)) if n1 != "-" and n2 != "-" and n1 != n2 ])
+    tot_after["subs"] += subs
+    tot_after["ins"] += ins
+    tot_after["del"] += del_
+
+    r2 = edlib.align(true, seq, task="path", mode="NW")
+    ref_alignment2, read_orig_alignment = help_functions.cigar_to_seq(r2["cigar"], true, seq)
+
+    ins = len([1 for n in ref_alignment2 if n == "-"])
+    del_ = len([1 for n in read_orig_alignment if n == "-"])
+    subs =  r2["editDistance"] - ins - del_
+    tot_before["subs"] += subs
+    tot_before["ins"] += ins
+    tot_before["del"] += del_
 
 
 def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size):
@@ -533,8 +544,9 @@ def main(args):
 
             for r_id in sorted(reads): #, reverse=True):
                 read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, X)]
-    
-                # previously_corrected_regions = defaultdict(list)
+                
+                if args.exact:
+                    previously_corrected_regions = defaultdict(list)
                 # stored_calculated_regions = defaultdict(list)
         
                 #  = stored_calculated_regions[r_id]
@@ -625,7 +637,7 @@ def main(args):
                             previously_corrected_regions[other_r_id].append(corr_region)
 
                 corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
-                eval_sim(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
+                eval_sim2(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
                 # if r_id == 380:
                 #     sys.exit()
 
@@ -650,7 +662,10 @@ if __name__ == '__main__':
     parser.add_argument('--w', type=int, default=7, help='Window size')
     parser.add_argument('--X', type=int, default=60, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.2, help='Upper interval length')
-    parser.add_argument('--compression', type=bool, default=False, help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
+    parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
+                                                                 not to be used for clusters with over ~500 reads)')
+  
+    parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
                                                                         minmimizer combinations to span regions in homopolymenr dense regions. Solution \
                                                                         could be to adjust upper interval legnth dynamically to guarantee a certain number of spanning intervals.')
     parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')

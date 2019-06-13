@@ -14,10 +14,10 @@ echo -n  "id"$'\t'"p"$'\t'"tot"$'\t'"err"$'\t'"subs"$'\t'"ins"$'\t'"del"$'\t'"ra
 for id in $(seq 1 1 5) 
 do
     # which python
-    python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --sim_genome_len 300 --coords 0 100 200 300 --outfolder $outbase/$id/ --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
-    for p in $(seq 0.1 0.2 1.0)  # $(seq 0.1 0.1 0.2)
+    python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --sim_genome_len 150 --coords 0 50 100 150 --outfolder $outbase/$id/ --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
+    for p in $(seq 1.0 0.5 1.0)  # $(seq 0.1 0.1 0.2)
     do
-        python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --ref $outbase/$id/reference.fa  --coords 0 100 200 300 --outfolder $outbase/$id/$p --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
+        python /Users/kxs624/Documents/workspace/isONcorrect/scripts/simulate_reads.py --ref $outbase/$id/reference.fa  --coords 0 50 100 150 --outfolder $outbase/$id/$p --probs 1.0 $p 1.0  --nr_reads 100 > /dev/null
 
         python /Users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ > /dev/null
         # python /Users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/isoncorrect/corrected_reads_parasail_1.fasta   --outfolder $outbase/$id/$p/isoncorrect/ > /dev/null
