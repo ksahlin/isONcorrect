@@ -130,6 +130,10 @@ def cigar_to_seq_mm2(read, full_r_seq, full_q_seq):
     return "".join([s for s in r_line]), "".join([s for s in m_line]), "".join([s for s in q_line])
 
 def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
+
+    """
+        Changed to parsing = and X instead of simple M.
+    """
     # print()
     r_index = 0
     q_index = 0
@@ -141,8 +145,9 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
     r_end, m_end, q_end = "", "", ""
     ins, del_, subs, matches = 0, 0, 0, 0
     for (op_type, op_len) in cigar_tuples:
+        # print((op_type, op_len))
         # op_len = int(op_len)
-        if op_type == 0:
+        if op_type == 7:
             ref_piece = r_seq[r_index: r_index + op_len]
             query_peace = q_seq[q_index: q_index + op_len]
             # print(ref_piece)
@@ -151,11 +156,14 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
             r_line.append(ref_piece)
             q_line.append(query_peace)
             match_seq = ''.join(['|' if r_base.upper() == q_base.upper() else '*' for (r_base, q_base) in zip(ref_piece, query_peace)]) # faster with "".join([list of str]) instead of +=
-            subs += match_seq.count("*") 
-            matches += match_seq.count("|") 
+            matches += op_len 
             m_line.append(match_seq)
             r_index += op_len
             q_index += op_len
+
+        elif op_type == 8:
+            subs += op_len 
+
 
         elif op_type == 1:
             # insertion into reference
@@ -179,6 +187,7 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
             # softclip
             pass
 
+
     r_line.append(r_end)
     m_line.append(m_end)
     q_line.append(q_end)    
@@ -197,7 +206,8 @@ def get_aln_stats_per_read(sam_file, reads, refs):
             read_seq = reads[read.query_name]
             ref_seq = refs[read.reference_name]
             ref_alignment, m_line, read_alignment, ins, del_, subs, matches = cigar_to_seq_mm2_local(read, ref_seq, read_seq)
-            if read.query_name == "4bc35255-317a-4e13-b285-ae44b922ccb2_runid=8c239806e6f576cd17d6b7d532976b1fe830f9c6_sampleid=pcs109_sirv_mix2_LC_read=121156_ch=54_start_time=2019-04-13T20:33:02Z_strand=-":
+            if read.query_name == 'b1d0ee62-7557-4645-8d1e-c1ccfb60c997_runid=8c239806e6f576cd17d6b7d532976b1fe830f9c6_sampleid=pcs109_sirv_mix2_LC_read=29302_ch=69_start_time=2019-04-12T22:47:30Z_strand=-':
+                print(read.query_alignment_start)
                 print(read.query_name, "primary", read.flag, read.reference_name) 
                 print(ref_alignment)
                 print(m_line)
@@ -216,19 +226,20 @@ def get_aln_stats_per_read(sam_file, reads, refs):
             # print("secondary", read.flag, read.reference_name) 
     return alignments
 
-def get_summary_stats(reads):
+def get_summary_stats(reads, quantile):
     tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
-
-    for acc in reads:
-
-        (ins, del_, subs, matches) = reads[acc]
+    sorted_reads = sorted(reads.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
+    for acc, (ins, del_, subs, matches) in sorted_reads[ : int(len(sorted_reads)*quantile)]:
+        # (ins, del_, subs, matches) = reads[acc]
 
         tot_ins += ins
         tot_del += del_
         tot_subs += subs
         tot_match += matches
 
-    return tot_ins, tot_del, tot_subs, tot_match
+    sum_aln_bases = tot_ins + tot_del + tot_subs + tot_match
+
+    return tot_ins, tot_del, tot_subs, tot_match, sum_aln_bases
 
 
 def main(args):
@@ -239,19 +250,30 @@ def main(args):
     orig = get_aln_stats_per_read(args.orig_sam, reads, refs)
     corr = get_aln_stats_per_read(args.corr_sam, corr_reads, refs)
 
-    orig_stats = get_summary_stats(orig)
-    sum_aln_orig_bases = orig_stats[0] + orig_stats[2] + orig_stats[3] 
-    print("Original reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*orig_stats), "tot aligned bases (ins+subs+match):", sum_aln_orig_bases )
-    print("Original reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/sum_aln_orig_bases , 1) for s in orig_stats]))
+    orig_stats = get_summary_stats(orig, 1.0)
+    # sum_aln_orig_bases = sum(orig_stats) #orig_stats[0] + orig_stats[2] + orig_stats[3] 
+    print("Original reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*orig_stats[:-1]), "tot aligned region (ins+del+subs+match):", orig_stats[-1] )
+    print("Original reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/orig_stats[-1] , 1) for s in orig_stats[:-1]]))
 
-    corr_stats = get_summary_stats(corr)
-    sum_aln_corr_bases = corr_stats[0] + corr_stats[2] + corr_stats[3] 
-    print("Corrected reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*corr_stats), "tot aligned bases (ins+subs+match):", sum_aln_corr_bases)
-    print("Corrected reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/sum_aln_corr_bases , 1) for s in corr_stats]))
+    corr_stats = get_summary_stats(corr, 1.0)
+    print("Corrected reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*corr_stats[:-1]), "tot aligned region (ins+del+subs+match):", corr_stats[-1])
+    print("Corrected reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/corr_stats[-1] , 1) for s in corr_stats[:-1]]))
 
 
     print( "Num_aligned_reads", "Aligned bases", "tot_errors", "avg_error_rate", "median_read_error_rate", "upper_25_quant", "lower_25_quant", "min", "max")
-    orig_sorted = sorted(orig.items(), key = lambda x: sum(x[1][0:3]))
+    orig_sorted = sorted(orig.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
+    print(orig_sorted[-1])
+    orig_sorted_error_rates = [ sum(tup[0:3])/float(sum(tup)) for acc, tup in orig_sorted]
+    orig_vals = [orig_sorted_error_rates[0], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/4)], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/2)], orig_sorted_error_rates[int(3*len(orig_sorted_error_rates)/4)], orig_sorted_error_rates[-1]]
+    print("{0},{1},{2},{3},{4}".format( *[round(x,2) for x in orig_vals ] ))
+
+    corr_sorted = sorted(corr.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
+    print(corr_sorted[-1])
+    corr_sorted_error_rates = [ sum(tup[0:3])/float(sum(tup)) for acc, tup in corr_sorted]
+    corr_vals = [corr_sorted_error_rates[0], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/4)], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/2)], corr_sorted_error_rates[int(3*len(corr_sorted_error_rates)/4)], corr_sorted_error_rates[-1]]
+
+    print("{0},{1},{2},{3},{4}".format( *[round(x,2) for x in corr_vals ] ))
+
     # print(orig_sorted)
     # print(",".join([s for s in orig_stats]))
     # print(",".join([s for s in corr_stats]))

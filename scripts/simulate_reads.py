@@ -78,9 +78,14 @@ def simulate_reads( args, ref ):
             if r > exons_probs[j]:
                 continue
             was_del = False
-            for n in e:
-                p_correct_reading = random.choice(error_lvls)
-                p_error = 1.0 - p_correct_reading
+            for l, n in enumerate(e):
+                if (j == 0 and l <= 15) or (j == len(exons) - 1 and l >= len(e) - 15): # no errors first and last 15 bases
+                    p_correct_reading = 1.0
+                    p_error = 1.0 - 0.995
+                else:
+                    p_correct_reading = random.choice(error_lvls)
+                    p_error = 1.0 - p_correct_reading
+
                 # print(round(10**(-math.log(p_correct_reading))), p_error, -math.log(p_error,10)*10)
 
                 r = random.uniform(0,1)
