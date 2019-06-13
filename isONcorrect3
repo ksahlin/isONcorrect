@@ -349,7 +349,7 @@ def solve_WIS(all_intervals_sorted_by_finish):
     def find_solution(j, opt_indicies): 
         if j == 0:
             return 
-        elif v[j] + OPT[p[j]] > OPT[j-1]:
+        elif v[j] + OPT[p[j]] >= OPT[j-1]:
             print(j)
             opt_indicies.append(j - 1) # we have shifted all indices forward by one so we neew to reduce to j -1 because of indexing in python works
             find_solution( p[j], opt_indicies ) 
