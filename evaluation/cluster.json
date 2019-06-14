@@ -17,8 +17,8 @@
     {
         "jobname" : "isoncorrect",
         "ntasks" : "64",
-        "Nodes" : 2,
-        "runtime" : "1-00:00:00",
+        "Nodes" : 4,
+        "runtime" : "3-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
         "exclude" : "c[4,6-7,8-16]"
