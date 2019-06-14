@@ -76,7 +76,7 @@ def main(args):
     start_multi = time()
     pool = Pool(processes=int(args.nr_cores))
     try:
-        res = pool.map_async(isoncorrect, instances)
+        res = pool.map_async(isoncorrect, instances, chunksize=1)
         score_results =res.get(999999999) # Without the timeout this blocking call ignores all signals.
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt, terminating workers")
