@@ -30,12 +30,12 @@ def mkdir_p(path):
 
 
 def isoncorrect(data):
-    isoncorrect_location, read_fastq_file, outfolder = data[0],data[1],data[2],
+    isoncorrect_location, read_fastq_file, outfolder, cl_id = data[0],data[1],data[2], data[3]
     mkdir_p(outfolder)
     isoncorrect_exec = os.path.join(isoncorrect_location, "isONcorrect3")
     isoncorrect_error_file = os.path.join(outfolder, "stderr.txt")
     with open(isoncorrect_error_file, "w") as error_file:
-        print('Running isoncorrect...', end=' ')
+        print('Running isoncorrect cl_id:{0}...'.format(cl_id), end=' ')
         stdout.flush()
         null = open("/dev/null", "w")
         subprocess.check_call([ isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder ], stderr=error_file, stdout=null)
@@ -54,17 +54,19 @@ def main(args):
         if read_fastq_file.endswith(".fastq"): 
             cl_id = read_fastq_file.split(".")[0]
             outfolder = os.path.join(args.outfolder, cl_id)
-            print(cl_id, outfolder, read_fastq_file, directory)
+            # print(cl_id, outfolder, read_fastq_file, directory)
             fastq_file_path = os.path.join(os.fsdecode(directory), read_fastq_file)
-            print(fastq_file_path)
-            instances.append((isoncorrect_location, fastq_file_path, outfolder) )
+            # print(fastq_file_path)
+            instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id)) )
             # print(os.path.join(directory, read_fastq_file))
             continue
         else:
             continue
 
     # sys.exit()
-
+    instances.sort(key = lambda x: x[3])
+    for t in instances:
+        print(t)
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGINT, original_sigint_handler)
     mp.set_start_method('spawn')
