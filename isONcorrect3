@@ -98,9 +98,6 @@ def get_minimizers_and_positions(reads, w, k, hash_fcn):
     M = {}
     for r_id in reads:
         (acc, seq, qual) = reads[r_id]
-
-        seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
-
         if hash_fcn == "lex":
             minimizers = get_kmer_minimizers(seq, k, w)
         elif hash_fcn == "rev_lex":
@@ -124,26 +121,26 @@ def get_minimizers_and_positions(reads, w, k, hash_fcn):
 #             M2[(m1, m2)][r_id].append((p1,p2))
 #     return reads_to_M2, M2
 
-def get_minimizer_combinations_database(reads, M, k, x):
+def get_minimizer_combinations_database(reads, M, k, x_low, x_high):
     M2 = defaultdict(lambda: defaultdict(list))
     for r_id in M:
         minimizers = M[r_id]
-        for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizers, k, x):
+        for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizers, k, x_low, x_high):
             for (m2, p2) in m1_curr_spans:
                 M2[m1][m2].append((r_id, p1, p2))
     return M2
 
 
 
-def minimizers_comb_iterator(minimizers, k, x):
+def minimizers_comb_iterator(minimizers, k, x_low, x_high):
     # print("read")
     for i, (m1, p1) in enumerate(minimizers[:-1]):
         m1_curr_spans = []
         for j, (m2, p2) in enumerate(minimizers[i+1:]):
-            if 2*k < p2 - p1 and p2 - p1 <= x:
+            if x_low < p2 - p1 and p2 - p1 <= x_high:
                 m1_curr_spans.append( (m2, p2) )
                 # yield (m1,p1), (m2, p2) 
-            elif p2 - p1 > x:
+            elif p2 - p1 > x_high:
                 break
         yield (m1, p1), m1_curr_spans
 
@@ -434,6 +431,15 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
     # cnt = 0
     for (m2,p2) in m1_curr_spans:
         relevant_reads = minimizer_combinations_database[m1][m2]
+        
+        # rr1 = len(relevant_reads)
+        # # print( "bef:", len(relevant_reads))
+        # relevant_reads = [(relevant_read_id, pos1, pos2) for relevant_read_id, pos1, pos2  in relevant_reads if math.fabs( (p2-p1) - (pos2 - pos1)) / min((pos2 - pos1), (p2-p1)) <= 0.4 ] # passing first edit distance check
+        # rr2 = len(relevant_reads)
+        # if rr1 > rr2:
+        #     print(rr1, rr2)
+        # # print("after:", len(relevant_reads))
+
         seqs = {}
         if len(relevant_reads) >= max(3,len(curr_best_seqs)): #max(3, previously_calculated_regions_read[p2]): # 
             # cnt += 1
@@ -457,9 +463,10 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                 p_error_sum_thresh = p_error_ref + sum([D[char_] for char_ in read_qual])/len(read_qual) + 0.1
                 # print("p_error_sum", p_error_sum_thresh)
                 # if reads[relevant_read_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[relevant_read_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
-                if edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) >= 0:   
+                # if math.fabs(len(ref_seq) - len(read_seq)) / len(read_seq) <= p_error_sum_thresh:
+                if edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) >= 0:    # passing second edit distance check
                     seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
-                # else:
+                # else:`
                 #     ed = edlib_alignment(ref_seq, read_seq, 100)
                 #     print(ed, ref_seq, read_seq, p1,p2, pos1,pos2)
                     # if read_seq in seqs_to_id:
@@ -541,7 +548,8 @@ def main(args):
         # DBG, position_DBG = create_augmented_reference.kmer_counter(reads, k_size)
         # print("done createng DB")
         w = args.w
-        X = args.X
+        x_high = args.xmax
+        x_low = args.xmin
         for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
             if args.compression:
                 minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
@@ -549,7 +557,7 @@ def main(args):
                 minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
 
             # reads_to_M2, M2 = get_minimizers_comb(reads, minimizer_database, k_size, args.X)
-            minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, X)
+            minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
             # print(minimizer_database)
             print("done creating minimizer combinations")
 
@@ -563,7 +571,7 @@ def main(args):
             # stored_calculated_regions = defaultdict(lambda: defaultdict(int))
 
             for r_id in sorted(reads): #, reverse=True):
-                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, X)]
+                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
                 
                 if args.exact:
                     previously_corrected_regions = defaultdict(list)
@@ -679,8 +687,9 @@ if __name__ == '__main__':
     # parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
 
     parser.add_argument('--k', type=int, default=7, help='Kmer size')
-    parser.add_argument('--w', type=int, default=7, help='Window size')
-    parser.add_argument('--X', type=int, default=60, help='Upper interval length')
+    parser.add_argument('--w', type=int, default=10, help='Window size')
+    parser.add_argument('--xmin', type=int, default=14, help='Upper interval length')
+    parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.2, help='Upper interval length')
     parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
                                                                  not to be used for clusters with over ~500 reads)')
@@ -694,7 +703,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-
+    if args.xmin < 2*args.k:
+        args.xmin = 2*args.k
+        print("xmin set to {0}".format(args.xmin))
 
     if len(sys.argv)==1:
         parser.print_help()
@@ -703,6 +714,12 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit()
 
+
+    print("ARGUMENT SETTINGS:")
+    for key, value in args.__dict__.items():
+        print("{0}: {1}".format(key, value))
+        # setattr(self, key, value)
+    print()
 
     if args.outfolder and not os.path.exists(args.outfolder):
         os.makedirs(args.outfolder)
