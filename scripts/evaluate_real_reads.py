@@ -264,15 +264,24 @@ def main(args):
     orig_sorted = sorted(orig.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
     print(orig_sorted[-1])
     orig_sorted_error_rates = [ sum(tup[0:3])/float(sum(tup)) for acc, tup in orig_sorted]
-    orig_vals = [orig_sorted_error_rates[0], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/4)], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/2)], orig_sorted_error_rates[int(3*len(orig_sorted_error_rates)/4)], orig_sorted_error_rates[-1]]
-    print("{0},{1},{2},{3},{4}".format( *[round(x,2) for x in orig_vals ] ))
+    orig_vals = [orig_sorted_error_rates[0], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/20)], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/10)], 
+                orig_sorted_error_rates[int(len(orig_sorted_error_rates)/4)], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/2)], 
+                orig_sorted_error_rates[int(3*len(orig_sorted_error_rates)/4)], orig_sorted_error_rates[int(9*len(orig_sorted_error_rates)/10)], orig_sorted_error_rates[int(19*len(orig_sorted_error_rates)/20)], 
+                orig_sorted_error_rates[-1]]
+
 
     corr_sorted = sorted(corr.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
     print(corr_sorted[-1])
     corr_sorted_error_rates = [ sum(tup[0:3])/float(sum(tup)) for acc, tup in corr_sorted]
-    corr_vals = [corr_sorted_error_rates[0], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/4)], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/2)], corr_sorted_error_rates[int(3*len(corr_sorted_error_rates)/4)], corr_sorted_error_rates[-1]]
-
-    print("{0},{1},{2},{3},{4}".format( *[round(x,2) for x in corr_vals ] ))
+    corr_vals = [corr_sorted_error_rates[0],corr_sorted_error_rates[int(len(corr_sorted_error_rates)/20)], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/10)],
+                 corr_sorted_error_rates[int(len(corr_sorted_error_rates)/4)], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/2)],
+                  corr_sorted_error_rates[int(3*len(corr_sorted_error_rates)/4)], corr_sorted_error_rates[int(9*len(corr_sorted_error_rates)/10)], corr_sorted_error_rates[int(19*len(corr_sorted_error_rates)/20)],
+                  corr_sorted_error_rates[-1]]
+    
+    print("Distribution of error rates (Percent)")
+    print("Reads, Best, top 5%, top 10%, top 25%, Median, top 75%, top 90%, top 95%, Worst")
+    print("Original,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in orig_vals ] ))
+    print("Corrected,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in corr_vals ] ))
 
     # print(orig_sorted)
     # print(",".join([s for s in orig_stats]))
