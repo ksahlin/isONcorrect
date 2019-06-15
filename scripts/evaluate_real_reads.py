@@ -262,7 +262,7 @@ def main(args):
 
     print( "Num_aligned_reads", "Aligned bases", "tot_errors", "avg_error_rate", "median_read_error_rate", "upper_25_quant", "lower_25_quant", "min", "max")
     orig_sorted = sorted(orig.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
-    print(orig_sorted[-1])
+    print(orig_sorted[-5:])
     orig_sorted_error_rates = [ sum(tup[0:3])/float(sum(tup)) for acc, tup in orig_sorted]
     orig_vals = [orig_sorted_error_rates[0], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/20)], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/10)], 
                 orig_sorted_error_rates[int(len(orig_sorted_error_rates)/4)], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/2)], 
@@ -271,7 +271,7 @@ def main(args):
 
 
     corr_sorted = sorted(corr.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
-    print(corr_sorted[-1])
+    print(corr_sorted[-5:])
     corr_sorted_error_rates = [ sum(tup[0:3])/float(sum(tup)) for acc, tup in corr_sorted]
     corr_vals = [corr_sorted_error_rates[0],corr_sorted_error_rates[int(len(corr_sorted_error_rates)/20)], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/10)],
                  corr_sorted_error_rates[int(len(corr_sorted_error_rates)/4)], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/2)],
