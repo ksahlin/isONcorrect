@@ -40,12 +40,12 @@ def isoncorrect(data):
         
         # null = open("/dev/null", "w")
         isoncorrect_out_file = open(os.path.join(outfolder, "stdout.txt"), "w")
-        subprocess.check_call([ isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder ], stderr=error_file, stdout=isoncorrect_out_file)
-        print('Done.')
+        subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder ], stderr=error_file, stdout=isoncorrect_out_file)
+        print('Done with cl_id:{0}.'.format(cl_id))
         stdout.flush()
     error_file.close()
     isoncorrect_out_file.close()
-    return
+    return cl_id
 
 def main(args):
     directory = os.fsencode(args.fastq_folder)
@@ -79,8 +79,11 @@ def main(args):
     start_multi = time()
     pool = Pool(processes=int(args.nr_cores))
     try:
-        res = pool.map_async(isoncorrect, instances, chunksize=1)
-        score_results =res.get(999999999) # Without the timeout this blocking call ignores all signals.
+        # res = pool.map_async(isoncorrect, instances, chunksize=1)
+        # score_results =res.get(999999999) # Without the timeout this blocking call ignores all signals.
+        start = time()
+        for x in pool.imap(isoncorrect, instances):
+            print("{} (Time elapsed: {}s)".format(x, int(time() - start)))
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt, terminating workers")
         pool.terminate()
