@@ -37,11 +37,14 @@ def isoncorrect(data):
     with open(isoncorrect_error_file, "w") as error_file:
         print('Running isoncorrect cl_id:{0}...'.format(cl_id), end=' ')
         stdout.flush()
-        null = open("/dev/null", "w")
-        subprocess.check_call([ isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder ], stderr=error_file, stdout=null)
+        
+        # null = open("/dev/null", "w")
+        isoncorrect_out_file = open(os.path.join(outfolder, "stdout.txt"), "w")
+        subprocess.check_call([ isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder ], stderr=error_file, stdout=isoncorrect_out_file)
         print('Done.')
         stdout.flush()
     error_file.close()
+    isoncorrect_out_file.close()
     return
 
 def main(args):

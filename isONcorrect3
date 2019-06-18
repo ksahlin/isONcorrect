@@ -17,7 +17,8 @@ import edlib
 
 from modules import correct_seqs, create_augmented_reference, align, help_functions
 
-
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 
 
@@ -506,9 +507,9 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
         start, stop, weights, instance = all_intervals_sorted_by_finish[j]
         # print(start-7, stop+7, weights)
         if start - k_size > prev_stop and prev_stop > 0:
-            print()
-            print("Gap in correction:", start-k_size - prev_stop, "between positions:", prev_stop, start, )
-            print()
+            # print()
+            eprint("Gap in correction:", start-k_size - prev_stop, "between positions:", prev_stop, start, )
+            # print()
             # sys.exit()
         prev_stop = stop + k_size
 
@@ -522,7 +523,7 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
         corr_seq.append((start,stop, best_corr))
     # corr_seq = corr_seq
     # print(corr_seq, len(seq))
-    print(first_start, final_stop)
+    eprint(first_start, final_stop)
     tmp = [seq[0 : corr_seq[0][0]] ]
     for cnt, (start_, stop_, seq_segment) in enumerate(corr_seq):
         tmp.append(seq_segment)
@@ -540,7 +541,7 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
 def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
-    print("Correcting {0} reads.".format(len(reads)))
+    eprint("Correcting {0} reads.".format(len(reads)))
     start = time()
     corrected_reads = {}
     v_depth_ratio_threshold = args.T
@@ -559,7 +560,7 @@ def main(args):
             # reads_to_M2, M2 = get_minimizers_comb(reads, minimizer_database, k_size, args.X)
             minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
             # print(minimizer_database)
-            print("done creating minimizer combinations")
+            eprint("done creating minimizer combinations")
 
             # print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
             # sys.exit()
@@ -638,7 +639,7 @@ def main(args):
     
 
                 # sys.exit()
-                print("Correcting read", r_id)
+                eprint("Correcting read", r_id)
                 # print(previously_corrected_regions[r_id])
                 if previously_corrected_regions[r_id]: # add previously corrected regions in to the solver
                     all_intervals.extend(previously_corrected_regions[r_id])
@@ -650,7 +651,7 @@ def main(args):
                 #     print(tmp_, inT_)
                 # SYS.EXIT()
                 if not all_intervals:
-                    print("Found nothing to correct")
+                    eprint("Found nothing to correct")
                     corrected_seq = seq
                 else:
                     all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
@@ -665,14 +666,16 @@ def main(args):
                             previously_corrected_regions[other_r_id].append(corr_region)
 
                 corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
-                eval_sim2(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
-                # if r_id == 380:
-                #     sys.exit()
 
-    print("tot_before:", tot_errors_before)
-    print("tot_after:", sum(tot_errors_after.values()), tot_errors_after)
+                print("@{0}\n{1}\n+\n{2}".format(acc, corrected_seq, "+"*len(corrected_seq) ))
+                eprint("{0},{1}".format(r_id,corrected_seq))
+
+                # eval_sim2(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
+
+    eprint("tot_before:", tot_errors_before)
+    eprint("tot_after:", sum(tot_errors_after.values()), tot_errors_after)
     outfile = open(os.path.join(args.outfolder, "corrected_reads.fastq"), "w")
-    print( len(corrected_reads))
+    eprint( len(corrected_reads))
     for r_id, (acc, seq, qual) in corrected_reads.items():
         outfile.write("@{0}\n{1}\n+\n{2}\n".format(acc, seq, qual))
     outfile.close()
@@ -705,7 +708,7 @@ if __name__ == '__main__':
 
     if args.xmin < 2*args.k:
         args.xmin = 2*args.k
-        print("xmin set to {0}".format(args.xmin))
+        eprint("xmin set to {0}".format(args.xmin))
 
     if len(sys.argv)==1:
         parser.print_help()
@@ -715,11 +718,11 @@ if __name__ == '__main__':
         sys.exit()
 
 
-    print("ARGUMENT SETTINGS:")
+    eprint("ARGUMENT SETTINGS:")
     for key, value in args.__dict__.items():
-        print("{0}: {1}".format(key, value))
+        eprint("{0}: {1}".format(key, value))
         # setattr(self, key, value)
-    print()
+    eprint()
 
     if args.outfolder and not os.path.exists(args.outfolder):
         os.makedirs(args.outfolder)
@@ -730,10 +733,10 @@ if __name__ == '__main__':
     # if edlib_module not in sys.modules:
     #     print('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment.'.format(edlib_module))
     if parasail_module not in sys.modules:
-        print('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment!'.format(parasail_module))
+        eprint('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment!'.format(parasail_module))
         sys.exit(1)
     if 100 < args.w or args.w < args.k:
-        print('Please specify a window of size larger or equal to k, and smaller than 100.')
+        eprint('Please specify a window of size larger or equal to k, and smaller than 100.')
         sys.exit(1)
 
     main(args)
