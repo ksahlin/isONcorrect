@@ -82,7 +82,7 @@ def main(args):
         # res = pool.map_async(isoncorrect, instances, chunksize=1)
         # score_results =res.get(999999999) # Without the timeout this blocking call ignores all signals.
         start = time()
-        for x in pool.imap(isoncorrect, instances):
+        for x in pool.imap_unordered(isoncorrect, instances):
             print("{} (Time elapsed: {}s)".format(x, int(time() - start)))
     except KeyboardInterrupt:
         print("Caught KeyboardInterrupt, terminating workers")
