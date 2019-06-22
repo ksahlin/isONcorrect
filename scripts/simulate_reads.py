@@ -51,84 +51,101 @@ def check_valid_args(args, ref):
 
 
 
-def simulate_reads( args, ref ):
+def simulate_reads( args, isoforms ):
 
     outfile = open(os.path.join(args.outfolder,"reads.fq"), "w")
     is_fastq = True #if outfile[-1] == "q" else False
-    seq, acc = ref[list(ref.keys())[0]]
-    seq = seq.upper()
+    middle_exon_frequnecy = args.probs[1]
+    no_middel_exon = [(isoforms[0][0], isoforms[0][1]) for i in range(int(args.nr_reads*(1-args.probs[1])))]
+    has_middel_exon = [(isoforms[1][0], isoforms[1][1]) for i in range(int(args.nr_reads*args.probs[1]))]
+    isoforms_generated = has_middel_exon + no_middel_exon
+    # print(len(has_middel_exon), len(no_middel_exon))
+    assert len(isoforms_generated) == args.nr_reads
+    # seq, acc = isoforms[list(isoforms.items())
+    # seq = seq.upper()
 
     # exons = [seq[j_start: j_stop] for (j_start, j_stop) in zip(range(0,300, 50), range(50, 301, 50)) ]
     # exons_probs = [1.0, 0.2, 1.0, 1.0, 0.2, 1.0]
 
-    exon_coords = [(start, stop) for start, stop in zip(args.coords[:-1], args.coords[1:]) ]
-    exons = [seq[j_start: j_stop] for (j_start, j_stop) in exon_coords ]
-    exons_probs = args.probs
-    print(exon_coords)
-    print(exons)
-    print(exons_probs)
+    # exon_coords = [(start, stop) for start, stop in zip(args.coords[:-1], args.coords[1:]) ]
+    # exons = [seq[j_start: j_stop] for (j_start, j_stop) in exon_coords ]
+    # exons_probs = args.probs
+    # print(exon_coords)
+    # print(exons)
+    # print(exons_probs)
+
     # sys.exit()
     reads = {}
     error_lvls = [0.6, 0.7, 0.8, 0.9, 0.92, 0.94, 0.96,0.98, 0.99, 0.995]
-    for i in range(args.nr_reads):
+    for i, (i_acc, isoform) in enumerate(isoforms_generated):
         read = []
         qual = []
-        for j, e in enumerate(exons):
+        # for j, e in enumerate(exons):
+        # r = random.uniform(0,1)
+        # if r > middle_exon_frequnecy:
+        #     # has_exon = 0
+        #     i_acc, isoform = isoforms[1]
+        #     # continue
+        # else:
+        #     i_acc, isoform = isoforms[0]
+
+        #     # has_exon = 1
+
+        was_del = False
+        for l, n in enumerate(isoform):
+            if l <= 15 or l >= len(isoform) - 15: # no errors first and last 15 bases
+                p_correct_reading = 1.0
+                p_error = 1.0 - 0.995
+            else:
+                p_correct_reading = random.choice(error_lvls)
+                p_error = 1.0 - p_correct_reading
+
+            # print(round(10**(-math.log(p_correct_reading))), p_error, -math.log(p_error,10)*10)
+
             r = random.uniform(0,1)
-            if r > exons_probs[j]:
-                continue
-            was_del = False
-            for l, n in enumerate(e):
-                if (j == 0 and l <= 15) or (j == len(exons) - 1 and l >= len(e) - 15): # no errors first and last 15 bases
-                    p_correct_reading = 1.0
-                    p_error = 1.0 - 0.995
-                else:
-                    p_correct_reading = random.choice(error_lvls)
-                    p_error = 1.0 - p_correct_reading
+            if r > p_correct_reading:
+                error = True
+            else:
+                error = False
 
-                # print(round(10**(-math.log(p_correct_reading))), p_error, -math.log(p_error,10)*10)
-
+            if error:
                 r = random.uniform(0,1)
-                if r > p_correct_reading:
-                    error = True
-                else:
-                    error = False
+                if r < 0.6: #deletion
+                    was_del = p_error
+                    pass 
+                elif 0.6 <= r < 0.9:
+                    read.append(random.choice("ACGT"))
+                    qual.append( round(-math.log(p_error,10)*10) )
 
-                if error:
-                    r = random.uniform(0,1)
-                    if r < 0.6: #deletion
-                        was_del = p_error
-                        pass 
-                    elif 0.6 <= r < 0.9:
+                else:
+                    read.append(n)
+                    qual.append( round(-math.log(p_error,10)*10) )
+
+                    r_ins = random.uniform(0,1)
+                    while r_ins >= 0.7:
                         read.append(random.choice("ACGT"))
-                        qual.append( round(-math.log(p_error,10)*10) )
-
-                    else:
                         r_ins = random.uniform(0,1)
-                        while r_ins >= 0.7:
-                            read.append(random.choice("ACGT"))
-                            r_ins = random.uniform(0,1)
-                            qual.append( round(-math.log(p_error,10)*10) )
+                        qual.append( round(-math.log(0.7,10)*10) )
 
-                    # if r < 0.84:
-                    #     read.append(n)
-                    # elif 0.84 <= r <= 0.96:
-                    #     pass 
-                    # else:
-                    #     read.append(n)
-                    #     read.append(random.choice("ACGT"))
-                    #     r_ins = random.uniform(0,1)
-                    #     while r_ins >= 0.96:
-                    #         read.append(random.choice("ACGT"))
-                    #         r_ins = random.uniform(0,1)
+                # if r < 0.84:
+                #     read.append(n)
+                # elif 0.84 <= r <= 0.96:
+                #     pass 
+                # else:
+                #     read.append(n)
+                #     read.append(random.choice("ACGT"))
+                #     r_ins = random.uniform(0,1)
+                #     while r_ins >= 0.96:
+                #         read.append(random.choice("ACGT"))
+                #         r_ins = random.uniform(0,1)
+            else:
+                if was_del: # adding uncertainty from prevous deleted base
+                    read.append(n)
+                    qual.append( round(-math.log(was_del,10)*10) )
                 else:
-                    if was_del: # adding uncertainty from prevous deleted base
-                        read.append(n)
-                        qual.append( round(-math.log(was_del,10)*10) )
-                    else:
-                        read.append(n)
-                        qual.append( round(-math.log(p_error,10)*10) )
-                    was_del = False
+                    read.append(n)
+                    qual.append( round(-math.log(p_error,10)*10) )
+                was_del = False
 
 
 
@@ -136,7 +153,7 @@ def simulate_reads( args, ref ):
             continue
         read_seq = "".join([n for n in read])
         qual_seq = "".join([chr(q + 33) for q in qual])
-        reads[str(i)] = (read_seq, qual_seq)
+        reads[str(i) + "_"+ str(i_acc)] = (read_seq, qual_seq)
 
         # print(read_seq)
         # print(qual_seq)
@@ -166,16 +183,26 @@ def mkdir_p(path):
 def generate_isoforms(args, ref_path):
     isoforms_out = open(os.path.join(args.outfolder,"isoforms.fa"), "w")
     ref = {acc : seq for acc, (seq, qual) in readfq(open(ref_path, 'r'))}
-    # print(ref_path, ref)
     seq = ref[list(ref.keys())[0]]
     exon_coords = [(start, stop) for start, stop in zip(args.coords[:-1], args.coords[1:]) ]
     exons = [seq[j_start: j_stop] for (j_start, j_stop) in exon_coords ]
-    for i in range(1, len(exons)+1):
-        for j, e in enumerate(itertools.combinations(exons,i)):
-            isoform = "".join([ex for ex in e])
-            isoforms_out.write(">{0}\n{1}\n".format("isoform_{0}_{1}".format(i,j), isoform))
 
+    # only two
+    isoform = "".join([ex for ex in exons])
+    isoforms_out.write(">{0}\n{1}\n".format("1", isoform))
+    isoform = "".join([exons[0], exons[2]])
+    isoforms_out.write(">{0}\n{1}\n".format("2", isoform))
     isoforms_out.close()
+
+    # # all combinations
+    # for i in range(1, len(exons)+1):
+    #     for j, e in enumerate(itertools.combinations(exons,i)):
+    #         isoform = "".join([ex for ex in e])
+    #         isoforms_out.write(">{0}\n{1}\n".format("isoform_{0}_{1}".format(i,j), isoform))
+
+    # isoforms_out.close()
+
+
 
 def main(args):
     mkdir_p(args.outfolder)
@@ -187,16 +214,17 @@ def main(args):
         generate_isoforms(args,genome_out.name)
         sys.exit()
     else:
-        ref = {acc : (seq, qual) for acc, (seq, qual) in readfq(open(args.ref, 'r'))}
+        isoforms = [(acc,seq) for acc, (seq, qual) in readfq(open(args.isoforms, 'r'))]
+    # print(isoforms)
+    # check_valid_args(args, ref)
 
-    check_valid_args(args, ref)
-
-    simulate_reads(args, ref)
+    simulate_reads(args, isoforms)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Plot p-minimizers shared.")
     parser.add_argument('--ref', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
+    parser.add_argument('--isoforms', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
     parser.add_argument('--nr_reads', type=int, default = 200, help='Outfolder path')
     parser.add_argument('--outfolder', type=str, help='Outfolder.')
     # parser.add_argument('--outfile', type=str, help='Simulated reads file. If ending in "q", fastq format will be output with all quality values being 10, i.e., "+". ')

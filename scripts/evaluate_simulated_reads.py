@@ -536,6 +536,7 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     error_types_container = {}
     error_types_container_minus_ends = {}
     best_match_container = {}
+    isoform_switches = 0
     not_FN = set()
     # print(consensus_transcripts)
     # if len(consensus_transcripts) == 0:
@@ -563,6 +564,8 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
                 print("Exact", q_acc, "to transcript with copy number:", transcript_copies[ref_acc]) 
                 errors_container[q_acc] = 0
                 best_match_container[q_acc] = ref_acc
+                if int(q_acc.split("_")[-1]) != int(ref_acc):
+                    isoform_switches += 1
                 identity_container[q_acc] = 1.0
                 error_types_container[q_acc] = (0, 0, 0)
                 not_FN.add(ref_acc)
@@ -593,6 +596,10 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
 
             errors_container[q_acc] = fewest_errors
             best_match_container[q_acc] = r_acc_max_id
+            if int(q_acc.split("_")[-1]) != int(r_acc_max_id):
+                isoform_switches += 1
+            # print(q_acc, q_acc.split("_")[-1], r_acc_max_id)
+
             identity_container[q_acc] = 1.0 - (best_ed / float(max(len(q_seq), len(reference_transcripts[r_acc_max_id])) ))
             error_types_container[q_acc] = (best_mismatches, best_insertions, best_deletions)
             error_types_container_minus_ends[q_acc] = best_mismatches_minus_ends,  best_insertions_minus_ends, best_deletions_minus_ends
@@ -624,20 +631,20 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     all_i = sum([i for s,i,d in all_errors])
     all_d = sum([d for s,i,d in all_errors])
 
-    all_errors_minus_ends = sum([sum(error_types_container_minus_ends[acc]) for acc in error_types_container_minus_ends])
+    # all_errors_minus_ends = sum([sum(error_types_container_minus_ends[acc]) for acc in error_types_container_minus_ends])
 
 
-    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3), all_errors_minus_ends))
+    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3), isoform_switches)) #, all_errors_minus_ends))
     
 
-    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del", "s_minus_end", "i_minus_end", "d_minus_end"))
+    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del")) #, "s_minus_end", "i_minus_end", "d_minus_end"))
     for q_acc in errors_container:
         # each ro displays values for a consensus transcript
         if  identity_container[q_acc] > params.sim_cutoff:
             ssw_stats = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])
             # print(ssw_stats, minimizer_graph_c_to_t[q_acc])
             # print()
-            out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc], *error_types_container_minus_ends[q_acc]))
+            out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])) #, *error_types_container_minus_ends[q_acc]))
 
     print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
 
