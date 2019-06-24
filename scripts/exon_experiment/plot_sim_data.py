@@ -20,8 +20,8 @@ sns.set(style="whitegrid")
 
 data=sys.argv[1]
 # f = open(data, "r")
-indata = pd.read_csv(data, sep="\t")
+indata = pd.read_csv(data)
 
-ax = sns.boxplot(x="p", y="rate",  data=indata)
+ax = sns.boxplot(x="p", y="rate", hue = "type", data=indata)
 plt.savefig(sys.argv[2])
 plt.close()
