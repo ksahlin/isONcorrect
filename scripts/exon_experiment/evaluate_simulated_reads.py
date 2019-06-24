@@ -634,17 +634,17 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     # all_errors_minus_ends = sum([sum(error_types_container_minus_ends[acc]) for acc in error_types_container_minus_ends])
 
 
-    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3), isoform_switches)) #, all_errors_minus_ends))
+    out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3), isoform_switches)) #, all_errors_minus_ends))
     
 
-    out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del")) #, "s_minus_end", "i_minus_end", "d_minus_end"))
+    out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del")) #, "s_minus_end", "i_minus_end", "d_minus_end"))
     for q_acc in errors_container:
         # each ro displays values for a consensus transcript
         if  identity_container[q_acc] > params.sim_cutoff:
-            ssw_stats = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])
+            ssw_stats = "{0},{1},{2},{3},{4},{5},{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])
             # print(ssw_stats, minimizer_graph_c_to_t[q_acc])
             # print()
-            out_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])) #, *error_types_container_minus_ends[q_acc]))
+            out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])) #, *error_types_container_minus_ends[q_acc]))
 
     print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
 
