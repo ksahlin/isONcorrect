@@ -630,12 +630,12 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     all_s = sum([s for s,i,d in all_errors])
     all_i = sum([i for s,i,d in all_errors])
     all_d = sum([d for s,i,d in all_errors])
-
+    tot_mut = sum([1 for q_acc, q_seq in consensus_transcripts.items() if int(q_acc.split("_")[-1]) == 2 ])
     # all_errors_minus_ends = sum([sum(error_types_container_minus_ends[acc]) for acc in error_types_container_minus_ends])
 
 
-    out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3),
-                    round(100*all_s/float(total_read_nucleotides), 3), round(100*all_i/float(total_read_nucleotides), 3), round(100*all_d/float(total_read_nucleotides), 3), isoform_switches)) #, all_errors_minus_ends))
+    out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3),
+                    round(100*all_s/float(total_read_nucleotides), 3), round(100*all_i/float(total_read_nucleotides), 3), round(100*all_d/float(total_read_nucleotides), 3), isoform_switches, round(100*(1.0 - isoform_switches/float(tot_mut))) )) #, all_errors_minus_ends))
     
 
     out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del")) #, "s_minus_end", "i_minus_end", "d_minus_end"))

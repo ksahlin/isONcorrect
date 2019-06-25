@@ -20,45 +20,49 @@ results_file=$outbase/"results.tsv"
 plot_file=$outbase/"results"
 
 
-echo -n  "id","type","Depth","p","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions","switches"$'\n' > $results_file
-for id in $(seq 1 1 10)  
-do 
-    for depth in 10 20 50 100 200 500
-    do
-        # which python
-        python $experiment_dir/simulate_reads.py --sim_genome_len 300 --coords 0 100 200 300 --outfolder $outbase/$id/ --probs 1.0 $p 1.0  --nr_reads $depth > /dev/null
-        for p in $(seq 0.1 0.1 0.5) # $(seq 0.1 0.1 1.0)  # $(seq 0.1 0.1 0.2)
-        do
-            python $experiment_dir/simulate_reads.py --isoforms $outbase/$id/isoforms.fa  --coords 0 100 200 300 --outfolder $outbase/$id/$p --probs 1.0 $p 1.0  --nr_reads $depth #> /dev/null
-            # if [ "$1" == "exact" ]
-            #     then
-            #         python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80 --exact   &> /dev/null
-            #     else
-            #         python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80   &> /dev/null
-            # fi
+# echo -n  "id","type","Depth","p","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions","switches","Retained"$'\n' > $results_file
+# for id in $(seq 1 1 10)  
+# do 
+#     for depth in 10 #50 100  #200 500
+#     do
+#         # which python
+#         python $experiment_dir/simulate_reads.py --sim_genome_len 300 --coords 0 100 200 300 --outfolder $outbase/$id/ --probs 1.0 $p 1.0  --nr_reads $depth > /dev/null
+#         for p in $(seq 0.1 0.2 0.5) # $(seq 0.1 0.1 1.0)  # $(seq 0.1 0.1 0.2)
+#         do
+#             python $experiment_dir/simulate_reads.py --isoforms $outbase/$id/isoforms.fa  --coords 0 100 200 300 --outfolder $outbase/$id/$p --probs 1.0 $p 1.0  --nr_reads $depth #> /dev/null
+#             # if [ "$1" == "exact" ]
+#             #     then
+#             #         python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80 --exact   &> /dev/null
+#             #     else
+#             #         python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80   &> /dev/null
+#             # fi
 
-            python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80  &> /dev/null            
-            python $experiment_dir/evaluate_simulated_reads.py  $outbase/$id/$p/isoncorrect/corrected_reads.fastq  $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation > /dev/null
-            echo -n  $id,approx,$depth,$p,&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv 
-            echo -n  $id,approx,$depth,$p, >> $results_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv >> $results_file
-
-
-            python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80 --exact   &> /dev/null            
-            python $experiment_dir/evaluate_simulated_reads.py  $outbase/$id/$p/isoncorrect/corrected_reads.fastq  $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation > /dev/null
-            echo -n  $id,exact,$depth,$p,&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv 
-            echo -n  $id,exact,$depth,$p, >> $results_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv >> $results_file
-
-            fastq2fasta $outbase/$id/$p/reads.fq $outbase/$id/$p/reads.fa
-            python $experiment_dir/evaluate_simulated_reads.py   $outbase/$id/$p/reads.fa $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation_reads > /dev/null
-            echo -n  $id,original,$depth,$p,&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation_reads/results.tsv 
-            echo -n  $id,original,$depth,$p, >> $results_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation_reads/results.tsv  >> $results_file
-        done
-    done
-done
+#             python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80  &> /dev/null            
+#             python $experiment_dir/evaluate_simulated_reads.py  $outbase/$id/$p/isoncorrect/corrected_reads.fastq  $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation > /dev/null
+#             echo -n  $id,approx,$depth,$p,&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv 
+#             echo -n  $id,approx,$depth,$p, >> $results_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv >> $results_file
 
 
-echo  $experiment_dir/plot_sim_data.py $results_file $plot_file
-python $experiment_dir/plot_sim_data.py $results_file $plot_file"_tot.pdf" Total
-python $experiment_dir/plot_sim_data.py $results_file $plot_file"_subs.pdf" Substitutions
-python $experiment_dir/plot_sim_data.py $results_file $plot_file"_ind.pdf" Insertions
-python $experiment_dir/plot_sim_data.py $results_file $plot_file"_del.pdf" Deletions
+#             python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$p/reads.fq   --outfolder $outbase/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80 --exact   &> /dev/null            
+#             python $experiment_dir/evaluate_simulated_reads.py  $outbase/$id/$p/isoncorrect/corrected_reads.fastq  $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation > /dev/null
+#             echo -n  $id,exact,$depth,$p,&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv 
+#             echo -n  $id,exact,$depth,$p, >> $results_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation/results.tsv >> $results_file
+
+#             fastq2fasta $outbase/$id/$p/reads.fq $outbase/$id/$p/reads.fa
+#             python $experiment_dir/evaluate_simulated_reads.py   $outbase/$id/$p/reads.fa $outbase/$id/isoforms.fa $outbase/$id/$p/isoncorrect/evaluation_reads > /dev/null
+#             echo -n  $id,original,$depth,$p,&& head -n 1 $outbase/$id/$p/isoncorrect/evaluation_reads/results.tsv 
+#             echo -n  $id,original,$depth,$p, >> $results_file && head -n 1 $outbase/$id/$p/isoncorrect/evaluation_reads/results.tsv  >> $results_file
+#         done
+#     done
+# done
+
+
+# echo  $experiment_dir/plot_mutation_data.py $results_file $plot_file
+# python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_tot.pdf" Total
+# python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_subs.pdf" Substitutions
+# python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_ind.pdf" Insertions
+# python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_del.pdf" Deletions
+
+python $experiment_dir/plot_frac_switches.py $results_file $plot_file"_mut_retained.pdf"
+
+

@@ -190,8 +190,17 @@ def generate_isoforms(args, ref_path):
     # only two
     isoform = "".join([ex for ex in exons])
     isoforms_out.write(">{0}\n{1}\n".format("1", isoform))
-    isoform = "".join([exons[0], exons[2]])
+    
+    nucl = exons[1][int(len(exons[1])/2)]
+    new_nucl = set(["A","C","G","T"]) - set([nucl])
+    subs = random.choice(list(new_nucl))
+    assert nucl != subs
+    mutated_exon = exons[1][ : int(len(exons[1])/2)] + subs + exons[1][ int(len(exons[1])/2) +1 :]
+    assert len(mutated_exon) == len(exons[1])
+    exons[1] = mutated_exon
+    isoform = "".join([ex for ex in exons])
     isoforms_out.write(">{0}\n{1}\n".format("2", isoform))
+    
     isoforms_out.close()
 
     # # all combinations
