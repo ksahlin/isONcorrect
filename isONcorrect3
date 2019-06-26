@@ -195,7 +195,6 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     # print(spoa_ref)
     #### TMP
     #### TMP
-
     partition = {"ref" : (0, spoa_ref, spoa_ref, 1)}
     # partition = {"ref" : (0, r_seq, r_seq, 1)}
     # for q_id, (s_tmp, s_qual, pos1, pos2) in curr_best_seqs.items():
@@ -246,6 +245,14 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     # print(h_pol_counts)    
     assert len(alignment_matrix["ref"]) == len(h_pol_counts)
 
+    # if "CCTCAGCA" in spoa_ref:
+    #     print("Minor", spoa_ref)
+    #     # print(PFM)
+
+    # if "CCTCTGCA" in spoa_ref:
+    #     print("Major", spoa_ref)
+    #     # indx = spoa_ref.index("CCTCTGCA")
+    #     # print(PFM)
 
     for i, d in enumerate(PFM):
         n_max, count_max = max(d.items(), key = lambda x: x[1])
@@ -268,20 +275,45 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
         #         count_max = c
 
         # curr_read_corr = []
+        ref_nucl = alignment_matrix["ref"][i]
         for q_id_tuple in alignment_matrix:
             if q_id_tuple == "ref":
                 continue
 
-            if n_max != '-' and alignment_matrix[q_id_tuple][i] != '-': 
-                # variants = d.items()
-                # if n_max != alignment_matrix[q_id_tuple][i]:
-                    # print("here!!!!!!!!!", count_max, d[alignment_matrix[q_id_tuple][i]])
-
-                if n_max != alignment_matrix[q_id_tuple][i] and count_max * v_depth_ratio_threshold <= d[alignment_matrix[q_id_tuple][i]]: # potential variant position
-                    # print("SAVED varinant")
-                    other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
+            read_nucl = alignment_matrix[q_id_tuple][i]
+            if read_nucl != "-" and ref_nucl != "-" and read_nucl != ref_nucl:
+                if d[ref_nucl] * v_depth_ratio_threshold <= d[read_nucl]: # potential variant position
+                    # print(q_id_tuple[0])
+                    # if q_id_tuple[0] == "curr_read":
+                    #     print("Preserving", read_nucl, "from", ref_nucl,  d[ref_nucl], v_depth_ratio_threshold, d[read_nucl], q_id_tuple)
+                    other_corrections[q_id_tuple].append(read_nucl)
                 else:
-                    other_corrections[q_id_tuple].append(n_max)
+                    other_corrections[q_id_tuple].append(ref_nucl)
+
+            else:
+                other_corrections[q_id_tuple].append(ref_nucl)
+
+
+
+            # OLD METHOD
+            
+            # if alignment_matrix["ref"][i] != "-" and alignment_matrix[q_id_tuple][i] != "-" and alignment_matrix["ref"][i] != alignment_matrix[q_id_tuple][i]:
+            #     if d[alignment_matrix["ref"][i]] * v_depth_ratio_threshold <= d[alignment_matrix[q_id_tuple][i]]: # potential variant position
+            #         # print("SAVED varinant")
+            #         other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
+            #     else:
+            #         other_corrections[q_id_tuple].append(n_max)              
+
+            # if n_max != '-' and alignment_matrix[q_id_tuple][i] != '-': 
+            #     # variants = d.items()
+            #     # if n_max != alignment_matrix[q_id_tuple][i]:
+            #         # print("here!!!!!!!!!", count_max, d[alignment_matrix[q_id_tuple][i]])
+
+            #     if n_max != alignment_matrix[q_id_tuple][i] and count_max * v_depth_ratio_threshold <= d[alignment_matrix[q_id_tuple][i]]: # potential variant position
+            #         # print("SAVED varinant")
+            #         other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
+            #     else:
+            #         other_corrections[q_id_tuple].append(n_max)
             
             # elif n_max == '-' and alignment_matrix[q_id_tuple][i] != '-':
             #     if n_max != alignment_matrix[q_id_tuple][i] and count_max * v_depth_ratio_threshold < d[alignment_matrix[q_id_tuple][i]]: # potential variant position
@@ -291,48 +323,32 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
             #         other_corrections[q_id_tuple].append(n_max)
 
 
-            else:
-                other_corrections[q_id_tuple].append(n_max)
-
-            # read_nucl = alignment_matrix[q_id_tuple][i]
-            # read_nucl_count = d[read_nucl]
-            # if n_max == "-":
-            #     # if read_nucl != "-":
-            #     #     print(read_nucl, read_nucl_count, count_max, weight )
+            # else:
+            #     # if d[alignment_matrix["ref"][i]] * v_depth_ratio_threshold <= d[alignment_matrix[q_id_tuple][i]]: # potential variant position
+            #     #     # print("SAVED varinant")
+            #     #     other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
+            #     # else:
+            #     #     other_corrections[q_id_tuple].append(n_max)   
             #     other_corrections[q_id_tuple].append(n_max)
 
-            #     # print(read_nucl_count, tot_depth, h_pol_counts[i], count_max, n_max)
-            #     # if read_nucl_count < del_ratio*weight:
-            #     #     other_corrections[q_id_tuple].append(n_max)
-            #     # else:
-            #     #     other_corrections[q_id_tuple].append(read_nucl)
-            # else:
-            #     if read_nucl == "-":
-            #         other_corrections[q_id_tuple].append(n_max)
 
-            #     elif read_nucl_count < v_depth_ratio_threshold * count_max:
-
-            #     # # curr_read_corr.append(n_max)
-            #     # if read_nucl != "-" and read_nucl_count > 3 and read_nucl_count > 0.2 * count_max: # keeping variant
-            #     #     other_corrections[q_id_tuple].append(read_nucl)                
-            #     # else:
-            #         other_corrections[q_id_tuple].append(n_max)
-            #     else:
-            #         other_corrections[q_id_tuple].append(read_nucl)
 
     other_corrections_final = defaultdict(list)
     for q_id_tuple in other_corrections:
-        curr_read_corr = other_corrections[q_id_tuple]
-        curr_read_corr = "".join([n for n in curr_read_corr if n != "-"])
+        other_read_corr = other_corrections[q_id_tuple]
+        other_read_corr = "".join([n for n in other_read_corr if n != "-"])
         # print(q_id_tuple)
         q_id, q_p1, q_p2 = q_id_tuple
         # print()
-        other_corrections_final[q_id].append( (q_p1 + k_size, q_p2, weight, curr_read_corr[k_size:-k_size] ))
-        # if curr_read_corr[k_size:-k_size] == "ACTCAAGCATTA":
+        other_corrections_final[q_id].append( (q_p1 + k_size, q_p2, weight, other_read_corr[k_size:-k_size] ))
+
+        if q_id == "curr_read":
+            curr_read_corr = "".join([n for n in other_read_corr if n != "-"])
+        # if other_read_corr[k_size:-k_size] == "ACTCAAGCATTA":
         #     print(q_id, curr_best_seqs[q_id][2], curr_best_seqs[q_id][3])
         #     print(curr_best_seqs[q_id][2], curr_best_seqs[q_id][3])
         #     sys.exit()
-    # print(curr_read_corr)
+    # print(other_read_corr)
     # sys.exit()
     return curr_read_corr[k_size:-k_size], other_corrections_final
 

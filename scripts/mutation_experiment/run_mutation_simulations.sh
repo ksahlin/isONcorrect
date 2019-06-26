@@ -21,13 +21,13 @@ plot_file=$outbase/"results"
 
 
 echo -n  "id","type","Depth","p","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions","switches_to_major","switches_to_minor","Minor_Retained","Major_Retained"$'\n' > $results_file
-for id in $(seq 1 1 3)  
+for id in $(seq 1 1 10)  
 do 
-    for depth in 100 # 50 # 100  #200 500
+    for depth in 10 20 50 # 50 # 100  #200 500
     do
         # which python
         python $experiment_dir/simulate_reads.py --sim_genome_len 300 --coords 0 100 200 300 --outfolder $outbase/$id/ --probs 1.0 $p 1.0  --nr_reads $depth > /dev/null
-        for p in $(seq 0.1 0.2 0.5) # $(seq 0.1 0.1 1.0)  # $(seq 0.1 0.1 0.2)
+        for p in $(seq 0.1 0.1 0.5) # $(seq 0.1 0.1 1.0)  # $(seq 0.1 0.1 0.2)
         do
             python $experiment_dir/simulate_reads.py --isoforms $outbase/$id/isoforms.fa  --coords 0 100 200 300 --outfolder $outbase/$id/$p --probs 1.0 $p 1.0  --nr_reads $depth #> /dev/null
             # if [ "$1" == "exact" ]
