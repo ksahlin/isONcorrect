@@ -58,10 +58,10 @@ plot_file=$outbase/"results"
 
 
 # echo  $experiment_dir/plot_mutation_data.py $results_file $plot_file
-# python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_tot.pdf" Total
-# python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_subs.pdf" Substitutions
-# python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_ind.pdf" Insertions
-# python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_del.pdf" Deletions
+python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_tot.pdf" Total
+python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_subs.pdf" Substitutions
+python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_ind.pdf" Insertions
+python $experiment_dir/plot_mutation_data.py $results_file $plot_file"_del.pdf" Deletions
 
 python $experiment_dir/plot_frac_switches.py $results_file $plot_file"_minor_mut_retained.pdf" $plot_file"_major_mut_retained.pdf"
 
