@@ -57,8 +57,8 @@ do
 done
 
 
-echo  $experiment_dir/plot_sim_data.py $results_file $plot_file
-python $experiment_dir/plot_sim_data.py $results_file $plot_file"_tot.pdf" Total
-python $experiment_dir/plot_sim_data.py $results_file $plot_file"_subs.pdf" Substitutions
-python $experiment_dir/plot_sim_data.py $results_file $plot_file"_ind.pdf" Insertions
-python $experiment_dir/plot_sim_data.py $results_file $plot_file"_del.pdf" Deletions
+echo  $experiment_dir/plot_exon_data.py $results_file $plot_file
+python $experiment_dir/plot_exon_data.py $results_file $plot_file"_tot.pdf" Total
+python $experiment_dir/plot_exon_data.py $results_file $plot_file"_subs.pdf" Substitutions
+python $experiment_dir/plot_exon_data.py $results_file $plot_file"_ind.pdf" Insertions
+python $experiment_dir/plot_exon_data.py $results_file $plot_file"_del.pdf" Deletions
