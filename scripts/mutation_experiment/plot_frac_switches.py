@@ -22,12 +22,13 @@ data=sys.argv[1]
 # f = open(data, "r")
 indata = pd.read_csv(data)
 # y=sys.argv[3]
-g = sns.catplot(x="p", y="Retained", col="Depth", col_wrap=3,
+
+g = sns.catplot(x="p", y="Minor_Retained", col="Depth", col_wrap=3,
             data=indata, hue="type", hue_order= ["exact", "approx", "original"],
             kind="violin", aspect=1)
 
-g.set(ylim=(0,100))
-g.set_ylabels("Mutation  retained %")
+g.set(ylim=(-50,100))
+g.set_ylabels("Minor mutation retained %")
 g.set_xlabels("Fraction mutation present in data")
 
 # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
@@ -35,4 +36,16 @@ g.set_xlabels("Fraction mutation present in data")
 # ax.set_ylabel("Error rate %")
 
 plt.savefig(sys.argv[2])
+plt.close()
+
+
+g = sns.catplot(x="p", y="Major_Retained", col="Depth", col_wrap=3,
+            data=indata, hue="type", hue_order= ["exact", "approx", "original"],
+            kind="violin", aspect=1)
+
+g.set(ylim=(-50,100))
+g.set_ylabels("Major mutation retained %")
+g.set_xlabels("Fraction mutation present in data")
+
+plt.savefig(sys.argv[3])
 plt.close()
