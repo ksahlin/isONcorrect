@@ -536,7 +536,8 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     error_types_container = {}
     error_types_container_minus_ends = {}
     best_match_container = {}
-    isoform_switches = 0
+    isoform_switches_minor_to_major = 0
+    isoform_switches_major_to_minor = 0
     not_FN = set()
     # print(consensus_transcripts)
     # if len(consensus_transcripts) == 0:
@@ -565,7 +566,7 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
                 errors_container[q_acc] = 0
                 best_match_container[q_acc] = ref_acc
                 if int(q_acc.split("_")[-1]) != int(ref_acc):
-                    isoform_switches += 1
+                    isoform_switches_minor_to_major += 1
                 identity_container[q_acc] = 1.0
                 error_types_container[q_acc] = (0, 0, 0)
                 not_FN.add(ref_acc)
@@ -576,6 +577,8 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
 
     else:
         print("Start1")
+        isoform1, isoform2 = reference_transcripts["1"], reference_transcripts["2"]
+        # mutation = [(i, p1, p2) for i, p1,p2 in enumerate(zip(isoform1,isoform2)) if  p1 != p2][0] 
         best_edit_distances = get_minimizers_2set_simple(consensus_transcripts, reference_transcripts)
         minimizer_graph_c_to_t, minimizer_graph_c_to_t_minus_ends = get_ssw_alignments(best_edit_distances, consensus_transcripts, reference_transcripts)
         for i, (q_acc, q_seq) in enumerate(minimizer_graph_c_to_t.items()): 
@@ -583,6 +586,7 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
             r_acc_max_id = "NONE"
             fewest_errors = len(q_seq)
             best_mismatches, best_insertions, best_deletions = len(q_seq), len(q_seq), len(q_seq)
+            tie = False
             for j, (r_acc, r_seq) in enumerate(minimizer_graph_c_to_t[q_acc].items()):
                 deletions, insertions, mismatches = minimizer_graph_c_to_t[q_acc][r_acc]
                 edit_distance =  deletions + insertions + mismatches
@@ -593,11 +597,19 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
                     best_mismatches, best_insertions, best_deletions = mismatches, insertions, deletions  
 
                     best_deletions_minus_ends, best_insertions_minus_ends, best_mismatches_minus_ends = minimizer_graph_c_to_t_minus_ends[q_acc][r_acc]
+                elif edit_distance == best_ed: # error at mutation site
+                    tie = True
 
             errors_container[q_acc] = fewest_errors
             best_match_container[q_acc] = r_acc_max_id
-            if int(q_acc.split("_")[-1]) != int(r_acc_max_id):
-                isoform_switches += 1
+            if int(q_acc.split("_")[-1]) != int(r_acc_max_id) and not tie:
+                if int(q_acc.split("_")[-1]) == 2 and int(r_acc_max_id) == 1:
+                    isoform_switches_minor_to_major += 1
+                elif int(q_acc.split("_")[-1]) == 1 and int(r_acc_max_id) == 2:
+                    isoform_switches_major_to_minor += 1
+                else: #Bug
+                    sys.exit()
+
             # print(q_acc, q_acc.split("_")[-1], r_acc_max_id)
 
             identity_container[q_acc] = 1.0 - (best_ed / float(max(len(q_seq), len(reference_transcripts[r_acc_max_id])) ))
@@ -630,12 +642,14 @@ def get_best_match(consensus_transcripts, reference_transcripts, outfolder, tran
     all_s = sum([s for s,i,d in all_errors])
     all_i = sum([i for s,i,d in all_errors])
     all_d = sum([d for s,i,d in all_errors])
-    tot_mut = sum([1 for q_acc, q_seq in consensus_transcripts.items() if int(q_acc.split("_")[-1]) == 2 ])
+    tot_minor = sum([1 for q_acc, q_seq in consensus_transcripts.items() if int(q_acc.split("_")[-1]) == 2 ])
+    tot_major = len(consensus_transcripts.items()) - tot_minor
     # all_errors_minus_ends = sum([sum(error_types_container_minus_ends[acc]) for acc in error_types_container_minus_ends])
 
 
-    out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3),
-                    round(100*all_s/float(total_read_nucleotides), 3), round(100*all_i/float(total_read_nucleotides), 3), round(100*all_d/float(total_read_nucleotides), 3), isoform_switches, round(100*(1.0 - isoform_switches/float(tot_mut))) )) #, all_errors_minus_ends))
+    out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3),
+                    round(100*all_s/float(total_read_nucleotides), 3), round(100*all_i/float(total_read_nucleotides), 3), round(100*all_d/float(total_read_nucleotides), 3), 
+                    isoform_switches_minor_to_major, isoform_switches_major_to_minor, round(100*(1.0 - isoform_switches_minor_to_major/float(tot_minor))),  round(100*(1.0 - isoform_switches_major_to_minor/float(tot_major))) )) #, all_errors_minus_ends))
     
 
     out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del")) #, "s_minus_end", "i_minus_end", "d_minus_end"))

@@ -277,11 +277,20 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
                 # if n_max != alignment_matrix[q_id_tuple][i]:
                     # print("here!!!!!!!!!", count_max, d[alignment_matrix[q_id_tuple][i]])
 
-                if n_max != alignment_matrix[q_id_tuple][i] and count_max * v_depth_ratio_threshold < d[alignment_matrix[q_id_tuple][i]]: # potential variant position
+                if n_max != alignment_matrix[q_id_tuple][i] and count_max * v_depth_ratio_threshold <= d[alignment_matrix[q_id_tuple][i]]: # potential variant position
                     # print("SAVED varinant")
                     other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
                 else:
                     other_corrections[q_id_tuple].append(n_max)
+            
+            # elif n_max == '-' and alignment_matrix[q_id_tuple][i] != '-':
+            #     if n_max != alignment_matrix[q_id_tuple][i] and count_max * v_depth_ratio_threshold < d[alignment_matrix[q_id_tuple][i]]: # potential variant position
+            #         # print("SAVED varinant")
+            #         other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
+            #     else:
+            #         other_corrections[q_id_tuple].append(n_max)
+
+
             else:
                 other_corrections[q_id_tuple].append(n_max)
 
