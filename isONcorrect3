@@ -288,10 +288,10 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
                     #     print("Preserving", read_nucl, "from", ref_nucl,  d[ref_nucl], v_depth_ratio_threshold, d[read_nucl], q_id_tuple)
                     other_corrections[q_id_tuple].append(read_nucl)
                 else:
-                    other_corrections[q_id_tuple].append(ref_nucl)
+                    other_corrections[q_id_tuple].append(n_max)
 
             else:
-                other_corrections[q_id_tuple].append(ref_nucl)
+                other_corrections[q_id_tuple].append(n_max)
 
 
 

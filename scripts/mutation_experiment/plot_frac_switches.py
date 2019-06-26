@@ -27,7 +27,7 @@ g = sns.catplot(x="p", y="Minor_Retained", col="Depth", col_wrap=3,
             data=indata, hue="type", hue_order= ["exact", "approx", "original"],
             kind="violin", aspect=1)
 
-g.set(ylim=(-50,100))
+g.set(ylim=(0,100))
 g.set_ylabels("Minor mutation retained %")
 g.set_xlabels("Fraction mutation present in data")
 
@@ -43,7 +43,7 @@ g = sns.catplot(x="p", y="Major_Retained", col="Depth", col_wrap=3,
             data=indata, hue="type", hue_order= ["exact", "approx", "original"],
             kind="violin", aspect=1)
 
-g.set(ylim=(-50,100))
+g.set(ylim=(0,100))
 g.set_ylabels("Major mutation retained %")
 g.set_xlabels("Fraction mutation present in data")
 
