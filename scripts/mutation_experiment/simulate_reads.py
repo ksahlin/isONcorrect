@@ -56,9 +56,9 @@ def simulate_reads( args, isoforms ):
     outfile = open(os.path.join(args.outfolder,"reads.fq"), "w")
     is_fastq = True #if outfile[-1] == "q" else False
     middle_exon_frequnecy = args.probs[1]
-    no_middel_exon = [(isoforms[0][0], isoforms[0][1]) for i in range(int(round(args.nr_reads*(1-args.probs[1]))))]
-    has_middel_exon = [(isoforms[1][0], isoforms[1][1]) for i in range(int(round(args.nr_reads*args.probs[1])))]
-    isoforms_generated = has_middel_exon + no_middel_exon
+    no_mutation = [(isoforms[0][0], isoforms[0][1]) for i in range(int(round(args.nr_reads*(1-args.probs[1]))))]
+    has_mutation = [(isoforms[1][0], isoforms[1][1]) for i in range(int(round(args.nr_reads*args.probs[1])))]
+    isoforms_generated =  no_mutation + has_mutation
     # print(len(has_middel_exon), len(no_middel_exon), args.nr_reads)
     assert len(isoforms_generated) == args.nr_reads
     # seq, acc = isoforms[list(isoforms.items())
