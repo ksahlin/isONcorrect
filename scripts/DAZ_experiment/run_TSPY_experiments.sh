@@ -18,12 +18,12 @@ exon_file=""
 #         plot_file=$outbase/"results_approximate"
 # fi
 
-results_file=$outbase/"results.tsv"
-plot_file=$outbase/"results"
 mut_rate=$1
 family_size=$2
 abundance=$3
 gene_member="TSPY3"
+results_file=$outbase/"results_"$mut_rate"_"$abundance"_"$gene_member".tsv"
+plot_file=$outbase/"results_"$mut_rate"_"$abundance"_"$gene_member
 
 echo -n  "id","type","Depth","p","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions","switches"$'\n' > $results_file
 
