@@ -28,7 +28,7 @@ g = sns.catplot(x="p", y=y, col="Depth", col_wrap=3,
 
 g.set(ylim=(0,15))
 g.set_ylabels("Error rate %")
-g.set_xlabels("Fraction middle exon included")
+g.set_xlabels("Mutation rate")
 
 # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
 # ax.set_ylim(0,15)
