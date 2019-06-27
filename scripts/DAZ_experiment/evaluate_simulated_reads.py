@@ -605,7 +605,7 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
             errors_container[q_acc] = fewest_errors
             best_match_container[q_acc] = r_acc_max_id
 
-            corrected_read_abundances[ acc.split("_")[0] ] += 1
+            corrected_read_abundances[ q_acc.split("_")[0] ] += 1
 
             # print(q_acc, q_acc.split("_")[-1], r_acc_max_id)
 
