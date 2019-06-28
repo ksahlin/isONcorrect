@@ -33,14 +33,14 @@ plot_file=$outbase/"results_"$mut_rate"_"$abundance"_"$gene_member
 # echo -n  "id","type","Depth","mut","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions","switches"$'\n' > $results_file
 # echo -n  "id"$'\t'"Depth"$'\t'"mut"$'\t'"transcript_id"$'\t'"abundance_original"$'\t'"abundance_corrected"$'\n' > $results_file2
 
-# # python $experiment_dir/get_exons.py $database $outbase
+# python $experiment_dir/get_exons.py $database $outbase
 
 # for id in $(seq 1 1 2)  
 # do 
 #     python $experiment_dir/generate_transcripts.py --exon_file $outbase/$gene_member"_exons.fa"  $outbase/$id/biological_material.fa --gene_member $gene_member  --family_size $family_size --isoform_distribution exponential  --mutation_rate $mut_rate  &> /dev/null
 #     python $experiment_dir/generate_abundance.py --transcript_file $outbase/$id/biological_material.fa $outbase/$id/biological_material_abundance.fa --abundance $abundance  &> /dev/null
 
-#     for depth in 50 100 200 #20 #20 50 100 #10 20 #50 # 100 200 500 1000 5000 10000
+#     for depth in 50 100 #200 #20 #20 50 100 #10 20 #50 # 100 200 500 1000 5000 10000
 #     do
 #         python $experiment_dir/generate_ont_reads.py $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/reads.fq $depth &> /dev/null
 
