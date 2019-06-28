@@ -22,7 +22,7 @@ data=sys.argv[1]
 # f = open(data, "r")
 indata = pd.read_csv(data)
 y=sys.argv[3]
-g = sns.catplot(x="p", y=y, col="Depth", col_wrap=3,
+g = sns.catplot(x="mut", y=y, col="Depth", col_wrap=3,
             data=indata, hue="type", hue_order= ["exact", "approx", "original"],
             kind="violin", aspect=1)
 

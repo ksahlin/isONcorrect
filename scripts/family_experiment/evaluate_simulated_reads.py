@@ -529,6 +529,7 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
 
 def get_best_match(corrected_reads, reference_transcripts, reference_transcripts_abundances, outfolder, transcript_abundances, transcript_copies, sampled_dict, params):
     out_file = open(os.path.join(outfolder, "results.tsv"), "w")
+    out_file2 = open(os.path.join(outfolder, "results2.tsv"), "w")
     #aligner = ssw.Aligner(gap_open=2, gap_extend=1)
     # do SW
     nr_unique_refs = len(reference_transcripts)
@@ -641,6 +642,8 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
     sorted_original_abundances = sorted(original_abundances.items(), key = lambda x: x[1], reverse=True)
     print("Corrected abundances:", [corrected_read_abundances[acc] for acc, ab in sorted_original_abundances])
     print("Original abundances:", [ab for acc, ab in sorted_original_abundances])
+    for acc, ab in sorted_original_abundances:
+        out_file2.write("{0}\t{1}\t{2}\n".format(acc, ab, corrected_read_abundances[acc]))
 
     out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del")) #, "s_minus_end", "i_minus_end", "d_minus_end"))
     for q_acc in errors_container:
