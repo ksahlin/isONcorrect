@@ -82,6 +82,8 @@ def main(args):
         transcript = sequence_transcripts[acc]
         read_acc, read, qual = simulate_read(i, acc, transcript)
         ont_reads[read_acc] = (read, qual)
+        if i % 5000 == 0:
+            print(i, "reads simulated.")
 
 
     # for acc, abundance in misc_functions.iteritems(reads_generated_log):
