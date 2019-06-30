@@ -28,8 +28,10 @@ do
 #     do
     # echo  python $experiment_dir/simulate_reads.py $database $outbase/$id/reads.fq $depth
     # python $experiment_dir/simulate_reads.py $database $outbase/$id/reads.fq $depth #&> /dev/null
-    python $isonclust_dir/isONclust --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/ --k 11 --w 15  #&> /dev/null            
-    # python $isonclust_dir/isONclust write_fastq --clusters $outbase/$id/isonclust/final_clusters.csv --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/fastq --N 2  &> /dev/null            
+    echo python $isonclust_dir/isONclust --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/ --k 13 --w 20
+    # python $isonclust_dir/isONclust --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/ --k 13 --w 20  #&> /dev/null            
+    
+    # python $isonclust_dir/isONclust write_fastq --clusters $outbase/$id/isonclust/final_clusters.csv --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/fastq --N 2  #&> /dev/null            
 
     # python $isoncorrect_dir/run_isoncorrect --t 2 --fastq_folder $outbase/$id/isonclust/fastq  --outfolder $outbase/$id/isoncorrect/ --k 7 --w 10 --xmax 80  &> /dev/null            
 
