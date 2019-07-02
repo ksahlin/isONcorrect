@@ -60,7 +60,13 @@ def main(args):
             # print(cl_id, outfolder, read_fastq_file, directory)
             fastq_file_path = os.path.join(os.fsdecode(directory), read_fastq_file)
             # print(fastq_file_path)
-            instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id)) )
+            if args.keep_old:
+                if os.path.isfile(os.path.join(outfolder, "corrected_reads.fastq")): 
+                    print("already computed cluster", cl_id)
+                else:
+                    instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id)) )
+            else:
+                instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id)) )
             # print(os.path.join(directory, read_fastq_file))
             continue
         else:
@@ -108,6 +114,8 @@ if __name__ == '__main__':
     parser.add_argument('--xmin', type=int, default=14, help='Upper interval length')
     parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.2, help='Upper interval length')
+    parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results')
+
     parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
                                                                  not to be used for clusters with over ~500 reads)')
   
