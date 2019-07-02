@@ -230,7 +230,7 @@ def create_multialignment_format_NEW(query_to_target_positioned_dict, start, sto
     position_solutions = {max_ins : {} for max_ins in max_insertions}
 
     for nucl in ["A", "G", "C", "T", "U", "-"]:
-        position_solutions[nucl] = {"A": ["A"], "G": ["G"], "C": ["C"], "T": ["T"], "U": ["U"], "-": ["-"]}
+        position_solutions[nucl] = {"A": ["A"], "G": ["G"], "C": ["C"], "T": ["T"], "U": ["U"], "-": ["-"], "N": ["N"]}
 
     for p in range(nr_pos):
         max_ins = max_insertions[p]

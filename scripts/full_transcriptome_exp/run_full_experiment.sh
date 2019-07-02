@@ -30,10 +30,9 @@ do
     # python $experiment_dir/simulate_reads.py $database $outbase/$id/reads.fq $depth #&> /dev/null
     # echo python $isonclust_dir/isONclust --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/ --k 13 --w 25
     # python $isonclust_dir/isONclust --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/ --k 13 --w 25  #&> /dev/null            
-    
-    python $isonclust_dir/isONclust write_fastq --clusters $outbase/$id/isonclust/final_clusters.csv --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/fastq --N 2  #&> /dev/null            
+    # python $isonclust_dir/isONclust write_fastq --clusters $outbase/$id/isonclust/final_clusters.csv --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/fastq --N 20  #&> /dev/null            
 
-    # python $isoncorrect_dir/run_isoncorrect --t 2 --fastq_folder $outbase/$id/isonclust/fastq  --outfolder $outbase/$id/isoncorrect/ --k 7 --w 10 --xmax 80  &> /dev/null            
+    python $isoncorrect_dir/run_isoncorrect --keep_old --t 2 --fastq_folder $outbase/$id/isonclust/fastq  --outfolder $outbase/$id/isoncorrect/ --k 7 --w 10 --xmax 80  # &> /dev/null            
 
     # all_clusters_fastq = expand('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont_min_phred_q6/fastq_clusters/{clusterid}/corrected_reads.fastq', clusterid=[str(i) for i in range(0,62747)])
     # > $corrected_reads_fastq
