@@ -17,6 +17,8 @@ depth=$1
 error_rates_file=$outbase/"error_rates_"$depth".tsv"
 results_file2=$outbase/"abundance_"$depth".tsv"
 plot_file=$outbase/"results_"$depth
+corrected_reads_mappings=$outbase/"corrected_"$depth".sam"
+original_reads_mappings=$outbase/"original_"$depth".sam"
 
 # echo -n  "id","type","Depth","mut","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions","switches"$'\n' > $results_file
 echo -n  "id"$'\t'"Depth"$'\t'"mut"$'\t'"transcript_id"$'\t'"abundance_original"$'\t'"abundance_corrected"$'\n' > $results_file2
@@ -55,9 +57,10 @@ do
     #     done
         
 
-    python $experiment_dir/get_error_rates.py  $database $outbase/$id/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
-    # minimap2 --ax .. $database  $corrected_reads_fastq > $corrected_reads_mappings
-    # minimap2 --ax .. $database  $outbase/$id/reads.fq > $original_reads_mappings
+    # python $experiment_dir/get_error_rates.py  $database $outbase/$id/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
+    
+    minimap2 -ax map-ont --eqx $database  $corrected_reads_fastq > $corrected_reads_mappings
+    minimap2 -ax map-ont --eqx $database  $outbase/$id/reads.fq > $original_reads_mappings
     # python $experiment_dir/evaluate_abundance.py  $corrected_reads_mappings  $original_reads_mappings  $outbase/$id/isoncorrect/evaluation #&> /dev/null
 
     
