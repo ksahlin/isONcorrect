@@ -14,11 +14,11 @@ IFS=$'\n'       # make newlines the only separator
 set -f          # disable globbing
 
 depth=$1 
-results_file=$outbase/"results_"$depth".tsv"
+error_rates_file=$outbase/"error_rates_"$depth".tsv"
 results_file2=$outbase/"abundance_"$depth".tsv"
 plot_file=$outbase/"results_"$depth
 
-echo -n  "id","type","Depth","mut","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions","switches"$'\n' > $results_file
+# echo -n  "id","type","Depth","mut","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions","switches"$'\n' > $results_file
 echo -n  "id"$'\t'"Depth"$'\t'"mut"$'\t'"transcript_id"$'\t'"abundance_original"$'\t'"abundance_corrected"$'\n' > $results_file2
 
 
@@ -26,31 +26,36 @@ for id in $(seq 1 1 1)
 do 
 #     for depth in 50 100 #200 #20 #20 50 100 #10 20 #50 # 100 200 500 1000 5000 10000
 #     do
+    
+    ## Simulate reads
     # echo  python $experiment_dir/simulate_reads.py $database $outbase/$id/reads.fq $depth
     # python $experiment_dir/simulate_reads.py $database $outbase/$id/reads.fq $depth #&> /dev/null
-    # echo python $isonclust_dir/isONclust --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/ --k 13 --w 25
-    # python $isonclust_dir/isONclust --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/ --k 13 --w 25  #&> /dev/null            
+    
+    ## 
+    # python $experiment_dir/filter_fastq.py $outbase/$id/reads.fq 20000
+    # mv $outbase/$id/reads.fq_filtered.fq $outbase/$id/reads.fq
+    
+    # echo python $isonclust_dir/isONclust --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/ --k 13 --w 25 --t 2
+    # python $isonclust_dir/isONclust --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/ --k 13 --w 25 --t 2 #&> /dev/null            
+
     # python $isonclust_dir/isONclust write_fastq --clusters $outbase/$id/isonclust/final_clusters.csv --fastq $outbase/$id/reads.fq --outfolder $outbase/$id/isonclust/fastq --N 20  #&> /dev/null            
 
     # python $isoncorrect_dir/run_isoncorrect --keep_old --t 2 --fastq_folder $outbase/$id/isonclust/fastq  --outfolder $outbase/$id/isoncorrect/ --k 7 --w 10 --xmax 80  # &> /dev/null            
 
-    # all_clusters_fastq = expand('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont_min_phred_q6/fastq_clusters/{clusterid}/corrected_reads.fastq', clusterid=[str(i) for i in range(0,62747)])
-    > $corrected_reads_fastq
-    FILES=("$outbase/$id/isoncorrect"/*/corrected_reads.fastq)
-    # cat /Users/kxs624/tmp/ISONCORRECT/SIMULATED_DATA/full/1/isoncorrect/*/corrected_reads.fastq
-    # ls  $"/Users/kxs624/tmp/ISONCORRECT/SIMULATED_DATA/full/1/isoncorrect/"$*
-    for c_id in $(seq 0 1 200) $"${FILES[@]}"
-        do 
-            if [ -f "$outbase/$id/isoncorrect"/$c_id/corrected_reads.fastq ]; then
-               echo "$outbase/$id/isoncorrect"/$c_id/corrected_reads.fastq
-            else
-               echo "File $FILE does not exist."
-            fi
-        done
-    #     shell('cat {f} >> {output.corrected_reads_fastq}')
+    # > $corrected_reads_fastq
+    # FILES=("$outbase/$id/isoncorrect"/*/corrected_reads.fastq)
+    # for c_id in $(seq 0 1 300) $"${FILES[@]}"
+    #     do 
+    #         if [ -f "$outbase/$id/isoncorrect"/$c_id/corrected_reads.fastq ]; then
+    #            echo "$outbase/$id/isoncorrect"/$c_id/corrected_reads.fastq
+    #            cat "$outbase/$id/isoncorrect"/$c_id/corrected_reads.fastq >> $corrected_reads_fastq
+    #         else
+    #            echo "File $FILE does not exist."
+    #         fi
+    #     done
         
 
-    # python $experiment_dir/evaluate_errorrates.py  $corrected_reads_fastq  $database $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
+    python $experiment_dir/get_error_rates.py  $database $outbase/$id/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
     # minimap2 --ax .. $database  $corrected_reads_fastq > $corrected_reads_mappings
     # minimap2 --ax .. $database  $outbase/$id/reads.fq > $original_reads_mappings
     # python $experiment_dir/evaluate_abundance.py  $corrected_reads_mappings  $original_reads_mappings  $outbase/$id/isoncorrect/evaluation #&> /dev/null
