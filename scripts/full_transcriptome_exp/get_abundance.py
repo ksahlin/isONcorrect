@@ -4,6 +4,7 @@ import os,sys
 import argparse
 import re
 import errno
+from collections import defaultdict
 
 import pysam
 
@@ -195,7 +196,7 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
     return "".join([s for s in r_line]), "".join([s for s in m_line]), "".join([s for s in q_line]), ins, del_, subs, matches
 
 
-def get_abundance_aligned_reads(sam_file, reads, refs):
+def get_abundance_aligned_reads(sam_file):
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     references = SAM_file.references
     
@@ -214,7 +215,7 @@ def get_abundance_aligned_reads(sam_file, reads, refs):
             
             read_acc = read.query_name
             
-            transcript_id = read_acc.split("_")[0]
+            transcript_id = read_acc.split("|")[2].split("_")[0]
             gene_id = read_acc.split("|")[1] 
             gene_fam_id = read_acc.split("|")[0] 
             
@@ -226,9 +227,9 @@ def get_abundance_aligned_reads(sam_file, reads, refs):
 
             ref_acc = read.reference_name
             
-            transcript_id = read_acc.split("_")[0]
-            gene_id = read_acc.split("|")[1] 
-            gene_fam_id = read_acc.split("|")[0] 
+            transcript_id = ref_acc.split("|")[2]
+            gene_id = ref_acc.split("|")[1] 
+            gene_fam_id = ref_acc.split("|")[0] 
 
             transcript_cov_aligned[transcript_id] += 1
             gene_cov_aligned[gene_id] += 1
@@ -239,50 +240,53 @@ def get_abundance_aligned_reads(sam_file, reads, refs):
             # print("secondary", read.flag, read.reference_name) 
     return transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned
 
-def get_summary_stats(reads, quantile):
-    tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
-    sorted_reads = sorted(reads.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
-    for acc, (ins, del_, subs, matches) in sorted_reads[ : int(len(sorted_reads)*quantile)]:
-        # (ins, del_, subs, matches) = reads[acc]
+# def get_summary_stats(reads, quantile):
+#     tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
+#     sorted_reads = sorted(reads.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
+#     for acc, (ins, del_, subs, matches) in sorted_reads[ : int(len(sorted_reads)*quantile)]:
+#         # (ins, del_, subs, matches) = reads[acc]
 
-        tot_ins += ins
-        tot_del += del_
-        tot_subs += subs
-        tot_match += matches
+#         tot_ins += ins
+#         tot_del += del_
+#         tot_subs += subs
+#         tot_match += matches
 
-    sum_aln_bases = tot_ins + tot_del + tot_subs + tot_match
+#     sum_aln_bases = tot_ins + tot_del + tot_subs + tot_match
 
-    return tot_ins, tot_del, tot_subs, tot_match, sum_aln_bases
+#     return tot_ins, tot_del, tot_subs, tot_match, sum_aln_bases
 
 
 def main(args):
     # reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
     transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned = get_abundance_aligned_reads(args.samfile)
 
-    print("id,cov_aln,cov_true,type")
+    print("id,cov_aln,cov_true,seq,type")
     for seq_id in set(transcript_cov_true) | set(transcript_cov_aligned) :
         cov_aln = transcript_cov_aligned[seq_id] if seq_id in transcript_cov_aligned else 0
         cov_true = transcript_cov_true[seq_id] if seq_id in transcript_cov_true else 0
-        print("{0},{1},{2},{3}".format(seq_id, cov_aln, cov_true, "transcript"))
+        print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "transcript", args.type))
 
     for seq_id in set(gene_cov_true) | set(gene_cov_aligned) :
         cov_aln = gene_cov_aligned[seq_id] if seq_id in gene_cov_aligned else 0
         cov_true = gene_cov_true[seq_id] if seq_id in gene_cov_true else 0
-        print("{0},{1},{2},{3}".format(seq_id, cov_aln, cov_true, "transcript"))
+        print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "gene", args.type))
 
     for seq_id in set(gene_fam_cov_true) | set(gene_fam_cov_aligned) :
         cov_aln = gene_fam_cov_aligned[seq_id] if seq_id in gene_fam_cov_aligned else 0
         cov_true = gene_fam_cov_true[seq_id] if seq_id in gene_fam_cov_true else 0
-        print("{0},{1},{2},{3}".format(seq_id, cov_aln, cov_true, "transcript"))      
+        print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "gene_fam", args.type))      
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
     parser.add_argument('samfile', type=str, help='Path to the original read file')
+    parser.add_argument('type', type=str, help='Path to the original read file')
     # parser.add_argument('reads', type=str, help='Path to the original read file')
 
     args = parser.parse_args()
 
-    outfolder = args.outfolder
-    if not os.path.exists(outfolder):
-        os.makedirs(outfolder)
+    # outfolder = args.outfolder
+    # if not os.path.exists(outfolder):
+    #     os.makedirs(outfolder)
     main(args)
+
+
