@@ -104,16 +104,16 @@ def get_error_profile(corr_seq, true_seq):
 
 
 def main(args):
-    true = { acc : seq for acc, (seq,_) in readfq(open(args.true, 'r'))}
+    true = { acc.split("|")[2] : seq for acc, (seq,_) in readfq(open(args.true, 'r'))}
     corrected = { acc : seq for acc, (seq,qual) in readfq(open(args.corrected, 'r'))}
     original = { acc : seq for acc, (seq,qual) in readfq(open(args.original, 'r'))}
 
-    isoform_coverage = Counter([acc.split("_")[0] for acc in original])
+    isoform_coverage = Counter([acc.split("|")[2].split("_")[0] for acc in original])
     gene_coverage = Counter([acc.split("|")[1] for acc in original])
     gene_fam_coverage = Counter([acc.split("|")[0] for acc in original])
-    print("read,err,subs,ins,del,type,err_rate,transcript_cov,gene_cov,gene_fam_cov")
+    print("read,err,subs,ins,del,err_rate,type,transcript_cov,gene_cov,gene_fam_cov")
     for acc in corrected:
-        transcript_id = acc.split("_")[0]
+        transcript_id = acc.split("|")[2].split("_")[0]
         gene_id = acc.split("|")[1] 
         gene_fam_id = acc.split("|")[0] 
         true_seq = true[transcript_id]
