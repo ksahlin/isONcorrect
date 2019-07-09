@@ -264,16 +264,33 @@ def main(args):
     for seq_id in set(transcript_cov_true) | set(transcript_cov_aligned) :
         cov_aln = transcript_cov_aligned[seq_id] if seq_id in transcript_cov_aligned else 0
         cov_true = transcript_cov_true[seq_id] if seq_id in transcript_cov_true else 0
+        if "," in seq_id:
+            print("BUG", seq_id)
+            sys.exit()
+        if type(cov_aln) != int or type(cov_true) != int:
+            print("BUG", type(cov_aln))
+            sys.exit()
         print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "transcript", args.type))
 
     for seq_id in set(gene_cov_true) | set(gene_cov_aligned) :
         cov_aln = gene_cov_aligned[seq_id] if seq_id in gene_cov_aligned else 0
         cov_true = gene_cov_true[seq_id] if seq_id in gene_cov_true else 0
+        if "," in seq_id:
+            print("BUG", seq_id)
+            sys.exit()
+        if type(cov_aln) != int:
+            print("BUG", type(cov_aln))
+            sys.exit()
+
         print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "gene", args.type))
 
     for seq_id in set(gene_fam_cov_true) | set(gene_fam_cov_aligned) :
         cov_aln = gene_fam_cov_aligned[seq_id] if seq_id in gene_fam_cov_aligned else 0
         cov_true = gene_fam_cov_true[seq_id] if seq_id in gene_fam_cov_true else 0
+        if "," in seq_id:
+            print("BUG", seq_id)
+            sys.exit()
+
         print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "gene_fam", args.type))      
 
 if __name__ == '__main__':

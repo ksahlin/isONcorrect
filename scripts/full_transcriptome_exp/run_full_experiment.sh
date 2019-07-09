@@ -43,12 +43,12 @@ do
     # rm -rf $outbase/$id/$depth/isonclust/sorted.fastq
     # echo python $isonclust_dir/isONclust --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/ --k 13 --w 25 --q 6.0 --t 2
     # python $isonclust_dir/isONclust --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/ --k 13 --w 25 --q 6.0 --t 2 #&> /dev/null            
-    # python $isonclust_dir/isONclust write_fastq --clusters $outbase/$id/$depth/isonclust/final_clusters.csv --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/fastq --N 20  #&> /dev/null            
+    python $isonclust_dir/isONclust write_fastq --clusters $outbase/$id/$depth/isonclust/final_clusters.csv --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/fastq --N 5  #&> /dev/null            
     # ############################
 
-    # # Correct reads with isONcorrect
-    # python $isoncorrect_dir/run_isoncorrect --keep_old --t 2 --fastq_folder $outbase/$id/$depth/isonclust/fastq  --outfolder $outbase/$id/$depth/isoncorrect/ --k 7 --w 10 --xmax 80  # &> /dev/null            
-    # ###############################
+    # Correct reads with isONcorrect
+    python $isoncorrect_dir/run_isoncorrect --keep_old --t 2 --fastq_folder $outbase/$id/$depth/isonclust/fastq  --outfolder $outbase/$id/$depth/isoncorrect/ --k 7 --w 10 --xmax 80  # &> /dev/null            
+    ###############################
 
     # # Merge individually corrected clusters    
     # > $corrected_reads_fastq
