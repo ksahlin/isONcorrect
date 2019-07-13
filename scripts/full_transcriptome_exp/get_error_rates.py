@@ -81,6 +81,10 @@ def cigar_to_seq(cigar, query, ref):
             q_aln.append('-' * length_)
             #  only ref index change
             r_index += length_
+        elif type_ == 'S':
+            print("error", file=sys.stderr)
+            print(cigar, file=sys.stderr)
+            sys.exit()
         
         else:
             print("error")
@@ -125,10 +129,19 @@ def main(args):
         corr_seq = corrected[acc]
         tot, ins, del_, subs, err_rate = get_error_profile(corr_seq, true_seq)
         print("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}".format(acc, tot, ins, del_, subs, err_rate, "corrected", isoform_coverage[transcript_id], gene_coverage[gene_id], gene_fam_coverage[gene_fam_id] ))
-
         # print("corrected:", ed_corr, "cov:", isoform_coverage[transcript_id])
-
+        err_rate_corr = err_rate
         orig_seq = original[acc]
+        
+        if err_rate_corr > 15:
+            print(acc, file=sys.stderr)
+            print(gene_coverage[gene_id], gene_fam_coverage[gene_fam_id], file=sys.stderr )
+            print(corr_seq, tot, ins, del_, subs, err_rate, file=sys.stderr)
+            print(true_seq, file=sys.stderr)
+            tot, ins, del_, subs, err_rate =  get_error_profile(orig_seq, true_seq)
+            print(orig_seq,tot, ins, del_, subs, err_rate, file=sys.stderr)
+            print("", file=sys.stderr)
+
         tot, ins, del_, subs, err_rate = get_error_profile(orig_seq, true_seq)
         print("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}".format(acc, tot, ins, del_, subs, err_rate, "original", isoform_coverage[transcript_id], gene_coverage[gene_id], gene_fam_coverage[gene_fam_id] ))
 
