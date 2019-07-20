@@ -260,7 +260,7 @@ def main(args):
     # reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
     transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned = get_abundance_aligned_reads(args.samfile)
 
-    print("id,cov_aln,cov_true,seq,type")
+    # print("id,cov_aln,cov_true,seq,type")
     for seq_id in set(transcript_cov_true) | set(transcript_cov_aligned) :
         cov_aln = transcript_cov_aligned[seq_id] if seq_id in transcript_cov_aligned else 0
         cov_true = transcript_cov_true[seq_id] if seq_id in transcript_cov_true else 0
