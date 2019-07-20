@@ -134,6 +134,7 @@ def main(args):
         orig_seq = original[acc]
         
         if err_rate_corr > 15:
+            print("Over corrected!", file=sys.stderr)
             print(acc, file=sys.stderr)
             print(gene_coverage[gene_id], gene_fam_coverage[gene_fam_id], file=sys.stderr )
             print(corr_seq, tot, ins, del_, subs, err_rate, file=sys.stderr)
@@ -141,6 +142,7 @@ def main(args):
             tot, ins, del_, subs, err_rate =  get_error_profile(orig_seq, true_seq)
             print(orig_seq,tot, ins, del_, subs, err_rate, file=sys.stderr)
             print("", file=sys.stderr)
+            
 
         tot, ins, del_, subs, err_rate = get_error_profile(orig_seq, true_seq)
         print("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}".format(acc, tot, ins, del_, subs, err_rate, "original", isoform_coverage[transcript_id], gene_coverage[gene_id], gene_fam_coverage[gene_fam_id] ))

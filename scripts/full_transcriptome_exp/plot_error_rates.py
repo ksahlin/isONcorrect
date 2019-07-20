@@ -27,7 +27,7 @@ indata = pd.read_csv(data)
 #             data=indata, kind="point", aspect=1)
 # ax = sns.scatterplot(x="abundance_original", y="abundance_corrected", #col="Depth", # col_wrap=3, #hue="time",
 #                       data=indata)
-g = sns.lmplot(x="transcript_cov", y="err_rate",  hue="type", x_jitter = 0.1, #col="Depth", 
+g = sns.lmplot(x="transcript_cov", y="err_rate",  hue="type", #scatter= False, x_estimator = np.mean,  #x_jitter = 0.1, #col="Depth", 
                 data=indata) #, col_wrap=2, height=3)
 
 # g.set(ylim=(0,100))
