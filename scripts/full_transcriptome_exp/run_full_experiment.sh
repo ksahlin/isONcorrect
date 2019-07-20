@@ -32,51 +32,51 @@ do
 #     for depth in 50 100 #200 #20 #20 50 100 #10 20 #50 # 100 200 500 1000 5000 10000
 #     do
     
-    # # Simulate reads
-    # echo  python $experiment_dir/simulate_reads.py $database $outbase/$id/$depth/reads.fq $depth
-    # python $experiment_dir/simulate_reads.py $database $outbase/$id/$depth/reads.fq $depth #&> /dev/null
-    # ###############
+    # Simulate reads
+    echo  python $experiment_dir/simulate_reads.py $database $outbase/$id/$depth/reads.fq $depth
+    python $experiment_dir/simulate_reads.py $database $outbase/$id/$depth/reads.fq $depth #&> /dev/null
+    ###############
     
-    # # #  Remove longest transcripts
-    # # python $experiment_dir/filter_fastq.py $outbase/$id/$depth/reads.fq 20000
-    # # mv $outbase/$id/$depth/reads.fq_filtered.fq $outbase/$id/$depth/reads.fq
-    # # ############################
-
-    # # Cluster with isONclust      
-    # rm -rf $outbase/$id/$depth/isonclust/sorted.fastq
-    # echo python $isonclust_dir/isONclust --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/ --k 13 --w 25 --q 6.0 --t 2
-    # python $isonclust_dir/isONclust --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/ --k 13 --w 25 --q 6.0 --t 2 #&> /dev/null            
-    # python $isonclust_dir/isONclust write_fastq --clusters $outbase/$id/$depth/isonclust/final_clusters.csv --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/fastq --N 5  #&> /dev/null            
+    # #  Remove longest transcripts
+    # python $experiment_dir/filter_fastq.py $outbase/$id/$depth/reads.fq 20000
+    # mv $outbase/$id/$depth/reads.fq_filtered.fq $outbase/$id/$depth/reads.fq
     # ############################
 
-    # # Correct reads with isONcorrect
-    # python $isoncorrect_dir/run_isoncorrect --keep_old --t 2 --fastq_folder $outbase/$id/$depth/isonclust/fastq  --outfolder $outbase/$id/$depth/isoncorrect/ --k 7 --w 10 --xmax 80  # &> /dev/null            
-    # ###############################
+    # Cluster with isONclust      
+    rm -rf $outbase/$id/$depth/isonclust/sorted.fastq
+    echo python $isonclust_dir/isONclust --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/ --k 13 --w 25 --q 6.0 --t 2
+    python $isonclust_dir/isONclust --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/ --k 13 --w 25 --q 6.0 --t 2 #&> /dev/null            
+    python $isonclust_dir/isONclust write_fastq --clusters $outbase/$id/$depth/isonclust/final_clusters.csv --fastq $outbase/$id/$depth/reads.fq --outfolder $outbase/$id/$depth/isonclust/fastq --N 1  #&> /dev/null            
+    ############################
 
-    # # Merge individually corrected clusters    
-    # > $corrected_reads_fastq
-    # FILES=("$outbase/$id/$depth/isoncorrect"/*/corrected_reads.fastq)
-    # for c_id in $(seq 0 1 1000) $"${FILES[@]}"
-    #     do 
-    #         if [ -f "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq ]; then
-    #            echo "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq
-    #            cat "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq >> $corrected_reads_fastq
-    #         else
-    #            echo "File $FILE does not exist."
-    #         fi
-    #     done
-    # #######################################
+    # Correct reads with isONcorrect
+    python $isoncorrect_dir/run_isoncorrect --keep_old --t 2 --fastq_folder $outbase/$id/$depth/isonclust/fastq  --outfolder $outbase/$id/$depth/isoncorrect/ --k 7 --w 10 --xmax 80  # &> /dev/null            
+    ###############################
+
+    # Merge individually corrected clusters    
+    > $corrected_reads_fastq
+    FILES=("$outbase/$id/$depth/isoncorrect"/*/corrected_reads.fastq)
+    for c_id in $(seq 0 1 1000) $"${FILES[@]}"
+        do 
+            if [ -f "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq ]; then
+               echo "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq
+               cat "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq >> $corrected_reads_fastq
+            else
+               echo "File $FILE does not exist."
+            fi
+        done
+    #######################################
         
-    # # # Evaluate error rates
-    # error_plot=$outbase/$id/$depth/"error_rates_"$depth".pdf" 
-    # python $experiment_dir/get_error_rates.py  $database $outbase/$id/$depth/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
-    # python $experiment_dir/plot_error_rates.py $error_rates_file  $error_plot
-    # # ######################
+    # # Evaluate error rates
+    error_plot=$outbase/$id/$depth/"error_rates_"$depth".pdf" 
+    python $experiment_dir/get_error_rates.py  $database $outbase/$id/$depth/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
+    python $experiment_dir/plot_error_rates.py $error_rates_file  $error_plot
+    # ######################
 
-    # # ## Map reads
-    # minimap2 -ax splice --eqx $database -uf -k14 $corrected_reads_fastq > $corrected_reads_mappings
-    # minimap2 -ax splice --eqx $database  -uf -k14 $outbase/$id/$depth/reads.fq > $original_reads_mappings
-    # # ###################
+    # ## Map reads
+    minimap2 -ax splice --eqx $database -uf -k14 $corrected_reads_fastq > $corrected_reads_mappings
+    minimap2 -ax splice --eqx $database  -uf -k14 $outbase/$id/$depth/reads.fq > $original_reads_mappings
+    # ###################
 
     # # Evaluate chnage in expression levels compared to true expression
     abundance_file=$outbase/$id/$depth/"abundance.tsv"
@@ -85,8 +85,7 @@ do
     python $experiment_dir/get_abundance.py  $corrected_reads_mappings "corrected" >> $abundance_file
     python $experiment_dir/get_abundance.py $original_reads_mappings  "original" >>  $abundance_file
     abundance_plot=$outbase/$id/$depth/"abundance.pdf" 
-    python plot_abundance.py $abundance_file "transcript" $abundance_plot
-    # python plot_abundance.py $abundance_file_original $abundance_orig_plot
+    python $experiment_dir/plot_abundance.py $abundance_file "transcript" $abundance_plot
 
 
 
