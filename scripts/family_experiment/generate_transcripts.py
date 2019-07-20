@@ -89,7 +89,7 @@ def get_isoforms(gene_copy, nr_isoforms, node, config, prev_simulated_isoforms):
             for i in range(len(gene_copy), 0, -1):
                 for isoform in itertools.combinations(list(gene_copy.keys()), i):
                     print(isoform)
-                    isoform_copy_accession = config["original_family"] + ";" + "member:{0};exons:".format(list(node.keys())[0]) + ",".join([str(ex_nr) for ex_nr in isoform])
+                    isoform_copy_accession = config["original_family"] + "|" + config["original_family"]  + "|" +  "member:{0};exons:".format(list(node.keys())[0]) + ":".join([str(ex_nr) for ex_nr in isoform])
                     isoform_copy_sequence = "".join([gene_copy[ex_nr] for ex_nr in isoform])
                     if isoform_copy_sequence in prev_simulated_isoforms:
                         continue
