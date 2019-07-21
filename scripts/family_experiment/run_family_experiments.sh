@@ -35,19 +35,19 @@ echo -n  "id","type","Depth","mut",$'\t'"abundance_original"$'\t'"abundance_corr
 
 # python $experiment_dir/get_exons.py $database $outbase
 
-for id in $(seq 1 1 1)  
+for id in $(seq 1 1 3)  
 do 
-    python $experiment_dir/generate_transcripts.py --exon_file $outbase/$gene_member"_exons.fa"  $outbase/$id/biological_material.fa --gene_member $gene_member  --family_size $family_size --isoform_distribution exponential  --mutation_rate $mut_rate  &> /dev/null
-    python $experiment_dir/generate_abundance.py --transcript_file $outbase/$id/biological_material.fa --abundance $abundance $outbase/$id/biological_material_abundance.fa   #&> /dev/null
+    # python $experiment_dir/generate_transcripts.py --exon_file $outbase/$gene_member"_exons.fa"  $outbase/$id/biological_material.fa --gene_member $gene_member  --family_size $family_size --isoform_distribution exponential  --mutation_rate $mut_rate  &> /dev/null
+    # python $experiment_dir/generate_abundance.py --transcript_file $outbase/$id/biological_material.fa --abundance $abundance $outbase/$id/biological_material_abundance.fa   #&> /dev/null
 
     for depth in 20 100 #100 #200 #20 #20 50 100 #10 20 #50 # 100 200 500 1000 5000 10000
     do
-        python $experiment_dir/generate_ont_reads.py $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/reads.fq $depth &> /dev/null
+        # python $experiment_dir/generate_ont_reads.py $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/reads.fq $depth &> /dev/null
 
         # python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$depth/reads.fq   --outfolder $outbase/$id/$depth/isoncorrect/ --k 7 --w 10 --xmax 80  &> /dev/null            
-        # python $experiment_dir/evaluate_simulated_reads.py  $outbase/$id/$depth/isoncorrect/corrected_reads.fastq  $outbase/$id/biological_material.fa $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
-        # echo -n  $id,approx,$depth,$mut_rate,&& head -n 1 $outbase/$id/$depth/isoncorrect/evaluation/results.tsv 
-        # echo -n  $id,approx,$depth,$mut_rate, >> $results_summary_file && head -n 1 $outbase/$id/$depth/isoncorrect/evaluation/results.tsv >> $results_summary_file
+        python $experiment_dir/evaluate_simulated_reads.py  $outbase/$id/$depth/isoncorrect/corrected_reads.fastq  $outbase/$id/biological_material.fa $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/isoncorrect/evaluation > /dev/null
+        echo -n  $id,approx,$depth,$mut_rate,&& head -n 1 $outbase/$id/$depth/isoncorrect/evaluation/summary.tsv 
+        echo -n  $id,approx,$depth,$mut_rate, >> $results_summary_file && head -n 1 $outbase/$id/$depth/isoncorrect/evaluation/summary.tsv >> $results_summary_file
         
         # for line in $(cat $outbase/$id/$depth/isoncorrect/evaluation/results2.tsv ); do
         #         # echo "tester: $line"
@@ -57,7 +57,7 @@ do
 
 
         fastq2fasta $outbase/$id/$depth/reads.fq $outbase/$id/$depth/reads.fa
-        python $experiment_dir/evaluate_simulated_reads.py   $outbase/$id/$depth/reads.fa $outbase/$id/biological_material.fa $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/isoncorrect/evaluation_reads #> /dev/null
+        python $experiment_dir/evaluate_simulated_reads.py   $outbase/$id/$depth/reads.fa $outbase/$id/biological_material.fa $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/isoncorrect/evaluation_reads > /dev/null
         echo -n  $id,original,$depth,$mut_rate,&& head -n 1 $outbase/$id/$depth/isoncorrect/evaluation_reads/summary.tsv 
         echo -n  $id,original,$depth,$mut_rate, >> $results_summary_file && head -n 1 $outbase/$id/$depth/isoncorrect/evaluation_reads/summary.tsv  >> $results_summary_file
 
@@ -67,10 +67,11 @@ do
             continue
         else
             echo "Depth less or equal to 100";
-            python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$depth/reads.fq   --outfolder $outbase/$id/$depth/isoncorrect/ --k 7 --w 10 --xmax 80 --exact   &> /dev/null            
-            python $experiment_dir/evaluate_simulated_reads.py  $outbase/$id/$depth/isoncorrect/corrected_reads.fastq  $outbase/$id/biological_material.fa $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/isoncorrect/evaluation #> /dev/null
-            echo -n  $id,exact,$depth,$mut_rate,&& head -n 1 $outbase/$id/$depth/isoncorrect/evaluation/summary.tsv 
-            echo -n  $id,exact,$depth,$mut_rate, >> $results_summary_file && head -n 1 $outbase/$id/$depth/isoncorrect/evaluation/summary.tsv >> $results_summary_file
+            # python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$id/$depth/reads.fq   --outfolder $outbase/$id/$depth/isoncorrect_exact/ --k 7 --w 10 --xmax 80 --exact   &> /dev/null            
+            python $experiment_dir/evaluate_simulated_reads.py  $outbase/$id/$depth/isoncorrect_exact/corrected_reads.fastq  $outbase/$id/biological_material.fa $outbase/$id/biological_material_abundance.fa $outbase/$id/$depth/isoncorrect_exact/evaluation > /dev/null
+            echo -n  $id,exact,$depth,$mut_rate,&& head -n 1 $outbase/$id/$depth/isoncorrect_exact/evaluation/summary.tsv 
+            echo -n  $id,exact,$depth,$mut_rate, >> $results_summary_file && head -n 1 $outbase/$id/$depth/isoncorrect_exact/evaluation/summary.tsv >> $results_summary_file
+
 
             # for c_id in $(seq 0 1 1000) $"${FILES[@]}"
             #     do 
@@ -85,33 +86,33 @@ do
         fi;
 
 
-        ########################################
-        # # Evaluate error rates TMP TEST
-        corrected_reads_mappings=$outbase/"corrected_"$depth".sam"
-        original_reads_mappings=$outbase/"original_"$depth".sam"
-        error_rates_file=$outbase/"error_rates_"$depth".tsv"
-        tmp_experiment_dir="/Users/kxs624/Documents/workspace/isONcorrect/scripts/full_transcriptome_exp"
-        corrected_reads_fastq=$outbase/$id/$depth/"isoncorrect"/"corrected_reads.fastq"
-        database=$outbase/$id/"biological_material.fa"
-        error_plot=$outbase/$id/$depth/"error_rates_"$depth".pdf" 
-        python $tmp_experiment_dir/get_error_rates.py  $database $outbase/$id/$depth/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
-        python $tmp_experiment_dir/plot_error_rates.py $error_rates_file  $error_plot
-        # ######################
+        # ########################################
+        # # # Evaluate error rates TMP TEST
+        # corrected_reads_mappings=$outbase/"corrected_"$depth".sam"
+        # original_reads_mappings=$outbase/"original_"$depth".sam"
+        # error_rates_file=$outbase/"error_rates_"$depth".tsv"
+        # tmp_experiment_dir="/Users/kxs624/Documents/workspace/isONcorrect/scripts/full_transcriptome_exp"
+        # corrected_reads_fastq=$outbase/$id/$depth/"isoncorrect"/"corrected_reads.fastq"
+        # database=$outbase/$id/"biological_material.fa"
+        # error_plot=$outbase/$id/$depth/"error_rates_"$depth".pdf" 
+        # python $tmp_experiment_dir/get_error_rates.py  $database $outbase/$id/$depth/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
+        # python $tmp_experiment_dir/plot_error_rates.py $error_rates_file  $error_plot
+        # # ######################
 
-        # ## Map reads
-        minimap2 -ax splice --eqx $database -uf -k14 $corrected_reads_fastq > $corrected_reads_mappings
-        minimap2 -ax splice --eqx $database  -uf -k14 $outbase/$id/$depth/reads.fq > $original_reads_mappings
-        # ###################
+        # # ## Map reads
+        # minimap2 -ax splice --eqx $database -uf -k14 $corrected_reads_fastq > $corrected_reads_mappings
+        # minimap2 -ax splice --eqx $database  -uf -k14 $outbase/$id/$depth/reads.fq > $original_reads_mappings
+        # # ###################
 
-        # # Evaluate chnage in expression levels compared to true expression
-        abundance_file=$outbase/$id/$depth/"abundance.tsv"
-        > $abundance_file
-        echo -n  "id","cov_aln","cov_true","seq","type"$'\n' > $abundance_file
-        python $tmp_experiment_dir/get_abundance.py  $corrected_reads_mappings "corrected" >> $abundance_file
-        python $tmp_experiment_dir/get_abundance.py $original_reads_mappings  "original" >>  $abundance_file
-        abundance_plot=$outbase/$id/$depth/"abundance.pdf" 
-        python $tmp_experiment_dir/plot_abundance.py $abundance_file "transcript" $abundance_plot
-        ######################################################################
+        # # # Evaluate chnage in expression levels compared to true expression
+        # abundance_file=$outbase/$id/$depth/"abundance.tsv"
+        # > $abundance_file
+        # echo -n  "id","cov_aln","cov_true","seq","type"$'\n' > $abundance_file
+        # python $tmp_experiment_dir/get_abundance.py  $corrected_reads_mappings "corrected" >> $abundance_file
+        # python $tmp_experiment_dir/get_abundance.py $original_reads_mappings  "original" >>  $abundance_file
+        # abundance_plot=$outbase/$id/$depth/"abundance.pdf" 
+        # python $tmp_experiment_dir/plot_abundance.py $abundance_file "transcript" $abundance_plot
+        # ######################################################################
 
 
     done
