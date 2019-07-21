@@ -482,16 +482,16 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
 
         for acc2 in best_edit_distances[acc1]:
             seq2 = targets[acc2]
-            r_aligned, q_aligned, stats = ssw_alignment( acc1, acc2, seq1, seq2, 1111,1111 )
+            # r_aligned, q_aligned, stats = ssw_alignment( acc1, acc2, seq1, seq2, 1111,1111 )
             
             read_alignment, ref_alignment = parasail_alignment(seq1, seq2)
-            insertions = r_aligned.count("-")
-            deletions = q_aligned.count("-")
+            insertions = ref_alignment.count("-")
+            deletions = read_alignment.count("-")
             indels =  insertions + deletions
             mismatches = len([1 for n1, n2 in zip(read_alignment, ref_alignment) if n1 != n2 and n1 != "-" and n2 != "-"] )
 
-            insertions_minus_ends = r_aligned[20:-20].count("-")
-            deletions_minus_ends = q_aligned[20:-20].count("-")
+            insertions_minus_ends = ref_alignment[20:-20].count("-")
+            deletions_minus_ends = read_alignment[20:-20].count("-")
             indels_minus_ends =  insertions_minus_ends + deletions_minus_ends
             mismatches_minus_ends = len([1 for n1, n2 in zip(read_alignment[20:-20], ref_alignment[20:-20]) if n1 != n2 and n1 != "-" and n2 != "-"] )
 
@@ -529,7 +529,7 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
 
 def get_best_match(corrected_reads, reference_transcripts, reference_transcripts_abundances, outfolder, transcript_abundances, transcript_copies, sampled_dict, params):
     out_file = open(os.path.join(outfolder, "results.tsv"), "w")
-    out_file2 = open(os.path.join(outfolder, "results2.tsv"), "w")
+    summary_file = open(os.path.join(outfolder, "summary.tsv"), "w")
     #aligner = ssw.Aligner(gap_open=2, gap_extend=1)
     # do SW
     nr_unique_refs = len(reference_transcripts)
@@ -539,12 +539,18 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
     error_types_container_minus_ends = {}
     best_match_container = {}
 
-    corrected_read_abundances = {}
     original_abundances = defaultdict(int)
     for acc in corrected_reads.keys():
         original_abundances[ acc.split("_")[0] ] += 1 # true origin transcript is present in header
+
+    corrected_read_abundances = {}    
+    for acc in reference_transcripts:
         corrected_read_abundances[ acc.split("_")[0]]  = 0
 
+    print(len(original_abundances))
+    print(len(corrected_read_abundances))
+    print(set(corrected_read_abundances) ^ set(original_abundances) )
+    # sys.exit()
     not_FN = set()
     # print(corrected_reads)
     # if len(corrected_reads) == 0:
@@ -559,7 +565,6 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
     sorted_lengths = sorted([len(r_seq) for r_acc, r_seq in reference_transcripts.items()])
     # for l in sorted_lengths:
     #     print(l)
-    total_read_nucleotides = sum([len(q_seq) for q_acc, q_seq in corrected_reads.items()])
     # pre check exact matches:
     if params.only_exact:
         ref_seq_to_acc = {seq : acc for acc, seq in reference_transcripts.items()}
@@ -589,7 +594,24 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
             r_acc_max_id = "NONE"
             fewest_errors = len(q_seq)
             best_mismatches, best_insertions, best_deletions = len(q_seq), len(q_seq), len(q_seq)
-            tie = False
+            q_acc_mod = q_acc.split("_")[0]
+            if len(minimizer_graph_c_to_t[q_acc]) > 1:
+                print("TIE!!", q_acc, minimizer_graph_c_to_t[q_acc])
+                if q_acc_mod in minimizer_graph_c_to_t[q_acc]:
+                    tmp = minimizer_graph_c_to_t[q_acc][q_acc_mod]
+                    minimizer_graph_c_to_t[q_acc] = {}
+                    minimizer_graph_c_to_t[q_acc] = { q_acc_mod : tmp}
+                    print("Done")
+
+            # tie = False
+            else:
+                if q_acc_mod == list(minimizer_graph_c_to_t[q_acc].keys())[0]:
+                    print("correct")
+                else:
+                    print("Wrong", q_acc, minimizer_graph_c_to_t[q_acc])
+                    # continue
+                # print(q_acc, minimizer_graph_c_to_t[q_acc])
+
             for j, (r_acc, r_seq) in enumerate(minimizer_graph_c_to_t[q_acc].items()):
                 deletions, insertions, mismatches = minimizer_graph_c_to_t[q_acc][r_acc]
                 edit_distance =  deletions + insertions + mismatches
@@ -600,13 +622,13 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
                     best_mismatches, best_insertions, best_deletions = mismatches, insertions, deletions  
 
                     best_deletions_minus_ends, best_insertions_minus_ends, best_mismatches_minus_ends = minimizer_graph_c_to_t_minus_ends[q_acc][r_acc]
-                elif edit_distance == best_ed: # error at mutation site
-                    tie = True
+                # elif edit_distance == best_ed: # error at mutation site
+                #     tie = True
 
             errors_container[q_acc] = fewest_errors
             best_match_container[q_acc] = r_acc_max_id
 
-            corrected_read_abundances[ q_acc.split("_")[0] ] += 1
+            corrected_read_abundances[ r_acc ] += 1
 
             # print(q_acc, q_acc.split("_")[-1], r_acc_max_id)
 
@@ -630,20 +652,36 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
     # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(nr_unique_refs, q_acc, best_match_container[q_acc], errors_container[q_acc], identity_container[q_acc], *error_types_container[q_acc]))
     print("errors", sorted([ ed for acc, ed in errors_container.items()]))
     print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
-    tot_errors = sum([ ed for acc, ed in errors_container.items()])
-    all_errors = [error_types_container[acc] for acc in error_types_container]
-    all_s = sum([s for s,i,d in all_errors])
-    all_i = sum([i for s,i,d in all_errors])
-    all_d = sum([d for s,i,d in all_errors])
 
-    out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3),
+    tot_errors = 0
+    all_s = 0
+    all_i = 0
+    all_d = 0
+    total_read_nucleotides = 0
+    for q_acc, q_seq in corrected_reads.items():
+        q_acc_mod = q_acc.split("_")[0]
+        # if q_acc_mod == best_match_container[q_acc]:
+        tot_errors += errors_container[q_acc]
+        all_s += error_types_container[q_acc][0]
+        all_i += error_types_container[q_acc][1]
+        all_d += error_types_container[q_acc][2]
+        total_read_nucleotides += len(q_seq)
+
+    # tot_errors = sum([ ed for acc, ed in errors_container.items()])
+    # all_errors = [error_types_container[acc] for acc in error_types_container]
+    # all_s = sum([s for s,i,d in all_errors])
+    # all_i = sum([i for s,i,d in all_errors])
+    # all_d = sum([d for s,i,d in all_errors])
+    # total_read_nucleotides = sum([len(q_seq) for q_acc, q_seq in corrected_reads.items()])
+
+    summary_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(total_read_nucleotides, tot_errors, all_s, all_i, all_d, round(100*tot_errors/float(total_read_nucleotides), 3),
                     round(100*all_s/float(total_read_nucleotides), 3), round(100*all_i/float(total_read_nucleotides), 3), round(100*all_d/float(total_read_nucleotides), 3) )) #, all_errors_minus_ends))
     
     sorted_original_abundances = sorted(original_abundances.items(), key = lambda x: x[1], reverse=True)
     print("Corrected abundances:", [corrected_read_abundances[acc] for acc, ab in sorted_original_abundances])
     print("Original abundances:", [ab for acc, ab in sorted_original_abundances])
-    for acc, ab in sorted_original_abundances:
-        out_file2.write("{0}\t{1}\t{2}\n".format(acc, ab, corrected_read_abundances[acc]))
+    # for acc, ab in sorted_original_abundances:
+    #     summary_file.write("{0}\t{1}\t{2}\n".format(acc, ab, corrected_read_abundances[acc]))
 
     out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del")) #, "s_minus_end", "i_minus_end", "d_minus_end"))
     for q_acc in errors_container:
