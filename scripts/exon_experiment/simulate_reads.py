@@ -56,9 +56,15 @@ def simulate_reads( args, isoforms ):
     outfile = open(os.path.join(args.outfolder,"reads.fq"), "w")
     is_fastq = True #if outfile[-1] == "q" else False
     middle_exon_frequnecy = args.probs[1]
-    no_middel_exon = [(isoforms[0][0], isoforms[0][1]) for i in range(int(round(args.nr_reads*(1-args.probs[1]))))]
-    has_middel_exon = [(isoforms[1][0], isoforms[1][1]) for i in range(int(round(args.nr_reads*args.probs[1])))]
+    no_middel_exon = [(isoforms[0][0] + "_{0}".format(i), isoforms[0][1]) for i in range(int(round(args.nr_reads*(1-args.probs[1]))))]
+    has_middel_exon = [(isoforms[1][0] + "_{0}".format(i), isoforms[1][1]) for i in range(int(round(args.nr_reads*args.probs[1])))]
     isoforms_generated = has_middel_exon + no_middel_exon
+
+    isoforms_abundance_out = open(os.path.join(args.outfolder,"isoforms_abundance.fa"), "w")
+    for i_acc, isoform in isoforms_generated:
+        isoforms_abundance_out.write(">{0}\n{1}\n".format(i_acc, isoform))
+    isoforms_abundance_out.close()
+
     # print(len(has_middel_exon), len(no_middel_exon), args.nr_reads)
     assert len(isoforms_generated) == args.nr_reads
     # seq, acc = isoforms[list(isoforms.items())
@@ -153,7 +159,7 @@ def simulate_reads( args, isoforms ):
             continue
         read_seq = "".join([n for n in read])
         qual_seq = "".join([chr(q + 33) for q in qual])
-        reads[str(i) + "_"+ str(i_acc)] = (read_seq, qual_seq)
+        reads[str(i_acc) + "_" + str(i)  ] = (read_seq, qual_seq)
 
         # print(read_seq)
         # print(qual_seq)
@@ -189,9 +195,9 @@ def generate_isoforms(args, ref_path):
 
     # only two
     isoform = "".join([ex for ex in exons])
-    isoforms_out.write(">{0}\n{1}\n".format("1", isoform))
+    isoforms_out.write(">sim|sim|{0}\n{1}\n".format("1", isoform))
     isoform = "".join([exons[0], exons[2]])
-    isoforms_out.write(">{0}\n{1}\n".format("2", isoform))
+    isoforms_out.write(">sim|sim|{0}\n{1}\n".format("2", isoform))
     isoforms_out.close()
 
     # # all combinations
