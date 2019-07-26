@@ -528,8 +528,8 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
 
 
 def get_best_match(corrected_reads, reference_transcripts, reference_transcripts_abundances, outfolder, transcript_abundances, transcript_copies, sampled_dict, params):
-    out_file = open(os.path.join(outfolder, "results.tsv"), "w")
-    summary_file = open(os.path.join(outfolder, "summary.tsv"), "w")
+    out_file = open(os.path.join(outfolder, "results.csv"), "w")
+    summary_file = open(os.path.join(outfolder, "summary.csv"), "w")
     #aligner = ssw.Aligner(gap_open=2, gap_extend=1)
     # do SW
     nr_unique_refs = len(reference_transcripts)
@@ -707,7 +707,7 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
         if params.deal_with_ties: 
             mut_present = mutation_present[q_acc]
             minor = 1 if true_abundance != max(list(original_abundances.values())) else 0
-            out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc], switch, true_abundance, mut_present, minor )) #, *error_types_container_minus_ends[q_acc]))
+            out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc], switch, true_abundance, mut_present, minor )) #, *error_types_container_minus_ends[q_acc]))
         else:
             out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc], switch, true_abundance )) #, *error_types_container_minus_ends[q_acc]))
 
@@ -745,7 +745,7 @@ def main(args):
     transcript_abundances, transcript_copies, reference_similarities = reference_similarity(reference_transcripts, args.outfolder, args)
     get_best_match(corrected_reads, reference_transcripts, reference_transcripts_abundances, args.outfolder, transcript_abundances, transcript_copies, sampled_dict, args)
 
-    out_file_ref_sim = open(os.path.join(args.outfolder, "ref_similaritiy_distr.tsv"), "w")
+    out_file_ref_sim = open(os.path.join(args.outfolder, "ref_similaritiy_distr.csv"), "w")
 
     ref_similarities = []
     for i in range(len(reference_similarities)):
