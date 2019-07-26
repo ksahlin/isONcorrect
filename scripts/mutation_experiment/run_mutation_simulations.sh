@@ -26,13 +26,13 @@ echo -n  "id","type","Depth","p","q_acc","r_acc", "total_errors","identity","sub
 
 for depth in 20 50 100 # 20 50 # 50 # 100  #200 500 
 do 
-    for id in $(seq 1 1 5) 
+    for id in $(seq 1 1 10) 
     do
-        # which python
         python $experiment_dir/simulate_reads.py --sim_genome_len 300 --coords 0 100 200 300 --outfolder $outbase/$depth/$id/ --probs 1.0 $p 1.0  --nr_reads $depth > /dev/null
         for p in $(seq 0.1 0.1 0.5) # $(seq 0.1 0.1 1.0)  # $(seq 0.1 0.1 0.2)
         do
             python $experiment_dir/simulate_reads.py --isoforms $outbase/$depth/$id/isoforms.fa  --coords 0 100 200 300 --outfolder $outbase/$depth/$id/$p --probs 1.0 $p 1.0  --nr_reads $depth #> /dev/null
+
             # if [ "$1" == "exact" ]
             #     then
             #         python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$depth/$id/$p/reads.fq   --outfolder $outbase/$depth/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80 --exact   &> /dev/null
