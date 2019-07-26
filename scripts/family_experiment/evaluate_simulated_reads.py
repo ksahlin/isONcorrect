@@ -552,6 +552,8 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
     print(set(corrected_read_abundances) ^ set(original_abundances) )
     # sys.exit()
     not_FN = set()
+    if params.deal_with_ties:
+        mutation_present = {}
     # print(corrected_reads)
     # if len(corrected_reads) == 0:
     #     out_file.write("{0}\t{1}\t{2}\n".format(nr_unique_refs, len(corrected_reads), ",".join([ str(a) for a in transcript_abundances.values()])) )
@@ -595,7 +597,11 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
             fewest_errors = len(q_seq)
             best_mismatches, best_insertions, best_deletions = len(q_seq), len(q_seq), len(q_seq)
             q_acc_mod = q_acc.split("_")[0]
+
             if len(minimizer_graph_c_to_t[q_acc]) > 1:
+                if params.deal_with_ties:   
+                    mutation_present[q_acc] = 0
+
                 print("TIE!!", q_acc, minimizer_graph_c_to_t[q_acc])
                 if q_acc_mod in minimizer_graph_c_to_t[q_acc]:
                     tmp = minimizer_graph_c_to_t[q_acc][q_acc_mod]
@@ -628,6 +634,11 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
             errors_container[q_acc] = fewest_errors
             best_match_container[q_acc] = r_acc_max_id
 
+            if params.deal_with_ties: 
+                if q_acc not in mutation_present:
+                    mutation_present[q_acc] = 1 if q_acc_mod == r_acc_max_id else 0
+
+            
             corrected_read_abundances[ r_acc ] += 1
 
             # print(q_acc, q_acc.split("_")[-1], r_acc_max_id)
@@ -683,14 +694,22 @@ def get_best_match(corrected_reads, reference_transcripts, reference_transcripts
     # for acc, ab in sorted_original_abundances:
     #     summary_file.write("{0}\t{1}\t{2}\n".format(acc, ab, corrected_read_abundances[acc]))
 
-    out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del")) #, "s_minus_end", "i_minus_end", "d_minus_end"))
+    if params.deal_with_ties: 
+        out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del", "switch", "abundance", "mutation_present", "minor")) #, "s_minus_end", "i_minus_end", "d_minus_end"))
+    else:
+        out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del", "switch", "abundance")) #, "s_minus_end", "i_minus_end", "d_minus_end"))
+
     for q_acc in errors_container:
-        # each ro displays values for a consensus transcript
-        if  identity_container[q_acc] > params.sim_cutoff:
-            ssw_stats = "{0},{1},{2},{3},{4},{5},{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])
-            # print(ssw_stats, minimizer_graph_c_to_t[q_acc])
-            # print()
-            out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc])) #, *error_types_container_minus_ends[q_acc]))
+        q_acc_mod = q_acc.split("_")[0]
+        switch = 1 if q_acc_mod !=  best_match_container[q_acc] else 0
+        true_abundance = original_abundances[q_acc_mod]
+
+        if params.deal_with_ties: 
+            mut_present = mutation_present[q_acc]
+            minor = 1 if true_abundance != max(list(original_abundances.values())) else 0
+            out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc], switch, true_abundance, mut_present, minor )) #, *error_types_container_minus_ends[q_acc]))
+        else:
+            out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc], switch, true_abundance )) #, *error_types_container_minus_ends[q_acc]))
 
     print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
 
@@ -761,10 +780,11 @@ if __name__ == '__main__':
     parser.add_argument('corrected_reads', type=str, help='Path to the consensus fasta file')
     parser.add_argument('reference_transcripts', type=str, help='Path to the transcript fasta file')
     parser.add_argument('reference_transcripts_abundances', type=str, help='Path to the transcript fasta file')
-    parser.add_argument('--transcripts_sampled', type=str, help='Path to sampled transcripts txt file')
+    parser.add_argument('--deal_with_ties',  action='store_true', help='Specific parameter for mutation analysis')
+
+    parser.add_argument('--transcripts_sampled', type=str, help='')
     parser.add_argument('--only_exact',  action='store_true', help='Only output number of exact matches')
     parser.add_argument('--no_ref_sim',  action='store_true', help='Do not compute reference identy levels')
-    parser.add_argument('--sim_cutoff',  type=float, default= -100.0, help='Output only hits with higher identity than (default: output all)')
 
     parser.add_argument('outfolder', type=str, help='Output path of results')
 
