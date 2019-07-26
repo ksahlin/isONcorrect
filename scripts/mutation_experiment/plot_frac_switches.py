@@ -26,7 +26,7 @@ minor_indata = df.loc[df['minor'] == 1]
 
 g = sns.catplot(x="p", y="mutation_present", col="Depth", col_wrap=3,
             data=minor_indata, hue="type", hue_order= ["exact", "approx", "original"],
-            kind="violin", aspect=1)
+            kind="bar", aspect=1)
 
 # g.set(ylim=(0,100))
 g.set_ylabels("Minor mutation retained %")
