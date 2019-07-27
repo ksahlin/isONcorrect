@@ -15,6 +15,11 @@ from collections import defaultdict
 
 
 
+import matplotlib
+matplotlib.use('agg')
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 
 '''
     Below code taken from https://github.com/lh3/readfq/blob/master/readfq.py
@@ -316,7 +321,7 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
     # do SW
     nr_unique_refs = len(reference_transcripts)
     errors_container = {}
-    identity_container = {}
+    error_rate_container = {}
     error_types_container = {}
     best_match_container = {}
 
@@ -355,7 +360,7 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
                 ref_acc = ref_seq_to_acc[q_seq] #.split("copy")[0]
                 errors_container[q_acc] = 0
                 best_match_container[q_acc] = ref_acc
-                identity_container[q_acc] = 1.0
+                error_rate_container[q_acc] = 1.0
                 error_types_container[q_acc] = (0, 0, 0)
                 not_FN.add(ref_acc)
 
@@ -416,7 +421,7 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
 
             # print(q_acc, q_acc.split("_")[-1], r_acc_max_id)
 
-            identity_container[q_acc] = 1.0 - (best_ed / float(max(len(q_seq), len(reference_transcripts[r_acc_max_id])) ))
+            error_rate_container[q_acc] = (best_ed / float(len(reference_transcripts[r_acc_max_id])))
             error_types_container[q_acc] = (best_mismatches, best_insertions, best_deletions)
             not_FN.add(r_acc_max_id)
 
@@ -424,7 +429,7 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
 
 
     # total discoveries, total perfect matches (1.0 identity), errors for each consensus
-    # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(nr_unique_refs, q_acc, best_match_container[q_acc], errors_container[q_acc], identity_container[q_acc], *error_types_container[q_acc]))
+    # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(nr_unique_refs, q_acc, best_match_container[q_acc], errors_container[q_acc], error_rate_container[q_acc], *error_types_container[q_acc]))
     print("errors", sorted([ ed for acc, ed in errors_container.items()]))
     print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
 
@@ -453,9 +458,9 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
     #     summary_file.write("{0}\t{1}\t{2}\n".format(acc, ab, corrected_read_abundances[acc]))
 
     if params.deal_with_ties: 
-        out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del", "switch", "abundance", "mutation_present", "minor"))
+        out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format("q_acc", "ref_acc", "total_errors", "error_rate", "subs", "ins", "del", "switch", "abundance", "mutation_present", "minor"))
     else:
-        out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format("q_acc", "ref_acc", "total_errors", "identity", "subs", "ins", "del", "switch", "abundance"))
+        out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format("q_acc", "ref_acc", "total_errors", "error_rate", "subs", "ins", "del", "switch", "abundance"))
 
     for q_acc in errors_container:
         q_acc_mod = q_acc.split("_")[0]
@@ -465,9 +470,9 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
         if params.deal_with_ties: 
             mut_present = mutation_present[q_acc]
             minor = 1 if true_abundance != max(list(original_abundances.values())) else 0
-            out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc], switch, true_abundance, mut_present, minor )) 
+            out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(100*error_rate_container[q_acc],4), *error_types_container[q_acc], switch, true_abundance, mut_present, minor )) 
         else:
-            out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(identity_container[q_acc],4), *error_types_container[q_acc], switch, true_abundance )) 
+            out_file.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(q_acc, best_match_container[q_acc], errors_container[q_acc], round(100*error_rate_container[q_acc],4), *error_types_container[q_acc], switch, true_abundance )) 
 
     print("TOTAL ERRORS:", sum([ ed for acc, ed in errors_container.items()]))
 
