@@ -29,7 +29,7 @@ g = sns.catplot(x="p", y="switch", col="Depth", col_wrap=3,
             kind="bar", aspect=1)
 
 # g.set(ylim=(0,100))
-g.set_ylabels("Read switched transcript %")
+g.set_ylabels("% Read switched transcript")
 g.set_xlabels("Fraction mutation present in data")
 
 # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
