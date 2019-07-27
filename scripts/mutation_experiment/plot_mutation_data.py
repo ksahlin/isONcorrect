@@ -30,10 +30,10 @@ g = sns.catplot(x="p", y=y, col="Depth", col_wrap=3,
             kind="violin", aspect=1)
 
 
-g.set(ylim=(0.1,15))
-g.set(yscale="log", yticks=[1e-1,1e0,1e1,1e2])
+g.set(ylim=(0,15))
+# g.set(yscale="log", yticks=[1e-1,1e0,1e1,1e2])
 # g.set_yticks([1e-1,1e0,1e1,1e2])
-g.set_yticklabels(("","0.1%","1%","10%","100%"), visible = True)
+# g.set_yticklabels(("","0.1%","1%","10%","100%"), visible = True)
 g.set_ylabels("Error rate")
 g.set_xlabels("Fraction mutation present")
 
