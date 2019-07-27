@@ -21,22 +21,16 @@ sns.set(style="whitegrid")
 data=sys.argv[1]
 # f = open(data, "r")
 indata = pd.read_csv(data)
+# minor_indata = df.loc[df['minor'] == 1]
 # y=sys.argv[3]
 
-
-# g = sns.lmplot(x="abundance", y="switch", col="Depth", # hue="day",
-#                 data=indata, col_wrap=2, height=3)
-
-g = sns.catplot(x="abundance", y="switch", col="Depth", col_wrap=3,
+g = sns.catplot(x="p", y="switch", col="Depth", col_wrap=3,
             data=indata, hue="type", hue_order= ["exact", "approx", "original"],
             kind="bar", aspect=1)
 
-g.set(ylim=(-0.1,1.0))
-# ax.set_ylabel("Abundance after correction")
-# ax.set_xlabel("Abundance before correction")
-
-g.set_ylabels("% Read switched transcript")
-g.set_xlabels("Abundance before correction")
+# g.set(ylim=(0,100))
+g.set_ylabels("Read switched transcript %")
+g.set_xlabels("Fraction mutation present in data")
 
 # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
 # ax.set_ylim(0,15)
@@ -45,3 +39,14 @@ g.set_xlabels("Abundance before correction")
 plt.savefig(sys.argv[2])
 plt.close()
 
+
+# g = sns.catplot(x="p", y="Major_Retained", col="Depth", col_wrap=3,
+#             data=indata, hue="type", hue_order= ["exact", "approx", "original"],
+#             kind="violin", aspect=1)
+
+# g.set(ylim=(0,100))
+# g.set_ylabels("Major mutation retained %")
+# g.set_xlabels("Fraction mutation present in data")
+
+# plt.savefig(sys.argv[3])
+# plt.close()
