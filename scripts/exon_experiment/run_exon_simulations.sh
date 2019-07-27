@@ -31,7 +31,7 @@ plot_file=$outbase/"summary"
 
 
 echo -n  "id","type","Depth","p","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions","switches"$'\n' > $summary_file
-echo -n  "id","type","Depth","p","q_acc","r_acc", "total_errors","error_rate","subs","ins","del","switch","abundance"$'\n' > $results_file
+echo -n  "id","type","Depth","p","q_acc","r_acc","total_errors","error_rate","subs","ins","del","switch","abundance"$'\n' > $results_file
 
 
 for id in $(seq 1 1 3)  
@@ -73,11 +73,11 @@ do
 done
 
 
-echo  $experiment_dir/plot_exon_data.py $summary_file $plot_file
+# echo  $experiment_dir/plot_exon_data.py $summary_file $plot_file
 python $experiment_dir/plot_exon_data.py $results_file $plot_file"_tot.pdf" error_rate
-python $experiment_dir/plot_exon_data.py $summary_file $plot_file"_subs.pdf" Substitutions
-python $experiment_dir/plot_exon_data.py $summary_file $plot_file"_ind.pdf" Insertions
-python $experiment_dir/plot_exon_data.py $summary_file $plot_file"_del.pdf" Deletions
+# python $experiment_dir/plot_exon_data.py $summary_file $plot_file"_subs.pdf" Substitutions
+# python $experiment_dir/plot_exon_data.py $summary_file $plot_file"_ind.pdf" Insertions
+# python $experiment_dir/plot_exon_data.py $summary_file $plot_file"_del.pdf" Deletions
 
 python $experiment_dir/plot_frac_switches.py $results_file $plot_file"_overcorrected.pdf" 
 

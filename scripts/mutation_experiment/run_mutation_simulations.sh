@@ -31,7 +31,7 @@ plot_file=$outbase/"summary"
 
 
 echo -n  "id","type","Depth","p","tot","err","subs","ins","del","Total","Substitutions","Insertions","Deletions"$'\n' > $summary_file
-echo -n  "id","type","Depth","p","q_acc","r_acc", "total_errors","identity","subs","ins","del","switch","abundance","mutation_present","minor"$'\n' > $results_file
+echo -n  "id","type","Depth","p","q_acc","r_acc","total_errors","identity","subs","ins","del","switch","abundance","mutation_present","minor"$'\n' > $results_file
 
 for depth in 20 50 100 # 20 50 # 50 # 100  #200 500 
 do 
