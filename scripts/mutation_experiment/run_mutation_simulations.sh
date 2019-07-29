@@ -36,10 +36,10 @@ echo -n  "id","type","Depth","p","q_acc","r_acc","total_errors","error_rate","su
 
 for depth in 20 50 # 20 50 # 50 # 100  #200 500 
 do 
-    for id in $(seq 1 1 2) 
+    for id in $(seq 1 1 3) 
     do
         python $experiment_dir/simulate_reads.py --sim_genome_len 300 --coords 0 100 200 300 --outfolder $outbase/$depth/$id/ --probs 1.0 $p 1.0  --nr_reads $depth > /dev/null
-        for p in $(seq 0.1 0.1 0.2) # $(seq 0.1 0.1 1.0)  # $(seq 0.1 0.1 0.2)
+        for p in $(seq 0.1 0.1 0.3) # $(seq 0.1 0.1 1.0)  # $(seq 0.1 0.1 0.2)
         do
             python $experiment_dir/simulate_reads.py --isoforms $outbase/$depth/$id/isoforms.fa  --coords 0 100 200 300 --outfolder $outbase/$depth/$id/$p --probs 1.0 $p 1.0  --nr_reads $depth > /dev/null
 
@@ -50,13 +50,13 @@ do
             #         python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$depth/$id/$p/reads.fq   --outfolder $outbase/$depth/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80   &> /dev/null
             # fi
 
-            python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$depth/$id/$p/reads.fq   --outfolder $outbase/$depth/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80  > /dev/null            
+            python $inbase/isONcorrect3 --fastq $outbase/$depth/$id/$p/reads.fq   --outfolder $outbase/$depth/$id/$p/isoncorrect/ --T 0.1 --k 7 --w 10 --xmax 80  > /dev/null            
             python $eval_dir/evaluate_simulated_reads.py  $outbase/$depth/$id/$p/isoncorrect/corrected_reads.fastq  $outbase/$depth/$id/isoforms.fa  $outbase/$depth/$id/$p/isoncorrect/evaluation --deal_with_ties > /dev/null
             echo -n  $id,approx,$depth,$p,&& head -n 1 $outbase/$depth/$id/$p/isoncorrect/evaluation/summary.csv 
             echo -n  $id,approx,$depth,$p, >> $summary_file && head -n 1 $outbase/$depth/$id/$p/isoncorrect/evaluation/summary.csv >> $summary_file
             awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_p=$p  '{if (NR!=1) {print awk_id",approx,"awk_depth","awk_p","$0}}'  $outbase/$depth/$id/$p/isoncorrect/evaluation/results.csv >> $results_file
 
-            python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$depth/$id/$p/reads.fq   --outfolder $outbase/$depth/$id/$p/isoncorrect_exact/ --k 7 --w 10 --xmax 80 --exact   > /dev/null            
+            python $inbase/isONcorrect3 --fastq $outbase/$depth/$id/$p/reads.fq   --outfolder $outbase/$depth/$id/$p/isoncorrect_exact/ --T 0.1 --k 7 --w 10 --xmax 80 --exact   > /dev/null            
             python $eval_dir/evaluate_simulated_reads.py  $outbase/$depth/$id/$p/isoncorrect_exact/corrected_reads.fastq  $outbase/$depth/$id/isoforms.fa  $outbase/$depth/$id/$p/isoncorrect_exact/evaluation --deal_with_ties > /dev/null
             echo -n  $id,exact,$depth,$p,&& head -n 1 $outbase/$depth/$id/$p/isoncorrect_exact/evaluation/summary.csv 
             echo -n  $id,exact,$depth,$p, >> $summary_file && head -n 1 $outbase/$depth/$id/$p/isoncorrect_exact/evaluation/summary.csv >> $summary_file
