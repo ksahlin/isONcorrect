@@ -174,7 +174,7 @@ def edlib_alignment(x, y, k):
     ed = result["editDistance"]
     return ed
 
-def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.2):
+def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.1):
     weight = len(curr_best_seqs)
     # r_seq = curr_best_seqs["curr_read"][0]
     # print(r_seq)
@@ -245,14 +245,6 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     # print(h_pol_counts)    
     assert len(alignment_matrix["ref"]) == len(h_pol_counts)
 
-    # if "CCTCAGCA" in spoa_ref:
-    #     print("Minor", spoa_ref)
-    #     # print(PFM)
-
-    # if "CCTCTGCA" in spoa_ref:
-    #     print("Major", spoa_ref)
-    #     # indx = spoa_ref.index("CCTCTGCA")
-    #     # print(PFM)
 
     for i, d in enumerate(PFM):
         n_max, count_max = max(d.items(), key = lambda x: x[1])
@@ -261,75 +253,22 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
             if h_pol_counts[i]*c > count_max:
                 n_max = n_max2 
                 count_max = c
-            # if c > 0.4*count_max:
-            #     n_max = n_max2 
 
-        # tot_depth = sum(d.values())
-        # del_ratio = v_depth_ratio_threshold*h_pol_counts[i]
-        # print(read_nucl, d[read_nucl], n_max, count_max)
-
-        # if n_max == "-":
-        #     c, n_max2 = max([(c,n) for n,c in d.items() if n != "-"])
-        #     if c > count_max/float(h_pol_counts[i]):
-        #         n_max = n_max2
-        #         count_max = c
-
-        # curr_read_corr = []
         ref_nucl = alignment_matrix["ref"][i]
+        variant_threshold = max(2, d[ref_nucl] * v_depth_ratio_threshold) # at least two reads have to have variant to avoid degenerate case
         for q_id_tuple in alignment_matrix:
             if q_id_tuple == "ref":
                 continue
 
             read_nucl = alignment_matrix[q_id_tuple][i]
             if read_nucl != "-" and ref_nucl != "-" and read_nucl != ref_nucl:
-                if d[ref_nucl] * v_depth_ratio_threshold <= d[read_nucl]: # potential variant position
-                    # print(q_id_tuple[0])
-                    # if q_id_tuple[0] == "curr_read":
-                    #     print("Preserving", read_nucl, "from", ref_nucl,  d[ref_nucl], v_depth_ratio_threshold, d[read_nucl], q_id_tuple)
+                if variant_threshold <= d[read_nucl]: # potential variant position
                     other_corrections[q_id_tuple].append(read_nucl)
                 else:
                     other_corrections[q_id_tuple].append(n_max)
 
             else:
                 other_corrections[q_id_tuple].append(n_max)
-
-
-
-            # OLD METHOD
-            
-            # if alignment_matrix["ref"][i] != "-" and alignment_matrix[q_id_tuple][i] != "-" and alignment_matrix["ref"][i] != alignment_matrix[q_id_tuple][i]:
-            #     if d[alignment_matrix["ref"][i]] * v_depth_ratio_threshold <= d[alignment_matrix[q_id_tuple][i]]: # potential variant position
-            #         # print("SAVED varinant")
-            #         other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
-            #     else:
-            #         other_corrections[q_id_tuple].append(n_max)              
-
-            # if n_max != '-' and alignment_matrix[q_id_tuple][i] != '-': 
-            #     # variants = d.items()
-            #     # if n_max != alignment_matrix[q_id_tuple][i]:
-            #         # print("here!!!!!!!!!", count_max, d[alignment_matrix[q_id_tuple][i]])
-
-            #     if n_max != alignment_matrix[q_id_tuple][i] and count_max * v_depth_ratio_threshold <= d[alignment_matrix[q_id_tuple][i]]: # potential variant position
-            #         # print("SAVED varinant")
-            #         other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
-            #     else:
-            #         other_corrections[q_id_tuple].append(n_max)
-            
-            # elif n_max == '-' and alignment_matrix[q_id_tuple][i] != '-':
-            #     if n_max != alignment_matrix[q_id_tuple][i] and count_max * v_depth_ratio_threshold < d[alignment_matrix[q_id_tuple][i]]: # potential variant position
-            #         # print("SAVED varinant")
-            #         other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
-            #     else:
-            #         other_corrections[q_id_tuple].append(n_max)
-
-
-            # else:
-            #     # if d[alignment_matrix["ref"][i]] * v_depth_ratio_threshold <= d[alignment_matrix[q_id_tuple][i]]: # potential variant position
-            #     #     # print("SAVED varinant")
-            #     #     other_corrections[q_id_tuple].append(alignment_matrix[q_id_tuple][i]) # preserve substitution
-            #     # else:
-            #     #     other_corrections[q_id_tuple].append(n_max)   
-            #     other_corrections[q_id_tuple].append(n_max)
 
 
 
@@ -344,12 +283,7 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
 
         if q_id == "curr_read":
             curr_read_corr = "".join([n for n in other_read_corr if n != "-"])
-        # if other_read_corr[k_size:-k_size] == "ACTCAAGCATTA":
-        #     print(q_id, curr_best_seqs[q_id][2], curr_best_seqs[q_id][3])
-        #     print(curr_best_seqs[q_id][2], curr_best_seqs[q_id][3])
-        #     sys.exit()
-    # print(other_read_corr)
-    # sys.exit()
+
     return curr_read_corr[k_size:-k_size], other_corrections_final
 
 
@@ -730,8 +664,8 @@ if __name__ == '__main__':
     parser.add_argument('--k', type=int, default=7, help='Kmer size')
     parser.add_argument('--w', type=int, default=10, help='Window size')
     parser.add_argument('--xmin', type=int, default=14, help='Upper interval length')
-    parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
-    parser.add_argument('--T', type=float, default=0.2, help='Upper interval length')
+    parser.add_argument('--xmax', type=int, default=80, help='Lower interval length')
+    parser.add_argument('--T', type=float, default=0.2, help='Minimum fraction keeping substitution')
     parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
                                                                  not to be used for clusters with over ~500 reads)')
   
