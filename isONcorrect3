@@ -226,11 +226,11 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     # read_aln = alignment_matrix["curr_read"]
 
     # get homopolymer adjustment
-    h_tmp = [len(list(_)) for ch, _ in itertools.groupby(spoa_ref) ]
+    h_tmp = [(len(list(_)), ch ) for ch, _ in itertools.groupby(spoa_ref) ]
     # print(h_tmp)
     # print(spoa_ref)
     h_tmp2 = []
-    h_tmp2 = [c for c in h_tmp for i in range(c)]
+    h_tmp2 = [(c, ch, i) for (c, ch) in h_tmp for i in range(c)]
     # print(h_tmp2)
     assert len(h_tmp2) == len(spoa_ref)
     curr_pos = 0
@@ -245,30 +245,38 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     # print(h_pol_counts)    
     assert len(alignment_matrix["ref"]) == len(h_pol_counts)
 
-
+    instance_depth = len(alignment_matrix)
     for i, d in enumerate(PFM):
-        n_max, count_max = max(d.items(), key = lambda x: x[1])
-        if n_max == "-":
-            c, n_max2 = max([(c,n) for n,c in d.items() if n != "-"])
-            if h_pol_counts[i]*c > count_max:
-                n_max = n_max2 
-                count_max = c
-
         ref_nucl = alignment_matrix["ref"][i]
+
+        # if h_pol_counts[i][0] >= 4:
+        #     for gg in alignment_matrix:
+        #         print(alignment_matrix[gg][i:i+16])
+        #     print(h_pol_counts[i:i+16])
+            # sys.exit()
+
+        n_max, count_max = max(d.items(), key = lambda x: x[1])
+        if n_max == "-" and n_max != ref_nucl:
+            # c, n_max2 = max([(c,n) for n,c in d.items() if n != "-"])
+            if h_pol_counts[i][0]*d[ref_nucl] > count_max:
+                n_max = ref_nucl #h_pol_counts[i][1 ]#n_max2 
+                # count_max = c
+                print("Changed - to", n_max, "hpol length:", h_pol_counts[i][0], "ref count:", d[ref_nucl], "prev max:", count_max )
+
         # n_max = alignment_matrix["ref"][i]
         # count_max = d[ref_nucl]
-        variant_threshold = max(2, d[ref_nucl] * v_depth_ratio_threshold) # at least two reads have to have variant to avoid degenerate case
+        variant_threshold = max(2, count_max * v_depth_ratio_threshold) # at least two reads have to have variant to avoid degenerate case
         for q_id_tuple in alignment_matrix:
             if q_id_tuple == "ref":
                 continue
 
             read_nucl = alignment_matrix[q_id_tuple][i]
-            if read_nucl != "-" and ref_nucl != "-" and read_nucl != ref_nucl:
+            if read_nucl != "-" and read_nucl != n_max:
                 if variant_threshold <= d[read_nucl]: # potential variant position
                     other_corrections[q_id_tuple].append(read_nucl)
                 else:
                     other_corrections[q_id_tuple].append(n_max)
-
+            # elif read_nucl != ref_nucl
             else:
                 other_corrections[q_id_tuple].append(n_max)
 

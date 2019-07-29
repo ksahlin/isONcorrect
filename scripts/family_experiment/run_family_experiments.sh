@@ -48,7 +48,7 @@ for id in $(seq 1 1 3)
 do 
     python $experiment_dir/generate_transcripts.py --exon_file $outbase/exons/$gene_member"_exons.fa"  $outbase/$id/biological_material.fa --gene_member $gene_member  --family_size $family_size --isoform_distribution exponential  --mutation_rate $mut_rate  > /dev/null
 
-    for depth in 10 20 #50 #100 #200 #20 #20 50 100 #10 20 #50 # 100 200 500 1000 5000 10000
+    for depth in 100 # 20 #50 #100 #200 #20 #20 50 100 #10 20 #50 # 100 200 500 1000 5000 10000
     do
         python $experiment_dir/generate_abundance.py --transcript_file $outbase/$id/biological_material.fa --abundance $abundance $outbase/$id/$depth/biological_material_abundance.fa   > /dev/null
         python $experiment_dir/generate_ont_reads.py $outbase/$id/$depth/biological_material_abundance.fa $outbase/$id/$depth/reads.fq $depth > /dev/null
