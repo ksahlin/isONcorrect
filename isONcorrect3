@@ -412,49 +412,49 @@ def solve_WIS(all_intervals_sorted_by_finish):
 D = {chr(i) : min( 10**( - (ord(chr(i)) - 33)/10.0 ), 0.79433)  for i in range(128)}
 
 
-def eval_sim(corr, seq, qual, tot_before, tot_after):
-    true = "AGCAATCAGACTCAAGCATTAAAATACCCGCCCAGAATATGCCATCAAACTGCCTGGCCCGACAAATTAATGCTGAAATTGTTAACTGACCGGAGGTCGACGTACCGACACTAGGAGGAGCGGGACTGTAGGAAAACCACTATCCTTTTC"
-    r1 = edlib.align(true, corr, task="path", mode="NW")
-    ref_alignment1, read_alignment = help_functions.cigar_to_seq(r1["cigar"], true, corr)
+# def eval_sim(corr, seq, qual, tot_before, tot_after):
+#     true = "AGCAATCAGACTCAAGCATTAAAATACCCGCCCAGAATATGCCATCAAACTGCCTGGCCCGACAAATTAATGCTGAAATTGTTAACTGACCGGAGGTCGACGTACCGACACTAGGAGGAGCGGGACTGTAGGAAAACCACTATCCTTTTC"
+#     r1 = edlib.align(true, corr, task="path", mode="NW")
+#     ref_alignment1, read_alignment = help_functions.cigar_to_seq(r1["cigar"], true, corr)
 
-    ins = len([1 for n in ref_alignment1[10:-10] if n == "-"])
-    del_ = len([1 for n in read_alignment[10:-10] if n == "-"])
-    subs =  len([p for p, (n1,n2) in enumerate(zip(read_alignment[10:-10], ref_alignment1[10:-10])) if n1 != "-" and n2 != "-" and n1 != n2 ])
-    tot_after["subs"] += subs
-    tot_after["ins"] += ins
-    tot_after["del"] += del_
+#     ins = len([1 for n in ref_alignment1[10:-10] if n == "-"])
+#     del_ = len([1 for n in read_alignment[10:-10] if n == "-"])
+#     subs =  len([p for p, (n1,n2) in enumerate(zip(read_alignment[10:-10], ref_alignment1[10:-10])) if n1 != "-" and n2 != "-" and n1 != n2 ])
+#     tot_after["subs"] += subs
+#     tot_after["ins"] += ins
+#     tot_after["del"] += del_
 
-    r2 = edlib.align(true, seq, task="path", mode="NW")
-    ref_alignment2, read_orig_alignment = help_functions.cigar_to_seq(r2["cigar"], true, seq)
+#     r2 = edlib.align(true, seq, task="path", mode="NW")
+#     ref_alignment2, read_orig_alignment = help_functions.cigar_to_seq(r2["cigar"], true, seq)
 
-    ins = len([1 for n in ref_alignment2 if n == "-"])
-    del_ = len([1 for n in read_orig_alignment if n == "-"])
-    subs =  r2["editDistance"] - ins - del_
-    tot_before["subs"] += subs
-    tot_before["ins"] += ins
-    tot_before["del"] += del_
+#     ins = len([1 for n in ref_alignment2 if n == "-"])
+#     del_ = len([1 for n in read_orig_alignment if n == "-"])
+#     subs =  r2["editDistance"] - ins - del_
+#     tot_before["subs"] += subs
+#     tot_before["ins"] += ins
+#     tot_before["del"] += del_
 
-def eval_sim2(corr, seq, qual, tot_before, tot_after):
-    true = "GCCAACGGCTTGGTGCCAAACACAATCGTCGTTGTCAATAACGCCTGCTAATCACTGCTTGGTGCGGCAGCTTGCTAACGATGAAAAGATTTGGATGGGTCCGATCTAATTACACGATAACGTGAGTCTAACCCTTAGTCTGTAAGAACT"
-    r1 = edlib.align(true, corr, task="path", mode="NW")
-    ref_alignment1, read_alignment = help_functions.cigar_to_seq(r1["cigar"], true, corr)
+# def eval_sim2(corr, seq, qual, tot_before, tot_after):
+#     true = "GCCAACGGCTTGGTGCCAAACACAATCGTCGTTGTCAATAACGCCTGCTAATCACTGCTTGGTGCGGCAGCTTGCTAACGATGAAAAGATTTGGATGGGTCCGATCTAATTACACGATAACGTGAGTCTAACCCTTAGTCTGTAAGAACT"
+#     r1 = edlib.align(true, corr, task="path", mode="NW")
+#     ref_alignment1, read_alignment = help_functions.cigar_to_seq(r1["cigar"], true, corr)
 
-    ins = len([1 for n in ref_alignment1 if n == "-"])
-    del_ = len([1 for n in read_alignment if n == "-"])
-    subs =  len([p for p, (n1,n2) in enumerate(zip(read_alignment, ref_alignment1)) if n1 != "-" and n2 != "-" and n1 != n2 ])
-    tot_after["subs"] += subs
-    tot_after["ins"] += ins
-    tot_after["del"] += del_
+#     ins = len([1 for n in ref_alignment1 if n == "-"])
+#     del_ = len([1 for n in read_alignment if n == "-"])
+#     subs =  len([p for p, (n1,n2) in enumerate(zip(read_alignment, ref_alignment1)) if n1 != "-" and n2 != "-" and n1 != n2 ])
+#     tot_after["subs"] += subs
+#     tot_after["ins"] += ins
+#     tot_after["del"] += del_
 
-    r2 = edlib.align(true, seq, task="path", mode="NW")
-    ref_alignment2, read_orig_alignment = help_functions.cigar_to_seq(r2["cigar"], true, seq)
+#     r2 = edlib.align(true, seq, task="path", mode="NW")
+#     ref_alignment2, read_orig_alignment = help_functions.cigar_to_seq(r2["cigar"], true, seq)
 
-    ins = len([1 for n in ref_alignment2 if n == "-"])
-    del_ = len([1 for n in read_orig_alignment if n == "-"])
-    subs =  r2["editDistance"] - ins - del_
-    tot_before["subs"] += subs
-    tot_before["ins"] += ins
-    tot_before["del"] += del_
+#     ins = len([1 for n in ref_alignment2 if n == "-"])
+#     del_ = len([1 for n in read_orig_alignment if n == "-"])
+#     subs =  r2["editDistance"] - ins - del_
+#     tot_before["subs"] += subs
+#     tot_before["ins"] += ins
+#     tot_before["del"] += del_
 
 
 def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size):
@@ -485,7 +485,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
             p_error_ref =  sum([D[char_] for char_ in ref_qual])/len(ref_qual) 
 
             seqs["curr_read"].append((ref_seq, ref_qual, p1, p2))
-            seqs_to_id = { ref_seq : [ ("curr_read",p1, p2)]}
+            # seqs_to_id = { ref_seq : [ ("curr_read",p1, p2)]}
 
             # print(p1, p2) #, relevant_reads)
             # print(m1,m2)
@@ -682,7 +682,8 @@ def main(args):
                     all_intervals.extend(previously_corrected_regions[r_id])
                     del previously_corrected_regions[r_id]
                     # del stored_calculated_regions[r_id]
-
+                # if r_id == 11:
+                #     print(all_intervals)
 
                 # for tmp_, inT_ in enumerate(all_intervals):
                 #     print(tmp_, inT_)
@@ -707,7 +708,7 @@ def main(args):
                 print("@{0}\n{1}\n+\n{2}".format(acc, corrected_seq, "+"*len(corrected_seq) ))
                 eprint("{0},{1}".format(r_id,corrected_seq))
 
-                eval_sim2(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
+                # eval_sim2(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
 
     eprint("tot_before:", tot_errors_before)
     eprint("tot_after:", sum(tot_errors_after.values()), tot_errors_after)

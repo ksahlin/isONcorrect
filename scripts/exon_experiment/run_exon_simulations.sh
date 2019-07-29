@@ -56,8 +56,8 @@ do
             echo -n  $id,approx,$depth,$p, >> $summary_file && head -n 1 $outbase/$depth/$id/$p/isoncorrect/evaluation/summary.csv >> $summary_file
             awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_p=$p  '{if (NR!=1) {print awk_id",approx,"awk_depth","awk_p","$0}}'  $outbase/$depth/$id/$p/isoncorrect/evaluation/results.csv >> $results_file
 
-            python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$depth/$id/$p/reads.fq   --outfolder $outbase/$depth/$id/$p/isoncorrect/ --k 7 --w 10 --xmax 80 --exact   > /dev/null            
-            python $eval_dir/evaluate_simulated_reads.py  $outbase/$depth/$id/$p/isoncorrect/corrected_reads.fastq  $outbase/$depth/$id/isoforms.fa $outbase/$depth/$id/$p/isoncorrect_exact/evaluation > /dev/null
+            python /users/kxs624/Documents/workspace/isONcorrect/isONcorrect3 --fastq $outbase/$depth/$id/$p/reads.fq   --outfolder $outbase/$depth/$id/$p/isoncorrect_exact/ --k 7 --w 10 --xmax 80 --exact   > /dev/null            
+            python $eval_dir/evaluate_simulated_reads.py  $outbase/$depth/$id/$p/isoncorrect_exact/corrected_reads.fastq  $outbase/$depth/$id/isoforms.fa $outbase/$depth/$id/$p/isoncorrect_exact/evaluation > /dev/null
             echo -n  $id,exact,$depth,$p,&& head -n 1 $outbase/$depth/$id/$p/isoncorrect_exact/evaluation/summary.csv 
             echo -n  $id,exact,$depth,$p, >> $summary_file && head -n 1 $outbase/$depth/$id/$p/isoncorrect_exact/evaluation/summary.csv >> $summary_file
             awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_p=$p '{if (NR!=1) {print awk_id",exact,"awk_depth","awk_p","$0}}'  $outbase/$depth/$id/$p/isoncorrect_exact/evaluation/results.csv >> $results_file
