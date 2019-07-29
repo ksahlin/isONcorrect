@@ -255,6 +255,8 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
                 count_max = c
 
         ref_nucl = alignment_matrix["ref"][i]
+        # n_max = alignment_matrix["ref"][i]
+        # count_max = d[ref_nucl]
         variant_threshold = max(2, d[ref_nucl] * v_depth_ratio_threshold) # at least two reads have to have variant to avoid degenerate case
         for q_id_tuple in alignment_matrix:
             if q_id_tuple == "ref":
