@@ -30,7 +30,7 @@ def mkdir_p(path):
 
 
 def isoncorrect(data):
-    isoncorrect_location, read_fastq_file, outfolder, cl_id = data[0],data[1],data[2], data[3]
+    isoncorrect_location, read_fastq_file, outfolder, cl_id, isoncorrect_algorithm_params = data[0],data[1],data[2], data[3], data[4]
     mkdir_p(outfolder)
     isoncorrect_exec = os.path.join(isoncorrect_location, "isONcorrect3")
     isoncorrect_error_file = os.path.join(outfolder, "stderr.txt")
@@ -40,7 +40,11 @@ def isoncorrect(data):
         
         # null = open("/dev/null", "w")
         isoncorrect_out_file = open(os.path.join(outfolder, "stdout.txt"), "w")
-        subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder ], stderr=error_file, stdout=isoncorrect_out_file)
+        subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+                                "--exact_instance_limit",  isoncorrect_algorithm_params["exact_instance_limit"],
+                                "--k",  isoncorrect_algorithm_params["k"],  "--w",  isoncorrect_algorithm_params["w"],
+                                "--xmin",  isoncorrect_algorithm_params["xmin"],  "--xmax",  isoncorrect_algorithm_params["xmax"],
+                                "--T",  isoncorrect_algorithm_params["T"] ], stderr=error_file, stdout=isoncorrect_out_file)
         print('Done with cl_id:{0}.'.format(cl_id))
         stdout.flush()
     error_file.close()
@@ -64,7 +68,8 @@ def main(args):
                 if os.path.isfile(os.path.join(outfolder, "corrected_reads.fastq")): 
                     print("already computed cluster", cl_id)
                 else:
-                    instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id)) )
+                    isoncorrect_algorithm_params = { "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.x_max, "T" args.T }
+                    instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
             else:
                 instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id)) )
             # print(os.path.join(directory, read_fastq_file))
@@ -111,13 +116,14 @@ if __name__ == '__main__':
     parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
     parser.add_argument('--k', type=int, default=7, help='Kmer size')
     parser.add_argument('--w', type=int, default=10, help='Window size')
-    parser.add_argument('--xmin', type=int, default=14, help='Upper interval length')
+    parser.add_argument('--xmin', type=int, default=14, help='Lower interval length')
     parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
-    parser.add_argument('--T', type=float, default=0.2, help='Upper interval length')
+    parser.add_argument('--T', type=float, default=0.2, help='Minimum fraction keeping substitution')
+    parser.add_argument('--exact_instance_limit', default=200,  help='Do not recompute previous results')
     parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results')
 
-    parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
-                                                                 not to be used for clusters with over ~500 reads)')
+    # parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
+    #                                                              not to be used for clusters with over ~500 reads)')
   
     parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
     args = parser.parse_args()
