@@ -68,7 +68,7 @@ def main(args):
                 if os.path.isfile(os.path.join(outfolder, "corrected_reads.fastq")): 
                     print("already computed cluster", cl_id)
                 else:
-                    isoncorrect_algorithm_params = { "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.x_max, "T" args.T }
+                    isoncorrect_algorithm_params = { "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.x_max, "T" : args.T }
                     instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
             else:
                 instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id)) )
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--xmin', type=int, default=14, help='Lower interval length')
     parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.2, help='Minimum fraction keeping substitution')
-    parser.add_argument('--exact_instance_limit', default=200,  help='Do not recompute previous results')
+    parser.add_argument('--exact_instance_limit', default=100,  help='Do not recompute previous results')
     parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results')
 
     # parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
