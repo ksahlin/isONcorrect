@@ -523,6 +523,9 @@ def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
     eprint("Correcting {0} reads.".format(len(reads)))
+    if len(reads) < args.exact_instance_limit:
+        args.exact = True
+
     start = time()
     corrected_reads = {}
     v_depth_ratio_threshold = args.T
@@ -678,7 +681,9 @@ if __name__ == '__main__':
     parser.add_argument('--T', type=float, default=0.2, help='Minimum fraction keeping substitution')
     parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
                                                                  not to be used for clusters with over ~500 reads)')
-  
+    
+    parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance')
+
     parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
                                                                         minmimizer combinations to span regions in homopolymenr dense regions. Solution \
                                                                         could be to adjust upper interval legnth dynamically to guarantee a certain number of spanning intervals.')
