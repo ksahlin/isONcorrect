@@ -37,10 +37,12 @@ original_reads_mappings=$outbase/"original_"$depth".sam"
 
 
 results_file=$outbase/"results_"$depth".csv"
-echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","subs","ins","del","switch","abundance"$'\n' > $results_file
+# echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","subs","ins","del","switch","abundance"$'\n' > $results_file
+plot_file=$outbase/"summary"
+
 
 # # Remove redundant
-database_filtered=$outbase/transcriptsfiltered.fa
+# database_filtered=$outbase/transcriptsfiltered.fa
 # python $experiment_dir/remove_redundant.py $database $database_filtered
 
 # # Simulate reads
@@ -66,40 +68,43 @@ database_filtered=$outbase/transcriptsfiltered.fa
 
 
 # Evaluate indiviually corrected clusters    
-# > $corrected_reads_fastq
-# FILES="$outbase/$id/$depth/isoncorrect"/*/corrected_reads.fastq
-# find $outbase/1/$depth/isoncorrect/*
-for folder in $(find $outbase/$depth/isoncorrect/*  -type d); #c_id in $(seq 0 1 1000) $"${FILES[@]}"
-    do 
-        # echo $folder
-        cl_id=$(basename $folder)
-        echo $cl_id
-        # if (( $cl_id > 50 ));
-        #     then
-        #         break
-        # fi
+# for folder in $(find $outbase/$depth/isoncorrect/*  -type d); #c_id in $(seq 0 1 1000) $"${FILES[@]}"
+#     do 
+#         # echo $folder
+#         cl_id=$(basename $folder)
+#         echo $cl_id
+#         # if (( $cl_id > 50 ));
+#         #     then
+#         #         break
+#         # fi
 
-        # if [ *$cl_id*  == "evaluation_original isoncorrect"  ]; then
-        #   echo "Strings are equal" $cl_id
-        #   continue
-        # fi
+#         # if [ *$cl_id*  == "evaluation_original isoncorrect"  ]; then
+#         #   echo "Strings are equal" $cl_id
+#         #   continue
+#         # fi
 
-        if [ -f $folder/corrected_reads.fastq ]; then
-            echo $folder/corrected_reads.fastq
-            python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $folder/corrected_reads.fastq $database_filtered $folder/evaluation  #> /dev/null
-            awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",isoncorrect,"awk_depth",0,"$0}}'  $folder/evaluation/results.csv >> $results_file
+#         if [ -f $folder/corrected_reads.fastq ]; then
+#             echo $folder/corrected_reads.fastq
+#             python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $folder/corrected_reads.fastq $database_filtered $folder/evaluation  #> /dev/null
+#             awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",isoncorrect,"awk_depth",0,"$0}}'  $folder/evaluation/results.csv >> $results_file
             
-            python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $outbase/$depth/isonclust/fastq/$cl_id.fastq $database_filtered $folder/evaluation_reads  #> /dev/null
-            awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",original,"awk_depth",0,"$0}}'  $folder/evaluation_reads/results.csv >> $results_file
+#             python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $outbase/$depth/isonclust/fastq/$cl_id.fastq $database_filtered $folder/evaluation_reads  #> /dev/null
+#             awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",original,"awk_depth",0,"$0}}'  $folder/evaluation_reads/results.csv >> $results_file
 
-            # echo "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq
-            # cat "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq >> $corrected_reads_fastq
-        else
-           echo $folder  "File  does not exist."
-        fi
-    done
-#######################################
-    
+#             # echo "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq
+#             # cat "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq >> $corrected_reads_fastq
+#         else
+#            echo $folder  "File  does not exist."
+#         fi
+#     done
+# #######################################
+
+python $experiment_dir/plot_error_rates.py $results_file $plot_file"_tot.pdf" error_rate
+# python $experiment_dir/plot_error_rates.py $summary_file $plot_file"_subs.pdf" Substitutions
+# python $experiment_dir/plot_error_rates.py $summary_file $plot_file"_ind.pdf" Insertions
+# python $experiment_dir/plot_error_rates.py $summary_file $plot_file"_del.pdf" Deletions
+python $experiment_dir/plot_abundance_diff.py $results_file $plot_file"_abundance_diff.pdf" 
+
 # # # Evaluate error rates
 # error_plot=$outbase/$id/$depth/"error_rates_"$depth".pdf" 
 # python $experiment_dir/get_error_rates.py  $database_filtered $outbase/$id/$depth/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
