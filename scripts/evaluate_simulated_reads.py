@@ -126,7 +126,7 @@ def reference_similarity(reference_transcripts, outfolder, params):
     # for t_acc, copy_nr in transcript_copies.items():
     #     print(t_acc, copy_nr)
     # print("abundances:", transcript_abundances)
-
+    reference_similarities = []
     if not params.no_ref_sim:
         # relative_abundance_matrix = {}
         # annotation_matrix = {}
@@ -202,13 +202,14 @@ def get_minimizers_2set_simple(querys, targets):
     for acc1, seq1 in querys.items():
         best_ed = len(seq1)
         for acc2, seq2 in targets.items():
-            edit_distance = edlib_ed(seq1, seq2, mode="NW", k = 2*len(seq1)) # seq1 = query, seq2 = target
-            if 0 <= edit_distance < best_ed:
-                best_ed = edit_distance
-                best_edit_distances[acc1] = {}
-                best_edit_distances[acc1][acc2] = best_ed
-            elif edit_distance == best_ed:
-                best_edit_distances[acc1][acc2] = best_ed
+            if acc1[:3] == acc2[:3]: #same gene family
+                edit_distance = edlib_ed(seq1, seq2, mode="NW", k = 2*len(seq1)) # seq1 = query, seq2 = target
+                if 0 <= edit_distance < best_ed:
+                    best_ed = edit_distance
+                    best_edit_distances[acc1] = {}
+                    best_edit_distances[acc1][acc2] = best_ed
+                elif edit_distance == best_ed:
+                    best_edit_distances[acc1][acc2] = best_ed
         # print(best_ed)
         # print(seq2)
         # print(seq1)
@@ -333,9 +334,9 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
     for acc in reference_transcripts:
         corrected_read_abundances[ acc.split("_")[0]]  = 0
 
-    print(len(original_abundances))
-    print(len(corrected_read_abundances))
-    print(set(corrected_read_abundances) ^ set(original_abundances) )
+    # print(len(original_abundances))
+    # print(len(corrected_read_abundances))
+    # print(set(corrected_read_abundances) ^ set(original_abundances) )
     # sys.exit()
     not_FN = set()
     if params.deal_with_ties:
@@ -393,9 +394,11 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
             # tie = False
             else:
                 if q_acc_mod == list(minimizer_graph_c_to_t[q_acc].keys())[0]:
-                    print("correct")
+                    # print("correct")
+                    pass
                 else:
-                    print("Wrong", q_acc, minimizer_graph_c_to_t[q_acc])
+                    # print("Wrong", q_acc, minimizer_graph_c_to_t[q_acc])
+                    pass
                     # continue
                 # print(q_acc, minimizer_graph_c_to_t[q_acc])
 
@@ -486,31 +489,32 @@ def main(args):
 
     out_file_ref_sim = open(os.path.join(args.outfolder, "ref_similaritiy_distr.csv"), "w")
 
-    ref_similarities = []
-    for i in range(len(reference_similarities)):
-        temp_list = reference_similarities[i]
-        del temp_list[i]
-        min_sim_to_i = min(temp_list) 
-        ref_similarities.append(min_sim_to_i)
-        # for j in range(len(reference_similarities[i])):
-        #     if i <= j:
-        #         continue
-        #     else:
-        #         ref_similarities.append(reference_similarities[i][j])
+    if not args.no_ref_sim:
+        ref_similarities = []
+        for i in range(len(reference_similarities)):
+            temp_list = reference_similarities[i]
+            del temp_list[i]
+            min_sim_to_i = min(temp_list) 
+            ref_similarities.append(min_sim_to_i)
+            # for j in range(len(reference_similarities[i])):
+            #     if i <= j:
+            #         continue
+            #     else:
+            #         ref_similarities.append(reference_similarities[i][j])
 
-    n = float( len(ref_similarities) )
-    mu =  sum(ref_similarities) / n
-    sigma = (sum(list(map((lambda x: x ** 2 - 2 * x * mu + mu ** 2), ref_similarities))) / (n - 1)) ** 0.5
-    min_error = min(ref_similarities)
-    max_error = max(ref_similarities)
-    ref_similarities.sort()
-    if len(ref_similarities) %2 == 0:
-        median_error = (ref_similarities[int(len(ref_similarities)/2)-1] + ref_similarities[int(len(ref_similarities)/2)]) / 2.0
-    else:
-        median_error = ref_similarities[int(len(ref_similarities)/2)]
+        n = float( len(ref_similarities) )
+        mu =  sum(ref_similarities) / n
+        sigma = (sum(list(map((lambda x: x ** 2 - 2 * x * mu + mu ** 2), ref_similarities))) / (n - 1)) ** 0.5
+        min_error = min(ref_similarities)
+        max_error = max(ref_similarities)
+        ref_similarities.sort()
+        if len(ref_similarities) %2 == 0:
+            median_error = (ref_similarities[int(len(ref_similarities)/2)-1] + ref_similarities[int(len(ref_similarities)/2)]) / 2.0
+        else:
+            median_error = ref_similarities[int(len(ref_similarities)/2)]
 
-    out_file_ref_sim.write("mean_error\tsd_error\tmin_error\tmax_error\tmedian_error\n")
-    out_file_ref_sim.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(mu, sigma, min_error, max_error, median_error))
+        out_file_ref_sim.write("mean_error\tsd_error\tmin_error\tmax_error\tmedian_error\n")
+        out_file_ref_sim.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(mu, sigma, min_error, max_error, median_error))
 
 
 

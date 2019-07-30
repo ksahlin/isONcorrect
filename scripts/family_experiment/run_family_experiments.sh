@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# RUN scripts e.g. as:   ./run_family_experiments.sh 0.01 4 exponential DAZ2 /Users/kxs624/Documents/workspace/isONcorrect/  /Users/kxs624/tmp/ISONCORRECT/SIMULATED_DATA/ /Users/kxs624/Documents/data/NCBI_RNA_database/Y_EXONS/Y_EXONS.fa
+# RUN scripts e.g. as:   ./run_family_experiments.sh 0.01 4 exponential DAZ3 /Users/kxs624/Documents/workspace/isONcorrect/  /Users/kxs624/tmp/ISONCORRECT/SIMULATED_DATA/ /Users/kxs624/Documents/data/NCBI_RNA_database/Y_EXONS/Y_EXONS.fa
 
 mut_rate=$1  # use 0.01 and 0.001
 family_size=$2
@@ -44,11 +44,11 @@ echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","
 
 python $experiment_dir/get_exons.py $database $outbase/"exons" > /dev/null
 
-for id in $(seq 1 1 3)  
+for id in $(seq 1 1 5)  
 do 
     python $experiment_dir/generate_transcripts.py --exon_file $outbase/exons/$gene_member"_exons.fa"  $outbase/$id/biological_material.fa --gene_member $gene_member  --family_size $family_size --isoform_distribution exponential  --mutation_rate $mut_rate  > /dev/null
 
-    for depth in 100 # 20 #50 #100 #200 #20 #20 50 100 #10 20 #50 # 100 200 500 1000 5000 10000
+    for depth in 20 50 100 # 20 #50 #100 #200 #20 #20 50 100 #10 20 #50 # 100 200 500 1000 5000 10000
     do
         python $experiment_dir/generate_abundance.py --transcript_file $outbase/$id/biological_material.fa --abundance $abundance $outbase/$id/$depth/biological_material_abundance.fa   > /dev/null
         python $experiment_dir/generate_ont_reads.py $outbase/$id/$depth/biological_material_abundance.fa $outbase/$id/$depth/reads.fq $depth > /dev/null
