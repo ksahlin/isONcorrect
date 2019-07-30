@@ -22,7 +22,7 @@ data=sys.argv[1]
 # seq=sys.argv[2]
 
 # f = open(data, "r")
-df = pd.read_csv(data) #, dtype={'id': str, "cov_true": int, "cov_aln": int, "type": str})
+indata = pd.read_csv(data) #, dtype={'id': str, "cov_true": int, "cov_aln": int, "type": str})
 # indata = df.loc[df['seq'] == str(seq)]
 # print(indata.info())
 # indata[["id"]] = indata.apply(pd.to_str)
@@ -35,11 +35,11 @@ df = pd.read_csv(data) #, dtype={'id': str, "cov_true": int, "cov_aln": int, "ty
 #             data=indata, kind="point", aspect=1)
 # ax = sns.scatterplot(x="abundance_original", y="abundance_corrected", #col="Depth", # col_wrap=3, #hue="time",
 #                       data=indata)
-g = sns.lmplot(x="cov_true", y="cov_aln",  hue="type", #x_jitter = 0.3, #fit_reg= True, x_jitter = 0.2, y_jitter = 0.2, #col="Depth", 
-                data=indata) #, col_wrap=2, height=3)
+# g = sns.lmplot(x="cov_true", y="cov_aln",  hue="type", #x_jitter = 0.3, #fit_reg= True, x_jitter = 0.2, y_jitter = 0.2, #col="Depth", 
+#                 data=indata) #, col_wrap=2, height=3)
 
 
-g = sns.catplot(x="p", y="switch", col="abundance", col_wrap=3,
+g = sns.catplot(x="abundance", y="switch", col="Depth", col_wrap=3,
             data=indata, hue="type", hue_order= ["isoncorrect", "original"],
             kind="bar", aspect=1)
 
