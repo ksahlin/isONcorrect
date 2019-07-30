@@ -200,7 +200,7 @@ def get_minimizers_2set_simple(querys, targets):
     best_edit_distances = {}
 
     for acc1, seq1 in querys.items():
-        best_ed = len(seq1)
+        best_ed = 100000 #len(seq1)
         for acc2, seq2 in targets.items():
             if acc1[:3] == acc2[:3]: #same gene family
                 edit_distance = edlib_ed(seq1, seq2, mode="NW", k = 2*len(seq1)) # seq1 = query, seq2 = target
