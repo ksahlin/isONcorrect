@@ -55,7 +55,7 @@ def readfq(fp): # this is a generator function
                 yield name, (seq, None) # yield a fasta record instead
                 break
 
-def plot_heatmap(file_name, data_frame_masked, annotation = True):
+def plot_heatmap(file_name, data_frame_masked, outfolder, annotation = True):
     out_file1 = os.path.join(outfolder, file_name + ".eps")
     out_file2 = os.path.join(outfolder, file_name + ".png")
     out_file3 = os.path.join(outfolder, file_name + ".pdf")
@@ -90,69 +90,37 @@ def plot_heatmap(file_name, data_frame_masked, annotation = True):
     fig.clf()
     #############################  
 
+
+def reference_abundances(sampled_transcripts, outfolder, params):
+    seqs_seen = set()
+    transcript_abundances = defaultdict(int)
+    for acc, seq in sorted(sampled_transcripts.items(), key=lambda x: len(x[1])):
+        acc_mod = acc.split("_")[0]
+        transcript_abundances[acc_mod] += 1
+
+    # sorted_reference_tuples = [ (acc.split("_")[0], transcript_abundances[acc.split("_")[0]]) for acc, seq in sorted(sampled_transcripts.items(), key = lambda x: len(x[1]))]
+    sorted_reference_tuples = [ (acc, ab) for acc, ab in transcript_abundances.items()]
+    reference_abundances = [0]*len(sorted_reference_tuples)
+    for i, (acc1,ab1) in enumerate(sorted_reference_tuples):
+        reference_abundances[i] = [0]*len(sorted_reference_tuples)
+        for j, (acc2,ab2) in enumerate(sorted_reference_tuples):
+            reference_abundances[i][j] = float(ab1)/ab2
+
+    relative_abundance_matrix_data_frame = pd.DataFrame(reference_abundances)
+    # msk = relative_abundance_matrix_data_frame > 99
+    # relative_abundance_matrix_data_frame_masked = relative_abundance_matrix_data_frame.mask(msk)
+    plot_heatmap("relative_abundance", relative_abundance_matrix_data_frame, outfolder)
+    # plot_heatmap("relative_abundance", relative_abundance_matrix_data_frame, annotation=True)
+
+
+
 def reference_similarity(reference_transcripts, outfolder, params):
     """
         Stats about reference transcripts
     """
-    seqs_seen = set()
-    transcript_abundances = {}
-    transcript_copies = Counter()
-    for acc, seq in sorted(reference_transcripts.items(), key=lambda x: len(x[1])):
 
-        try:
-            tr_acc, copy_number_str = acc.split("copy")
-
-        except ValueError:
-            tr_acc, copy_number_str = acc, "1"  # viral data not simulated
-
-        transcript_copies[tr_acc] += 1
-        try :
-            copy_number = int(copy_number_str)
-        except ValueError:
-            copy_number = 1
-
-        if tr_acc not in transcript_abundances:
-            transcript_abundances[tr_acc] = copy_number
-        elif tr_acc in transcript_abundances and copy_number >  transcript_abundances[tr_acc]:
-             transcript_abundances[tr_acc] = copy_number
-
-        if seq in seqs_seen:
-            # print("HERE!", len(seq))
-            del reference_transcripts[acc]
-        else:
-            seqs_seen.add(seq)
-
-    # print("Number of unique references:", len(reference_transcripts))
-    # for t_acc, copy_nr in transcript_copies.items():
-    #     print(t_acc, copy_nr)
-    # print("abundances:", transcript_abundances)
     reference_similarities = []
     if not params.no_ref_sim:
-        # relative_abundance_matrix = {}
-        # annotation_matrix = {}
-
-        sorted_reference_tuples = sorted(reference_transcripts.items(), key = lambda x: len(x[1]))
-        reference_abundances = [0]*len(sorted_reference_tuples)
-        for i, (acc1,seq1) in enumerate(sorted_reference_tuples):
-            reference_abundances[i] = [0]*len(sorted_reference_tuples)
-            # relative_abundance_matrix[acc1] = {}
-            # annotation_matrix[acc1] = {}
-            for j, (acc2,seq2) in enumerate(sorted_reference_tuples):
-                copy_nr_1 = transcript_abundances[acc1.split("copy")[0]]
-                copy_nr_2 = transcript_abundances[acc2.split("copy")[0]]
-                reference_abundances[i][j] = float(copy_nr_1)/copy_nr_2
-                # relative_abundance_matrix[acc1][acc2] = float(copy_nr_1)/copy_nr_2
-                # annotation_matrix[acc1][acc2] = str(fractions.Fraction(copy_nr_1, copy_nr_2))
-
-        # print(relative_abundance_matrix)
-        # print(annotation_matrix)
-        relative_abundance_matrix_data_frame = pd.DataFrame(reference_abundances)
-        # msk = relative_abundance_matrix_data_frame > 99
-        # relative_abundance_matrix_data_frame_masked = relative_abundance_matrix_data_frame.mask(msk)
-
-        plot_heatmap("relative_abundance", relative_abundance_matrix_data_frame)
-        # plot_heatmap("relative_abundance", relative_abundance_matrix_data_frame, annotation=True)
-
 
         print("calculating reference similarities")
         # do SW
@@ -184,9 +152,9 @@ def reference_similarity(reference_transcripts, outfolder, params):
         ref_sim_data_frame = pd.DataFrame(reference_similarities)
         msk = ref_sim_data_frame > 99
         ref_sim_data_frame_masked = ref_sim_data_frame.mask(msk)
-        plot_heatmap("similarities", ref_sim_data_frame_masked)
+        plot_heatmap("similarities", ref_sim_data_frame_masked, outfolder)
 
-    return transcript_abundances, transcript_copies, reference_similarities
+    return reference_similarities
 
 import edlib
 
@@ -484,7 +452,9 @@ def main(args):
     corrected_reads = {acc: seq.upper() for acc, (seq, _) in  readfq(open(args.corrected_reads, 'r'))}
     reference_transcripts = {acc: seq.upper() for acc, (seq, _) in  readfq(open(args.reference_transcripts, 'r'))}
     
-    transcript_abundances, transcript_copies, reference_similarities = reference_similarity(reference_transcripts, args.outfolder, args)
+    reference_similarities = reference_similarity(reference_transcripts, args.outfolder, args)
+    reference_abundances(corrected_reads, args.outfolder, args)
+    
     get_best_match(corrected_reads, reference_transcripts, args.outfolder, args)
 
     out_file_ref_sim = open(os.path.join(args.outfolder, "ref_similaritiy_distr.csv"), "w")
