@@ -159,7 +159,7 @@ rule evaluate:
         shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  {input.corrected_reads} {input.ref}  >  {output.original_reads_aligned} ")
 
 rule summary:
-    input: all_experiments = expand(rules.evaluate.output.csv_file, dataset=config["DATASET"], nr_reads=config["NR_READS"])
+    input: all_experiments = expand(rules.evaluate.output.csv_file, dataset=config["DATASETS"], nr_reads=config["NR_READS"])
     output: summary_table = os.path.join(config["ROOT_OUT"], "eval_table.csv")
     run:
         shell("> {output.summary_table}")
