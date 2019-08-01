@@ -41,7 +41,7 @@ indata = pd.read_csv(data) #, dtype={'id': str, "cov_true": int, "cov_aln": int,
 
 g = sns.catplot(x="abundance", y="switch", col="Depth", col_wrap=3,
             data=indata, hue="type", hue_order= ["isoncorrect", "original"],
-            kind="bar", aspect=1)
+            kind="point", aspect=1)
 
 # g.set(ylim=(0,100))
 g.set_ylabels("% Reads switched transcript")
