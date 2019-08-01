@@ -78,7 +78,7 @@ rule subsample:
     input:  fastq = config["ROOT_OUT"] + "/data/{dataset}/all_fl_reads.fq",
     output: subsampled_fastq =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}.fq"
     run:
-        shell("source activate py36")
+        # shell("source activate py36")
         inbase= config["ROOT_IN"]
         mkdir_p(config["ROOT_OUT"] + "/data/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads ) )
         shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads {wildcards.nr_reads}")
@@ -93,7 +93,7 @@ rule isONclust:
         mkdir_p(config["ROOT_OUT"] + "/time_and_mem/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads ) )
         outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)
         mkdir_p(outfolder)
-        shell("source activate py36")
+        # shell("source activate py36")
         shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust --t 32 --k 13 --w 20 {input.fastq}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
     
 
@@ -104,7 +104,7 @@ rule clusters_to_fastq:
              #"/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isONclust/mouse_ont_min_phred_q6/fastq_clusters/{clusterid}.fastq"
     run:
         time = config["GNUTIME"]
-        shell("source activate py36")
+        # shell("source activate py36")
         outfolder = config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/fastq/"
         shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust write_fastq --clusters {input.clusters} --fastq {input.fastq} --outfolder {outfolder} --N 5")
         shell("touch {output.flag}")
@@ -116,7 +116,7 @@ rule isoncorrect:
     run: 
         # outfolder = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont_min_phred_q6/fastq_clusters/{0}".format(wildcards.clusterid)
         # shell("python /galaxy/home/ksahlin/prefix/source/isONcorrect/isONcorrect --fastq {input.reads}  --outfolder {outfolder} ")
-        shell("source activate py36")
+        # shell("source activate py36")
         outfolder = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/"   
         infolder =  config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/fastq/"
         isoncorrect_dir = config["ROOT_IN"]
