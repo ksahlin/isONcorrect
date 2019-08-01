@@ -75,22 +75,23 @@ rule controlled_sim:
 
 
 rule subsample:
-    input:  fastq = os.path.join(config["ROOT_OUT"] + "/data/{dataset}/all_fl_reads.fq"),
-    output: subsampled_fastq =  os.path.join(config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}.fq")
+    input:  fastq = os.path.join(config["ROOT_OUT"], "data/{dataset}/all_fl_reads.fq"),
+    output: subsampled_fastq =  os.path.join(config["ROOT_OUT"], "data/{dataset}/{nr_reads}.fq")
     run:
         shell("source activate py36")
-        inbase= onfig["ROOT_IN"]
+        inbase= config["ROOT_IN"]
+        mkdir_p(config["ROOT_OUT"] + "/data/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads ) )
         shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads {wildcards.nr_reads}")
 
 
 rule isONclust:
     input:  fastq = rules.subsample.output,
-    output: time_and_mem =  os.path.join(config["ROOT_OUT"] + "/time_and_mem/{dataset}/{nr_reads}/time_and_mem.txt"),
-            clusters = os.path.join(config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/final_clusters.tsv") 
+    output: time_and_mem =  os.path.join(config["ROOT_OUT"], "/time_and_mem/{dataset}/{nr_reads}/time_and_mem.txt"),
+            clusters = os.path.join(config["ROOT_OUT"], "/clustering/{dataset}/{nr_reads}/final_clusters.tsv") 
     run:
         time = config["GNUTIME"]
-        mkdir_p(config["ROOT_OUT"] + "time_and_mem/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads ) )
-        outfolder = config["ROOT_OUT"] + "clustering/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)
+        mkdir_p(config["ROOT_OUT"] + "/time_and_mem/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads ) )
+        outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)
         mkdir_p(outfolder)
         shell("source activate py36")
         shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust --t 32 -k 13 -w 20 {input.flnc}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
@@ -144,7 +145,7 @@ rule align_corrected_reads_minimap2:
 rule align_original_reads_minimap2:
     input: original_reads = rules.subsample.output.subsampled_fastq,
             ref = config["MMI"]
-    output: original_reads_aligned =  os.path.join(config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}.sam")
+    output: original_reads_aligned =  os.path.join(config["ROOT_OUT"], "data/{dataset}/{nr_reads}.sam")
     run:
         shell("/usr/bin/time -v  minimap2 -t 8 -ax splice -uf -k14 {input.ref} {input.corrected_reads} >  {output.original_reads_aligned} ")
 
@@ -155,7 +156,7 @@ rule evaluate:
             original_reads_aligned =  rules.align_original_reads_minimap2.output.original_reads_aligned,
             corrected_reads_aligned =  rules.align_corrected_reads_minimap2.output.corrected_reads_aligned,
             ref = config["HG38"]
-    output: csv_file =  os.path.join(config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}.csv")
+    output: csv_file =  os.path.join(config["ROOT_OUT"], "evaluation_biological/{dataset}/{nr_reads}.csv")
     run:
         eval_dir = config["ROOT_IN"] + "/scripts/"
 
