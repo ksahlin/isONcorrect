@@ -523,8 +523,11 @@ def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
     eprint("Correcting {0} reads.".format(len(reads)))
-    if len(reads) < args.exact_instance_limit:
+    
+    if len(reads) <= args.exact_instance_limit:
         args.exact = True
+    if len(reads) <= args.w_equal_k_limit:
+        args.w = args.k
 
     start = time()
     corrected_reads = {}
@@ -683,6 +686,7 @@ if __name__ == '__main__':
                                                                  not to be used for clusters with over ~500 reads)')
     
     parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance')
+    parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
 
     parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
                                                                         minmimizer combinations to span regions in homopolymenr dense regions. Solution \
