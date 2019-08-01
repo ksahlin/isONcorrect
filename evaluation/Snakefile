@@ -117,10 +117,10 @@ rule isoncorrect:
         # outfolder = "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont_min_phred_q6/fastq_clusters/{0}".format(wildcards.clusterid)
         # shell("python /galaxy/home/ksahlin/prefix/source/isONcorrect/isONcorrect --fastq {input.reads}  --outfolder {outfolder} ")
         # shell("source activate py36")
-        outfolder = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/"   
-        infolder =  config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/fastq/"
+        outfolder = config["ROOT_OUT"] + "/correction/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)   
+        infolder =  config["ROOT_OUT"] + "/clustering/{0}/{1}/fastq/".format(wildcards.dataset, wildcards.nr_reads) 
         isoncorrect_dir = config["ROOT_IN"]
-        shell("python {isoncorrect_dir}/run_isoncorrect --keep_old  --fastq_folder {infolder}  --outfolder {outfolder} --t 60 --k 7 --w 10 --xmax 80 --exact_instance_limit 100 ")
+        shell("python {isoncorrect_dir}/run_isoncorrect --keep_old  --fastq_folder {infolder}  --outfolder {outfolder} --t 60 --k 7 --w 10 --xmax 80")
         shell("touch {output.flag}")
 
 
