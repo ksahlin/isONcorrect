@@ -43,6 +43,7 @@ def isoncorrect(data):
 
         subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                 "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
+                                "--w_equal_k_limit",  str(isoncorrect_algorithm_params["w_equal_k_limit"]),
                                 "--k",  str(isoncorrect_algorithm_params["k"]),  "--w",  str(isoncorrect_algorithm_params["w"]),
                                 "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
                                 "--T",  str(isoncorrect_algorithm_params["T"]) ], stderr=error_file, stdout=isoncorrect_out_file)
@@ -120,7 +121,8 @@ if __name__ == '__main__':
     parser.add_argument('--xmin', type=int, default=14, help='Lower interval length')
     parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.2, help='Minimum fraction keeping substitution')
-    parser.add_argument('--exact_instance_limit', type=int, default=100,  help='Do not recompute previous results')
+    parser.add_argument('--exact_instance_limit', type=int, default=200,  help='Do not recompute previous results')
+    parser.add_argument('--w_equal_k_limit', type=int, default=100,  help='Do not recompute previous results')
     parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results')
 
     # parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
