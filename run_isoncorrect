@@ -70,10 +70,11 @@ def main(args):
                 if os.path.isfile(os.path.join(outfolder, "corrected_reads.fastq")): 
                     print("already computed cluster", cl_id)
                 else:
-                    isoncorrect_algorithm_params = { "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
+                    isoncorrect_algorithm_params = {  "w_equal_k_limit" : args.w_equal_k_limit, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
                     instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
             else:
-                instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id)) )
+                isoncorrect_algorithm_params = {  "w_equal_k_limit" : args.w_equal_k_limit, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
+                instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
             # print(os.path.join(directory, read_fastq_file))
             continue
         else:
