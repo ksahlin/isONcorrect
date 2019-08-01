@@ -1,9 +1,16 @@
 {
 
-    "DATASETS" : ["mouse_ont"],
+    "DATASETS" : ["mouse_ont", "SIRV", "NA12878"],
+    "SIMULATED_DATASETS" : ["chr6"],
+
+    "READS" : ["10000", "100000", "500000","1000000"],
+
+    "ROOT_OUT" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/",
+    "ROOT_IN" : "/galaxy/home/ksahlin/prefix/source/isONcorrect/",
+
     "DATA" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/data/",
-    "ROOT_OUT" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/",
-    "MMI" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/data/hg38/hg38.mmi" ,
+    "MMI" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/data/hg38/hg38.mmi",
+    "HG38" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/data/HG38/hg38.fa",
     "ENSEMBL" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/data/",
     "TOOLS" :["isoncorrect"],
     "GNUTIME" : "/usr/bin/time -v",
