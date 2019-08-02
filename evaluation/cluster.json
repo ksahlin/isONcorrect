@@ -18,7 +18,7 @@
         "jobname" : "isoncorrect",
         "cpus-per-task" : "32",
         "Nodes" : 1,
-        "mem" : "512G",
+        "mem" : "500G",
         "runtime" : "10-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
