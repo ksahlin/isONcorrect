@@ -105,7 +105,7 @@ rule clusters_to_fastq:
     run:
         time = config["GNUTIME"]
         # shell("source activate py36")
-        outfolder = config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/fastq/"
+        outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/fastq/".format(wildcards.dataset, wildcards.nr_reads)
         shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust write_fastq --clusters {input.clusters} --fastq {input.fastq} --outfolder {outfolder} --N 5")
         shell("touch {output.flag}")
 
