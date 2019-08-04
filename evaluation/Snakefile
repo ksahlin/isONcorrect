@@ -135,33 +135,45 @@ rule combine_isoncorrect:
 
 
 rule align_corrected_reads_minimap2:
-    input: corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
-            ref = config["MMI"]
+    input: corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq
     output: corrected_reads_aligned = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/isONcorrect.sam"
     run:
-        shell("/usr/bin/time -v  minimap2 --eqx  -t 8 -ax splice -uf -k14 {input.ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
+        if wildcards.dataset == "SIRV":
+            ref = config["SIRV"]
+        elif wildcards.dataset == "NA12878":
+            ref = config["HG38_MMI"]
+
+        shell("/usr/bin/time -v  minimap2 --eqx  -t 8 -ax splice -uf -k14 {ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
 
 
 rule align_original_reads_minimap2:
-    input: original_reads = rules.subsample.output.subsampled_fastq,
-            ref = config["MMI"]
+    input: original_reads = rules.subsample.output.subsampled_fastq
     output: original_reads_aligned =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}.sam"
     run:
-        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k14 {input.ref} {input.original_reads} >  {output.original_reads_aligned} ")
+        if wildcards.dataset == "SIRV":
+            ref = config["SIRV"]
+        elif wildcards.dataset == "NA12878":
+            ref = config["HG38_MMI"]
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k14 {ref} {input.original_reads} >  {output.original_reads_aligned} ")
 
 
 rule evaluate:
     input: original_reads = rules.subsample.output.subsampled_fastq,
             corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
             original_reads_aligned =  rules.align_original_reads_minimap2.output.original_reads_aligned,
-            corrected_reads_aligned =  rules.align_corrected_reads_minimap2.output.corrected_reads_aligned,
-            ref = config["HG38"]
+            corrected_reads_aligned =  rules.align_corrected_reads_minimap2.output.corrected_reads_aligned
     output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}/results.csv"
     run:
+        if wildcards.dataset == "SIRV":
+            ref = config["SIRV"]
+        elif wildcards.dataset == "NA12878":
+            ref = config["HG38"]
+
         eval_dir = config["ROOT_IN"] + "/scripts/"
         outfolder = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)  
         mkdir_p(outfolder) 
-        shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  {input.corrected_reads} {input.ref}  {outfolder} ")
+        shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  {input.corrected_reads} {ref}  {outfolder} ")
+
 
 rule summary:
     input: all_experiments = expand(rules.evaluate.output.csv_file, dataset=config["DATASETS"], nr_reads=config["NR_READS"])
