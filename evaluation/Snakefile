@@ -130,7 +130,7 @@ rule combine_isoncorrect:
     run:
         # all_clusters_fastq = expand('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont_min_phred_q6/fastq_clusters/{clusterid}/corrected_reads.fastq', clusterid=[str(i) for i in range(0,62747)])
         shell("> {output.corrected_reads_fastq}")
-        for f in glob.glob(  config["ROOT_OUT"] + '/correction/{dataset}/{nr_reads}/*/corrected_reads.fastq'):
+        for f in glob.glob(  config["ROOT_OUT"] + '/correction/{0}/{1}/*/corrected_reads.fastq'.format(wildcards.dataset, wildcards.nr_reads)):
             shell('cat {f} >> {output.corrected_reads_fastq}')
 
 
