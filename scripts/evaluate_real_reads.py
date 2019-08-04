@@ -186,6 +186,8 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
         elif op_type == 4:
             # softclip
             pass
+        elif op_type == 0:
+            sys.exit("You have to use =/X cigar operators in sam file (M was detected). In minimap2 you can to provide --eqx flag to fix this.")
 
 
     r_line.append(r_end)
@@ -284,8 +286,8 @@ def main(args):
     print("Corrected,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in corr_vals ] ))
 
     outfile = open(os.path.join(args.outfolder, "results.csv"), "w")
-    outfile.write("Original,{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format( *[round(100*round(x,3), 2) for x in orig_vals ] ))
-    outfile.write("Corrected,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in corr_vals ] ))
+    outfile.write("Original,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format( *[round(100*round(x,3), 2) for x in orig_vals ], orig_stats[-1]))
+    outfile.write("Corrected,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}".format( *[round(100*round(x,3), 2) for x in corr_vals ], corr_stats[-1]))
     outfile.close()
     # print(orig_sorted)
     # print(",".join([s for s in orig_stats]))
