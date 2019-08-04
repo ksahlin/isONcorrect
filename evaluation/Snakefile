@@ -160,7 +160,7 @@ rule evaluate:
     run:
         eval_dir = config["ROOT_IN"] + "/scripts/"
 
-        shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  {input.corrected_reads} {input.ref}  >  {output.original_reads_aligned} ")
+        shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  {input.corrected_reads} {input.ref}  >  {output.csv_file} ")
 
 rule summary:
     input: all_experiments = expand(rules.evaluate.output.csv_file, dataset=config["DATASETS"], nr_reads=config["NR_READS"])
