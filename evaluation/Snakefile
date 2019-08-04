@@ -156,11 +156,12 @@ rule evaluate:
             original_reads_aligned =  rules.align_original_reads_minimap2.output.original_reads_aligned,
             corrected_reads_aligned =  rules.align_corrected_reads_minimap2.output.corrected_reads_aligned,
             ref = config["HG38"]
-    output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}.csv"
+    output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}/results.csv"
     run:
         eval_dir = config["ROOT_IN"] + "/scripts/"
-
-        shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  {input.corrected_reads} {input.ref}  >  {output.csv_file} ")
+        outfolder = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)  
+        mkdir_p(outfolder) 
+        shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  {input.corrected_reads} {input.ref}  {outfolder} ")
 
 rule summary:
     input: all_experiments = expand(rules.evaluate.output.csv_file, dataset=config["DATASETS"], nr_reads=config["NR_READS"])

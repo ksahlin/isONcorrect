@@ -283,9 +283,10 @@ def main(args):
     print("Original,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in orig_vals ] ))
     print("Corrected,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in corr_vals ] ))
 
-    outfile.write("Original,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in orig_vals ] ))
+    outfile = open(os.path.join(args.outfolder, "results.csv"), "w")
+    outfile.write("Original,{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format( *[round(100*round(x,3), 2) for x in orig_vals ] ))
     outfile.write("Corrected,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in corr_vals ] ))
-
+    outfile.close()
     # print(orig_sorted)
     # print(",".join([s for s in orig_stats]))
     # print(",".join([s for s in corr_stats]))
