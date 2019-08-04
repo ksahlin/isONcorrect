@@ -139,7 +139,7 @@ rule align_corrected_reads_minimap2:
             ref = config["MMI"]
     output: corrected_reads_aligned = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/isONcorrect.sam"
     run:
-        shell("/usr/bin/time -v  minimap2 -t 8 -ax splice -uf -k14 {input.ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx  -t 8 -ax splice -uf -k14 {input.ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
 
 
 rule align_original_reads_minimap2:
@@ -147,7 +147,7 @@ rule align_original_reads_minimap2:
             ref = config["MMI"]
     output: original_reads_aligned =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}.sam"
     run:
-        shell("/usr/bin/time -v  minimap2 -t 8 -ax splice -uf -k14 {input.ref} {input.original_reads} >  {output.original_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k14 {input.ref} {input.original_reads} >  {output.original_reads_aligned} ")
 
 
 rule evaluate:
