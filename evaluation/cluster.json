@@ -16,7 +16,7 @@
     "isoncorrect" : 
     {
         "jobname" : "isoncorrect",
-        "cpus-per-task" : "60",
+        "cpus-per-task" : "32",
         "Nodes" : 1,
         "mem" : "500G",
         "runtime" : "10-00:00:00",
