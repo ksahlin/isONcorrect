@@ -211,13 +211,13 @@ def get_aln_stats_per_read(sam_file, reads, refs):
             read_seq = reads[read.query_name]
             ref_seq = refs[read.reference_name]
             ref_alignment, m_line, read_alignment, ins, del_, subs, matches = cigar_to_seq_mm2_local(read, ref_seq, read_seq)
-            if read.query_name == 'b1d0ee62-7557-4645-8d1e-c1ccfb60c997_runid=8c239806e6f576cd17d6b7d532976b1fe830f9c6_sampleid=pcs109_sirv_mix2_LC_read=29302_ch=69_start_time=2019-04-12T22:47:30Z_strand=-':
-                print(read.query_alignment_start)
-                print(read.query_name, "primary", read.flag, read.reference_name) 
-                print(ref_alignment)
-                print(m_line)
-                print(read_alignment)
-                print(ins, del_, subs, matches)
+            # if read.query_name == 'b1d0ee62-7557-4645-8d1e-c1ccfb60c997_runid=8c239806e6f576cd17d6b7d532976b1fe830f9c6_sampleid=pcs109_sirv_mix2_LC_read=29302_ch=69_start_time=2019-04-12T22:47:30Z_strand=-':
+            #     print(read.query_alignment_start)
+            #     print(read.query_name, "primary", read.flag, read.reference_name) 
+            #     print(ref_alignment)
+            #     print(m_line)
+            #     print(read_alignment)
+            #     print(ins, del_, subs, matches)
 
             if read.query_name in alignments:
                 print("BUG")
@@ -376,7 +376,7 @@ def main(args):
     # print(refs)
     orig = get_aln_stats_per_read(args.orig_sam, reads, refs)
     corr = get_aln_stats_per_read(args.corr_sam, corr_reads, refs)
-    print(len(orig),len(corr))
+    print( "Reads successfully aligned:", len(orig),len(corr))
     quantile_tot_orig, quantile_insertions_orig, quantile_deletions_orig, quantile_substitutions_orig = print_quantile_values(orig)
     quantile_tot_corr, quantile_insertions_corr, quantile_deletions_corr, quantile_substitutions_corr = print_quantile_values(corr)
 
@@ -420,21 +420,21 @@ def main(args):
     print("Corrected,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in quantile_tot_corr ] ))
 
     outfile = open(os.path.join(args.outfolder, "results.csv"), "w")
-    outfile.write("Original,tot,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format( *[round(100*round(x,3), 2) for x in quantile_tot_orig ], orig_stats[-1]))
-    outfile.write("Corrected,tot,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format( *[round(100*round(x,3), 2) for x in quantile_tot_corr ], corr_stats[-1]))
+    outfile.write("Original,tot,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n".format( *[round(100*round(x,3), 2) for x in quantile_tot_orig ], *orig_stats, len(orig)))
+    outfile.write("Corrected,tot,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n".format( *[round(100*round(x,3), 2) for x in quantile_tot_corr ], *corr_stats, len(corr)))
     
-    outfile.write("Original,ins,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format( *[round(100*round(x,3), 2) for x in quantile_insertions_orig ], orig_stats[-1]))
-    outfile.write("Corrected,ins,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format( *[round(100*round(x,3), 2) for x in quantile_insertions_corr ], corr_stats[-1]))
+    outfile.write("Original,ins,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n".format( *[round(100*round(x,3), 2) for x in quantile_insertions_orig ], *orig_stats, len(orig)))
+    outfile.write("Corrected,ins,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n".format( *[round(100*round(x,3), 2) for x in quantile_insertions_corr ], *corr_stats, len(corr)))
 
-    outfile.write("Original,del,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format( *[round(100*round(x,3), 2) for x in quantile_deletions_orig ], orig_stats[-1]))
-    outfile.write("Corrected,del,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format( *[round(100*round(x,3), 2) for x in quantile_deletions_corr ], corr_stats[-1]))
+    outfile.write("Original,del,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n".format( *[round(100*round(x,3), 2) for x in quantile_deletions_orig ], *orig_stats, len(orig)))
+    outfile.write("Corrected,del,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n".format( *[round(100*round(x,3), 2) for x in quantile_deletions_corr ], *corr_stats, len(corr)))
 
-    outfile.write("Original,subs,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}\n".format( *[round(100*round(x,3), 2) for x in quantile_substitutions_orig ], orig_stats[-1]))
-    outfile.write("Corrected,subs,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}".format( *[round(100*round(x,3), 2) for x in quantile_substitutions_corr ], corr_stats[-1]))
+    outfile.write("Original,subs,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n".format( *[round(100*round(x,3), 2) for x in quantile_substitutions_orig ], *orig_stats, len(orig)))
+    outfile.write("Corrected,subs,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}".format( *[round(100*round(x,3), 2) for x in quantile_substitutions_corr ], *corr_stats, len(corr)))
 
     outfile.close()
 
-    print(len(orig),len(corr))
+    print("Reads successfully aligned:", len(orig),len(corr))
     # print(orig_sorted)
     # print(",".join([s for s in orig_stats]))
     # print(",".join([s for s in corr_stats]))
