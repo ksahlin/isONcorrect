@@ -165,7 +165,15 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
             q_index += op_len
 
         elif op_type == 8:
+            ref_piece = r_seq[r_index: r_index + op_len]
+            query_peace = q_seq[q_index: q_index + op_len]
+            r_line.append(ref_piece)
+            q_line.append(query_peace)
+
             subs += op_len 
+            m_line.append('*' * op_len)
+            r_index += op_len
+            q_index += op_len
 
 
         elif op_type == 1:
@@ -204,6 +212,7 @@ def get_aln_stats_per_read(sam_file, reads, refs):
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     references = SAM_file.references
     alignments = {}
+    alignments_detailed = {}
     for read in SAM_file.fetch(until_eof=True):
         if read.flag == 0 or read.flag == 16:
             # print(read.is_reverse)
@@ -224,12 +233,13 @@ def get_aln_stats_per_read(sam_file, reads, refs):
                 sys.exit()
             
             alignments[read.query_name] = (ins, del_, subs, matches)
+            alignments_detailed[read.query_name] = (ref_alignment, m_line, read_alignment)
             # print()
             # return
         else:
             pass
             # print("secondary", read.flag, read.reference_name) 
-    return alignments
+    return alignments, alignments_detailed
 
 def get_summary_stats(reads, quantile):
     tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
@@ -347,8 +357,13 @@ def parasail_alignment(read, reference, x_acc = "", y_acc = "", match_score = 2,
 def main(args):
     reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
     corr_reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
+    refs = { acc : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
+    # print(refs)
+    orig, orig_detailed = get_aln_stats_per_read(args.orig_sam, reads, refs)
+    corr, corr_detailed = get_aln_stats_per_read(args.corr_sam, corr_reads, refs)
 
     if args.align:
+        tot = 0
         for acc in reads:
             if acc not in corr_reads:
                 print(acc, "Not in corrected reads")
@@ -369,14 +384,18 @@ def main(args):
 
                 if max_corr_dlen > 10 or max_orig_dlen > 10:
                     print("orig", acc, read_alignment)
+                    print(orig[acc])
                     print("corr", acc, ref_alignment)
-                    print()
+                    print(corr[acc])
+                    print(corr_detailed[acc][0])
+                    print(corr_detailed[acc][1])
+                    print(corr_detailed[acc][2])
 
-    refs = { acc : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
-    # print(refs)
-    orig = get_aln_stats_per_read(args.orig_sam, reads, refs)
-    corr = get_aln_stats_per_read(args.corr_sam, corr_reads, refs)
+                    tot += 1
+                    print()
+        print("TOT structural diffs:", tot)
     print( "Reads successfully aligned:", len(orig),len(corr))
+
     quantile_tot_orig, quantile_insertions_orig, quantile_deletions_orig, quantile_substitutions_orig = print_quantile_values(orig)
     quantile_tot_corr, quantile_insertions_corr, quantile_deletions_corr, quantile_substitutions_corr = print_quantile_values(corr)
 

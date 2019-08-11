@@ -15,12 +15,12 @@ def simulate_read(i, transcript_acc, isoform ):
     qual = []
     was_del = False
     for l, n in enumerate(isoform):
-        # if l <= 15 or l >= len(isoform) - 15: # no errors first and last 15 bases
-        #     p_correct_reading = 1.0
-        #     p_error = 1.0 - 0.995
-        # else:
-        p_correct_reading = random.choice(error_lvls)
-        p_error = 1.0 - p_correct_reading
+        if l <= 15 or l >= len(isoform) - 15: # no errors first and last 15 bases
+            p_correct_reading = 1.0
+            p_error = 1.0 - 0.995
+        else:
+            p_correct_reading = random.choice(error_lvls)
+            p_error = 1.0 - p_correct_reading
 
         # print(round(10**(-math.log(p_correct_reading))), p_error, -math.log(p_error,10)*10)
 

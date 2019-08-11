@@ -42,7 +42,7 @@ echo -n  "id","type","Depth","mut","tot","err","subs","ins","del","Total","Subst
 echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","subs","ins","del","switch","abundance"$'\n' > $results_file
 
 
-python $experiment_dir/get_exons.py $database $outbase/"exons" > /dev/null
+# python $experiment_dir/get_exons.py $database $outbase/"exons" > /dev/null
 
 for id in $(seq 1 1 5)  
 do 
