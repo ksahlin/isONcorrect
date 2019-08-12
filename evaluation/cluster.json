@@ -19,7 +19,7 @@
         "cpus-per-task" : "32",
         "Nodes" : 1,
         "mem" : "500G",
-        "runtime" : "10-00:00:00",
+        "runtime" : "14-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
         "exclude" : "c[4,6-7,8-16]"
