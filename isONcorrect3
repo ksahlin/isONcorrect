@@ -355,7 +355,7 @@ def solve_WIS(all_intervals_sorted_by_finish):
     # assert opt_indicies2 == opt_indicies
     return opt_indicies
 
-D = {chr(i) : min( 10**( - (ord(chr(i)) - 33)/10.0 ), 0.79433)  for i in range(128)}
+
 
 
 # def eval_sim(corr, seq, qual, tot_before, tot_after):
@@ -405,7 +405,7 @@ D = {chr(i) : min( 10**( - (ord(chr(i)) - 33)/10.0 ), 0.79433)  for i in range(1
 #     tot_before["del"] += del_
 
 
-def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size):
+def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database):
 
     # curr_m_pos = read_min_comb[0][0][1]
     # curr_m_pos2 = read_min_comb[0][1][1]
@@ -429,8 +429,12 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         if len(relevant_reads) >= max(3,len(curr_best_seqs)): #max(3, previously_calculated_regions_read[p2]): # 
             # cnt += 1
             ref_seq = seq[p1  : p2 + k_size]
-            ref_qual = qual[p1 : p2 + k_size]
-            p_error_ref =  sum([D[char_] for char_ in ref_qual])/len(ref_qual) 
+            ref_qual = qual[p1 : p2 + k_size]            
+            # p_error_ref =  sum([D[char_] for char_ in ref_qual])/len(ref_qual) 
+
+            p_error_ref = (quality_values_database[r_id][p2 + k_size] - quality_values_database[r_id][p1])/(p2 + k_size - p1)
+            # print(p_error_ref, p_error_ref2)
+            # assert round(p_error_ref,4) == round(p_error_ref2,4)
 
             seqs["curr_read"].append((ref_seq, ref_qual, p1, p2))
             # seqs_to_id = { ref_seq : [ ("curr_read",p1, p2)]}
@@ -444,13 +448,19 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                     continue
                 read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
                 read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
+
+                p_error_read = (quality_values_database[relevant_read_id][pos2 + k_size] - quality_values_database[relevant_read_id][pos1])/(pos2 + k_size - pos1)
+                # print(round(p_error_read2,4), round(sum([D[char_] for char_ in read_qual])/len(read_qual),4))
+                # p_error_read = sum([D[char_] for char_ in read_qual])/len(read_qual)
+                # assert round(p_error_read2,4) == round(p_error_read,4)
                 # print(seq[p1+k_size : p2], read_seq, p1, p2, pos1, pos2, reads[relevant_read_id][1][pos1 : pos1 + k_size ], seq[p1:p1+k_size], reads[relevant_read_id][1][pos2 : pos2 +k_size],  seq[p2:p2+k_size])
                 # print(edlib_alignment(ref_seq, read_seq, len(ref_seq)),  ref_seq, read_seq, (pos1, pos2), (p1,p2), relevant_read_id)
-                p_error_sum_thresh = p_error_ref + sum([D[char_] for char_ in read_qual])/len(read_qual) #+ 0.1
+                p_error_sum_thresh = p_error_ref + p_error_read #sum([D[char_] for char_ in read_qual])/len(read_qual) #+ 0.1
                 error_cutoff = max(5, p_error_sum_thresh*(max(len(ref_seq), len(read_seq)) -2*k_size) )
                 # if reads[relevant_read_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[relevant_read_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
                 # if math.fabs(len(ref_seq) - len(read_seq)) / len(read_seq) <= p_error_sum_thresh:
                 editdist = edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq))
+                tmp_cnt += 1
                 if editdist >= 0:    # passing second edit distance check
                     # if locations[0][0] != 0 and locations[0][1] != len(read_seq):
                     #     print("FP??", p_error_sum_thresh)
@@ -530,7 +540,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         # for q_id, (read_seq, read_qual, pos1, pos2) in curr_best_seqs.items():
         #     if q_id != "curr_read":
         #         stored_calculated_regions[q_id][pos1] = len(curr_best_seqs)
-
+    return tmp_cnt
 
 def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold):
     corr_seq = []
@@ -580,6 +590,22 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
     corr = "".join([s for s in tmp])
     return corr, other_reads_corrected_regions
 
+
+D = {chr(i) : min( 10**( - (ord(chr(i)) - 33)/10.0 ), 0.79433)  for i in range(128)}
+
+def get_qvs(reads):
+    quality_values_database = {}
+    for r_id in reads:
+        (acc, seq, qual) = reads[r_id]
+        quality_values_database[r_id] = [0]
+        tmp_tot_sum = 0
+        for char_ in qual:
+            qv = D[char_]
+            quality_values_database[r_id].append( tmp_tot_sum + qv )  #= [D[char_] for char_ in qual]
+            tmp_tot_sum += qv
+    return quality_values_database
+
+
 def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
@@ -607,6 +633,7 @@ def main(args):
 
             # reads_to_M2, M2 = get_minimizers_comb(reads, minimizer_database, k_size, args.X)
             minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
+            quality_values_database = get_qvs(reads)
             # print(minimizer_database)
             eprint("done creating minimizer combinations")
 
@@ -621,7 +648,8 @@ def main(args):
 
             for r_id in sorted(reads): #, reverse=True):
                 read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
-                
+                # print(read_min_comb)
+                # sys.exit()
                 if args.exact:
                     previously_corrected_regions = defaultdict(list)
                 # stored_calculated_regions = defaultdict(list)
@@ -673,6 +701,7 @@ def main(args):
                 # print(read_prev_corrected_positions2)
 
                 # print(read_previously_considered_positions)
+                tmp_cnt = 0
                 for (m1,p1), m1_curr_spans in read_min_comb: 
                     # Implement that if any position is not in range of current corrections: then correct!!! Not just start and stop
                     not_prev_corrected_spans = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) ] 
@@ -682,11 +711,11 @@ def main(args):
                     # not_prev_corrected_spans2 = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_prev_corrected_positions2 and p2 - 1 in read_prev_corrected_positions2[p1 + k_size]) ]
                     
                     if not_prev_corrected_spans: # p1 + k_size not in read_previously_considered_positions:
-                        find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size)
+                        tmp_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database)
 
     
-
-                # sys.exit()
+                print(tmp_cnt, "computed editdist")
+                sys.exit()
                 eprint("Correcting read", r_id)
                 # print(previously_corrected_regions[r_id])
                 if previously_corrected_regions[r_id]: # add previously corrected regions in to the solver
