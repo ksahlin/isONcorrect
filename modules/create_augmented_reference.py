@@ -169,7 +169,7 @@ def run_spoa_affine_v2_0_3(reads, ref_out_file, spoa_out_file, spoa_path, dot_gr
     r.close()
     return consensus, msa
 
-def run_spoa(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
+def run_spoa_with_msa(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
     with open(spoa_out_file, "w") as output_file:
         # print('Running spoa...', end=' ')
         stdout.flush()
@@ -192,7 +192,25 @@ def run_spoa(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
 
     return consensus, msa
 
-
+def run_spoa(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
+    with open(spoa_out_file, "w") as output_file:
+        # print('Running spoa...', end=' ')
+        stdout.flush()
+        null = open("/dev/null", "w")
+        subprocess.check_call([ spoa_path, reads, "-l", "0", "-r", "0", "-g", "-2"], stdout=output_file, stderr=null)
+        # print('Done.')
+        stdout.flush()
+    output_file.close()
+    l = open(spoa_out_file, "r").readlines()
+    consensus = l[1].strip()
+    # msa = [s.strip() for s in l[3:]]
+    # print("regular spoa:", consensus)
+    # print(len(consensus))
+    # print(msa)
+    # r = open(ref_out_file, "w")
+    # r.write(">{0}\n{1}".format("reference", consensus))
+    # r.close()
+    return consensus
 
 
 # For eventual De Bruijn graph approach
