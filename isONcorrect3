@@ -143,7 +143,7 @@ def minimizers_comb_iterator(minimizers, k, x_low, x_high):
                 # yield (m1,p1), (m2, p2) 
             elif p2 - p1 > x_high:
                 break
-        yield (m1, p1), m1_curr_spans
+        yield (m1, p1), m1_curr_spans[::-1]
 
 
 # def time_test(sorted_left_reads, sorted_right_reads, relevant_reads, r_id, k, x):
@@ -405,7 +405,7 @@ def solve_WIS(all_intervals_sorted_by_finish):
 #     tot_before["del"] += del_
 
 
-def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database):
+def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database, already_computed):
 
     # curr_m_pos = read_min_comb[0][0][1]
     # curr_m_pos2 = read_min_comb[0][1][1]
@@ -414,119 +414,106 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
     curr_best_seqs_to_id = {}
     # cnt = 0
     for (m2,p2) in m1_curr_spans:
+        # print(p1,p2)
         relevant_reads = minimizer_combinations_database[m1][m2]
-        
-        # rr1 = len(relevant_reads)
-        # # print( "bef:", len(relevant_reads))
-        # relevant_reads = [(relevant_read_id, pos1, pos2) for relevant_read_id, pos1, pos2  in relevant_reads if math.fabs( (p2-p1) - (pos2 - pos1)) / min((pos2 - pos1), (p2-p1)) <= 0.4 ] # passing first edit distance check
-        # rr2 = len(relevant_reads)
-        # if rr1 > rr2:
-        #     print(rr1, rr2)
-        # # print("after:", len(relevant_reads))
-        # if len(relevant_reads) > 250:
-        #     print("lol repeat", len(relevant_reads), m1, m2)
         seqs = defaultdict(list)
         if len(relevant_reads) >= max(3,len(curr_best_seqs)): #max(3, previously_calculated_regions_read[p2]): # 
             # cnt += 1
             ref_seq = seq[p1  : p2 + k_size]
             ref_qual = qual[p1 : p2 + k_size]            
-            # p_error_ref =  sum([D[char_] for char_ in ref_qual])/len(ref_qual) 
-
             p_error_ref = (quality_values_database[r_id][p2 + k_size] - quality_values_database[r_id][p1])/(p2 + k_size - p1)
-            # print(p_error_ref, p_error_ref2)
-            # assert round(p_error_ref,4) == round(p_error_ref2,4)
 
             seqs["curr_read"].append((ref_seq, ref_qual, p1, p2))
-            # seqs_to_id = { ref_seq : [ ("curr_read",p1, p2)]}
-
-            # print(p1, p2) #, relevant_reads)
-            # print(m1,m2)
-            # print(r_id, seq[p1:p2])
             reads_visited = {}
             for relevant_read_id, pos1, pos2 in relevant_reads:
                 if r_id  == relevant_read_id:
                     continue
+                
                 read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
                 read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
+                if read_seq == ref_seq:
+                    seqs[relevant_read_id] = []
+                    seqs[relevant_read_id].append((read_seq, read_qual, pos1, pos2))
+                    reads_visited[relevant_read_id] = 0
+                    already_computed[relevant_read_id] = (p1,p2,pos1,pos2, 0)
+                    continue
+
+                
+                if relevant_read_id in reads_visited:
+                    # print("Prev:", reads_visited[relevant_read_id])
+                    # print("Act:", edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) )
+                    pass
+        # Implement if we see this to recompute all the aligments exact ed here instead!! Thats the only way to guarantee exactly the same
+        # or maybe use this traceback to get exact: https://github.com/Martinsos/edlib/pull/132#issuecomment-522258271
+                elif relevant_read_id in already_computed:
+                    curr_ref_start, curr_ref_end, curr_read_start, curr_read_end, curr_ed = already_computed[relevant_read_id]
+                    if (curr_read_start <= pos1 and pos2 <= curr_read_end) and (curr_ref_start <= p1 and p2 <=  curr_ref_end):
+                        p_error_read = (quality_values_database[relevant_read_id][pos2 + k_size] - quality_values_database[relevant_read_id][pos1])/(pos2 + k_size - pos1)
+                        p_error_sum_thresh = p_error_ref + p_error_read # curr_p_error_sum_thresh*len(ref_seq)
+                        read_beg_diff = pos1 - curr_read_start
+                        read_end_diff = pos2 - curr_read_end
+                        ref_beg_diff = p1 - curr_ref_start
+                        ref_end_diff = p2 - curr_ref_end
+
+
+                        if 0 <= curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff)  <= p_error_sum_thresh*len(ref_seq): # < curr_p_error_sum_thresh*len(ref_seq):
+                            # print("saved:",pos1, pos2, p1,p2, curr_ref_start, curr_ref_end, curr_read_start, curr_read_end, curr_ed, curr_p_error_sum_thresh)
+                            # print("saved", (curr_ref_end - curr_ref_start) - (p2-p1), (curr_read_end - curr_read_start) - (pos2 - pos1))
+
+                            # read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
+                            # read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
+                            seqs[relevant_read_id].append((read_seq, read_qual, pos1, pos2))
+                            reads_visited[relevant_read_id] = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff)
+
+                            # est = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff)
+                            # act = edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq))
+                            # if est != act:
+                            #     print("estimated", est)
+                            #     print("Actual", act)
+
+                            continue
+
+                    else:
+                        pass
+                
+
 
                 p_error_read = (quality_values_database[relevant_read_id][pos2 + k_size] - quality_values_database[relevant_read_id][pos1])/(pos2 + k_size - pos1)
-                # print(round(p_error_read2,4), round(sum([D[char_] for char_ in read_qual])/len(read_qual),4))
-                # p_error_read = sum([D[char_] for char_ in read_qual])/len(read_qual)
-                # assert round(p_error_read2,4) == round(p_error_read,4)
-                # print(seq[p1+k_size : p2], read_seq, p1, p2, pos1, pos2, reads[relevant_read_id][1][pos1 : pos1 + k_size ], seq[p1:p1+k_size], reads[relevant_read_id][1][pos2 : pos2 +k_size],  seq[p2:p2+k_size])
-                # print(edlib_alignment(ref_seq, read_seq, len(ref_seq)),  ref_seq, read_seq, (pos1, pos2), (p1,p2), relevant_read_id)
                 p_error_sum_thresh = p_error_ref + p_error_read #sum([D[char_] for char_ in read_qual])/len(read_qual) #+ 0.1
-                error_cutoff = max(5, p_error_sum_thresh*(max(len(ref_seq), len(read_seq)) -2*k_size) )
-                # if reads[relevant_read_id][1][pos1 : pos1 + k_size ] ==  seq[p1:p1+k_size] and reads[relevant_read_id][1][pos2 : pos2 +k_size] ==  seq[p2:p2+k_size]:
-                # if math.fabs(len(ref_seq) - len(read_seq)) / len(read_seq) <= p_error_sum_thresh:
+                # error_cutoff = max(5, p_error_sum_thresh*(max(len(ref_seq), len(read_seq)) -2*k_size) )
                 editdist = edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq))
-                tmp_cnt += 1
-                if editdist >= 0:    # passing second edit distance check
-                    # if locations[0][0] != 0 and locations[0][1] != len(read_seq):
-                    #     print("FP??", p_error_sum_thresh)
-                    #     print(ref_seq,p1,p2)
-                    #     print(read_seq, pos1, pos2)
-                    #     print(editdist, locations)
-                    #     continue
-                    # else:
-                    #     print("Good", p_error_sum_thresh)
-                    #     print(ref_seq,p1,p2)
-                    #     print(read_seq, pos1, pos2)
-                    #     print(editdist, locations)
 
+                if editdist == 0:
+                    print("Here!")
+                # tmp_cnt += 1
+                if editdist >= 0:    # passing second edit distance check
                     if relevant_read_id in reads_visited:
+                        prev_read_seq, read_read_qual, prev_pos1, prev_pos2 = seqs[relevant_read_id][0]
+                        editdist_prev = edlib_alignment(ref_seq, prev_read_seq, len(ref_seq))
+
                         # print("Read already visited lool", "prev:",reads_visited[relevant_read_id], "this:", editdist)
                         # print(seqs[relevant_read_id])
                         # print(p_error_sum_thresh)
                         # print(ref_seq,p1,p2)
                         # print(read_seq, pos1, pos2)
-                        # print(editdist, locations)
-                        if editdist < reads_visited[relevant_read_id]:
+                        # print("current:", editdist, "prev", reads_visited[relevant_read_id])
+                        if editdist < editdist_prev:
                             seqs[relevant_read_id] = []
                             seqs[relevant_read_id].append((read_seq, read_qual, pos1, pos2))
                             reads_visited[relevant_read_id] = editdist
+                            already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
+                            tmp_cnt += 1
                             # print("REPLACED OLD MATCH")
                         else:
-                            pass
+                            seqs[relevant_read_id] = []
+                            seqs[relevant_read_id].append((prev_read_seq, read_read_qual, prev_pos1, prev_pos2))
+                            reads_visited[relevant_read_id] = editdist_prev
+                            already_computed[relevant_read_id] = (p1,p2,prev_pos1, prev_pos2, editdist_prev)
                     else:
                         seqs[relevant_read_id].append((read_seq, read_qual, pos1, pos2))
                         reads_visited[relevant_read_id] = editdist
+                        already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
 
-
-                    # print( math.fabs(len(ref_seq) - len(read_seq)), editdist)
-                    # print(ref_seq,p1,p2)
-                    # print(read_seq, pos1, pos2)
-
-                    # if math.fabs(len(ref_seq) - len(read_seq)) >10 and p_error_sum_thresh*len(ref_seq) > math.fabs(len(ref_seq) - len(read_seq)):
-                    #     print("p_error_sum", p_error_sum_thresh, "new:", error_cutoff, "old:", p_error_sum_thresh*len(ref_seq),len(ref_seq), "lenght diff:", math.fabs(len(ref_seq) - len(read_seq)) )
-                    #     print(ref_seq,p1,p2)
-                    #     print(read_seq, pos1, pos2)
-                    #     print(editdist, locations)
-                    # elif math.fabs(len(ref_seq) - len(read_seq)) < 10 and editdist > 10 :
-                    #     print("LOOL", p_error_sum_thresh,  "new:", error_cutoff,)
-                    #     print(ref_seq,p1,p2)
-                    #     print(read_seq, pos1, pos2)
-                    #     print(editdist, locations)
-                    #     print()
-                # else:
-                #     print("FP??", p_error_sum_thresh)
-                #     print(ref_seq,p1,p2)
-                #     print(read_seq, pos1, pos2)
-                #     print(editdist, locations)
-                #     print()
-
-                #     ed = edlib_alignment(ref_seq, read_seq, 100)
-                #     print(ed, ref_seq, read_seq, p1,p2, pos1,pos2)
-                    # if read_seq in seqs_to_id:
-                    #     seqs_to_id[read_seq].append( (relevant_read_id, pos1 + k_size, pos2 ) )
-                    # else:
-                    #     seqs_to_id[read_seq] = [(relevant_read_id, pos1 + k_size, pos2 )]
-
-                    # print(relevant_read_id, read_seq)
-            # print(p1,p2, len(seqs))
-
-        # if len(seqs) > 2:
-        #     all_intervals.append( (p1 + k_size, p2,  len(seqs), seqs) )
 
         if len(seqs) > len(curr_best_seqs):
             curr_best_seqs = seqs
@@ -606,6 +593,61 @@ def get_qvs(reads):
     return quality_values_database
 
 
+def check_max_common_interval(list_of_intervals):
+    min_read_pos, max_read_pos = 10000, -1
+    corresp_ref_pos1, corresp_ref_pos2 = -1,-1
+    for read_pos1, read_pos2, ref_pos1, ref_pos2 in list_of_intervals:
+        if read_pos1 < min_read_pos:
+            min_read_pos = read_pos1
+            corresp_ref_pos1 = ref_pos1
+        if read_pos2 > max_read_pos:
+            max_read_pos = read_pos2
+            corresp_ref_pos2 = ref_pos2
+
+    return min_read_pos, max_read_pos, corresp_ref_pos1, corresp_ref_pos2 
+
+def test_potential_speedup(not_prev_corrected_spans, minimizer_combinations_database, reads, ref_id, m1, p1):
+    l_tmp = [ (relevant_read_id, pos1, pos2, p1, p2 ) for (m2,p2) in not_prev_corrected_spans for (relevant_read_id, pos1, pos2) in minimizer_combinations_database[m1][m2] ] 
+    d_tmp = defaultdict(list)
+    for (relevant_read_id, pos1, pos2, ref_pos1, ref_pos2) in l_tmp:
+        d_tmp[relevant_read_id].append( (pos1, pos2, ref_pos1, ref_pos2))
+    d_tmp2 = {}
+    # calc_max_common_interval(d_tmp[relevant_read_id])
+    for relevant_read_id in d_tmp:
+        min_read_pos, max_read_pos, corresp_ref_pos1, corresp_ref_pos2  = check_max_common_interval(d_tmp[relevant_read_id])
+        # min_ref_coord, max_ref_coord = d_tmp[relevant_read_id][0][-2], d_tmp[relevant_read_id][-1][-1]
+        # min_read_coord, max_read_coord = d_tmp[relevant_read_id][0][-4], d_tmp[relevant_read_id][-1][-3]
+        if max_read_pos - min_read_pos <= 80 and corresp_ref_pos2 - corresp_ref_pos1 <= 80:
+            # print(max_read_pos - min_read_pos, corresp_ref_pos2 - corresp_ref_pos1 )
+            d_tmp2[relevant_read_id] = (corresp_ref_pos1, corresp_ref_pos2, min_read_pos, max_read_pos, len(d_tmp[relevant_read_id]))
+
+        else:
+            pass
+            # print("Not good instance!")
+            # print(d_tmp[relevant_read_id])
+
+        # print(d_tmp[relevant_read_id])
+
+    # print(len(d_tmp2))
+    for i, relevant_read_id in enumerate(d_tmp2):
+        # print("Starting", i)
+        if relevant_read_id == ref_id:
+            continue
+        ref_start, ref_stop, read_start, read_stop, nr_segments = d_tmp2[relevant_read_id]
+        ref_seq = reads[ref_id][1][ref_start: ref_stop]
+        read_seq =  reads[relevant_read_id][1][read_start: read_stop]
+        # print(ref_start, ref_stop, read_start, read_stop, nr_segments)
+        # print(read_seq, ref_seq)
+        # res = edlib.align(read_seq, ref_seq, task="path", mode="NW")
+        # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
+        # print(result_read_to_ref)
+        # cigar_string = res["cigar"]
+        # print(res)
+        # read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, read_seq, ref_seq)
+        # print(read_alignment)
+        # print(ref_alignment)
+    # print("completed")
+
 def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
@@ -645,6 +687,7 @@ def main(args):
             tot_corr = 0
             previously_corrected_regions = defaultdict(list)
             # stored_calculated_regions = defaultdict(lambda: defaultdict(int))
+            tmp_cnt = 0
 
             for r_id in sorted(reads): #, reverse=True):
                 read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
@@ -701,7 +744,7 @@ def main(args):
                 # print(read_prev_corrected_positions2)
 
                 # print(read_previously_considered_positions)
-                tmp_cnt = 0
+                already_computed = {}
                 for (m1,p1), m1_curr_spans in read_min_comb: 
                     # Implement that if any position is not in range of current corrections: then correct!!! Not just start and stop
                     not_prev_corrected_spans = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) ] 
@@ -709,13 +752,15 @@ def main(args):
                     # if len(not_prev_corrected_spans) > len(not_prev_corrected_spans3):
                     #     print(len(not_prev_corrected_spans), len(not_prev_corrected_spans3))
                     # not_prev_corrected_spans2 = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_prev_corrected_positions2 and p2 - 1 in read_prev_corrected_positions2[p1 + k_size]) ]
-                    
+                    # print(len(not_prev_corrected_spans))
                     if not_prev_corrected_spans: # p1 + k_size not in read_previously_considered_positions:
-                        tmp_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database)
+                        # test_potential_speedup(not_prev_corrected_spans, minimizer_combinations_database, reads, r_id, m1, p1)
+                        # sys.exit()
+                        tmp_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database, already_computed)
 
     
                 print(tmp_cnt, "computed editdist")
-                sys.exit()
+                # sys.exit()
                 eprint("Correcting read", r_id)
                 # print(previously_corrected_regions[r_id])
                 if previously_corrected_regions[r_id]: # add previously corrected regions in to the solver
