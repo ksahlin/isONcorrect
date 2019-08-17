@@ -175,7 +175,7 @@ def edlib_alignment(x, y, k):
     # locations = result["locations"]
     return ed #, locations
 
-def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.1):
+def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200):
     weight = len(curr_best_seqs)
     # r_seq = curr_best_seqs["curr_read"][0]
     # print(r_seq)
@@ -186,13 +186,15 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     reads_path = open(os.path.join(outfolder, "reads_tmp.fa"), "w")
 
     # for q_id, (s_tmp, s_qual, pos1, pos2) in curr_best_seqs.items():
-    for q_id, list_of_spans in curr_best_seqs.items():
-        assert len(list_of_spans) == 1
-        for (seq, qual, pos1, pos2) in list_of_spans:
+    for i, (q_id, (seq, qual, pos1, pos2)) in enumerate(curr_best_seqs.items()):
+        if i > max_seqs_to_spoa:
+            break
+        # assert len(list_of_spans) == 1
+        # for (seq, qual, pos1, pos2) in list_of_spans:
             # print(q_id, str(pos1), str(pos2))
-            reads_path.write(">{0}\n{1}\n".format(str(q_id)+str(pos1)+str(pos2), seq))
+        reads_path.write(">{0}\n{1}\n".format(str(q_id)+str(pos1)+str(pos2), seq))
     reads_path.close()
-    spoa_ref, msa = create_augmented_reference.run_spoa(reads_path.name, "/dev/null", os.path.join(outfolder,"spoa_tmp.fa"), "spoa", "/dev/null")
+    spoa_ref = create_augmented_reference.run_spoa(reads_path.name, "/dev/null", os.path.join(outfolder,"spoa_tmp.fa"), "spoa", "/dev/null")
     # print()
     # print(spoa_ref)
     #### TMP
@@ -200,16 +202,16 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     partition = {"ref" : (0, spoa_ref, spoa_ref, 1)}
     # partition = {"ref" : (0, r_seq, r_seq, 1)}
     # for q_id, (s_tmp, s_qual, pos1, pos2) in curr_best_seqs.items():
-    for q_id, list_of_spans in curr_best_seqs.items():
-        for (seq, qual, pos1, pos2) in list_of_spans:
+    for q_id, (seq, qual, pos1, pos2) in curr_best_seqs.items():
+        # for (seq, qual, pos1, pos2) in list_of_spans:
         # if s_tmp == r_seq:
         #     continue
-            res = edlib.align(seq, spoa_ref, task="path", mode="NW")
-            # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
-            # print(result_read_to_ref)
-            cigar_string = res["cigar"]
-            read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, seq, spoa_ref)
-            partition[(q_id, pos1, pos2)] = (res["editDistance"], ref_alignment, read_alignment, 1)
+        res = edlib.align(seq, spoa_ref, task="path", mode="NW")
+        # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
+        # print(result_read_to_ref)
+        cigar_string = res["cigar"]
+        read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, seq, spoa_ref)
+        partition[(q_id, pos1, pos2)] = (res["editDistance"], ref_alignment, read_alignment, 1)
         # print(read_alignment, ref_alignment)
     alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
     # print(alignment_matrix)
@@ -416,14 +418,14 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
     for (m2,p2) in m1_curr_spans:
         # print(p1,p2)
         relevant_reads = minimizer_combinations_database[m1][m2]
-        seqs = defaultdict(list)
+        seqs = {} #defaultdict(list)
         if len(relevant_reads) >= max(3,len(curr_best_seqs)): #max(3, previously_calculated_regions_read[p2]): # 
             # cnt += 1
             ref_seq = seq[p1  : p2 + k_size]
             ref_qual = qual[p1 : p2 + k_size]            
             p_error_ref = (quality_values_database[r_id][p2 + k_size] - quality_values_database[r_id][p1])/(p2 + k_size - p1)
 
-            seqs["curr_read"].append((ref_seq, ref_qual, p1, p2))
+            seqs["curr_read"] = (ref_seq, ref_qual, p1, p2)
             reads_visited = {}
             for relevant_read_id, pos1, pos2 in relevant_reads:
                 if r_id  == relevant_read_id:
@@ -432,8 +434,8 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                 read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
                 read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
                 if read_seq == ref_seq:
-                    seqs[relevant_read_id] = []
-                    seqs[relevant_read_id].append((read_seq, read_qual, pos1, pos2))
+                    # seqs[relevant_read_id] = []
+                    seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
                     reads_visited[relevant_read_id] = 0
                     already_computed[relevant_read_id] = (p1,p2,pos1,pos2, 0)
                     continue
@@ -462,7 +464,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
                             # read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
                             # read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
-                            seqs[relevant_read_id].append((read_seq, read_qual, pos1, pos2))
+                            seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
                             reads_visited[relevant_read_id] = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff)
 
                             # est = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff)
@@ -488,7 +490,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                 # tmp_cnt += 1
                 if editdist >= 0:    # passing second edit distance check
                     if relevant_read_id in reads_visited:
-                        prev_read_seq, read_read_qual, prev_pos1, prev_pos2 = seqs[relevant_read_id][0]
+                        prev_read_seq, read_read_qual, prev_pos1, prev_pos2 = seqs[relevant_read_id]
                         editdist_prev = edlib_alignment(ref_seq, prev_read_seq, len(ref_seq))
 
                         # print("Read already visited lool", "prev:",reads_visited[relevant_read_id], "this:", editdist)
@@ -498,19 +500,19 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                         # print(read_seq, pos1, pos2)
                         # print("current:", editdist, "prev", reads_visited[relevant_read_id])
                         if editdist < editdist_prev:
-                            seqs[relevant_read_id] = []
-                            seqs[relevant_read_id].append((read_seq, read_qual, pos1, pos2))
+                            # seqs[relevant_read_id] = []
+                            seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
                             reads_visited[relevant_read_id] = editdist
                             already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
                             tmp_cnt += 1
                             # print("REPLACED OLD MATCH")
                         else:
-                            seqs[relevant_read_id] = []
-                            seqs[relevant_read_id].append((prev_read_seq, read_read_qual, prev_pos1, prev_pos2))
+                            # seqs[relevant_read_id] = []
+                            seqs[relevant_read_id] = (prev_read_seq, read_read_qual, prev_pos1, prev_pos2)
                             reads_visited[relevant_read_id] = editdist_prev
                             already_computed[relevant_read_id] = (p1,p2,prev_pos1, prev_pos2, editdist_prev)
                     else:
-                        seqs[relevant_read_id].append((read_seq, read_qual, pos1, pos2))
+                        seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
                         reads_visited[relevant_read_id] = editdist
                         already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
 
@@ -529,7 +531,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         #         stored_calculated_regions[q_id][pos1] = len(curr_best_seqs)
     return tmp_cnt
 
-def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold):
+def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold, max_seqs_to_spoa):
     corr_seq = []
     # print(opt_indicies)
     other_reads_corrected_regions = defaultdict(list)
@@ -550,7 +552,7 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
         if isinstance(instance, str): # already corrected
             best_corr = instance
         else:
-            best_corr, other_corrections = get_best_corrections(instance, k_size, outfolder, v_depth_ratio_threshold) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
+            best_corr, other_corrections = get_best_corrections(instance, k_size, outfolder, v_depth_ratio_threshold, max_seqs_to_spoa) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
             for other_r_id, other_corr_regions in other_corrections.items():
                 for region in other_corr_regions:
                     other_reads_corrected_regions[other_r_id].append(region)
@@ -652,7 +654,7 @@ def main(args):
     start = time()
     reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
     eprint("Correcting {0} reads.".format(len(reads)))
-    
+    max_seqs_to_spoa = args.max_seqs_to_spoa
     if len(reads) <= args.exact_instance_limit:
         args.exact = True
     if len(reads) <= args.w_equal_k_limit:
@@ -782,7 +784,7 @@ def main(args):
                     # sys.exit()
                     opt_indicies = solve_WIS(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
                     # print(opt_indicies)
-                    corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold)
+                    corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold, max_seqs_to_spoa)
                     
                     for other_r_id, corrected_regions in other_reads_corrected_regions.items():
                         for corr_region in corrected_regions:
@@ -819,8 +821,9 @@ if __name__ == '__main__':
     parser.add_argument('--T', type=float, default=0.2, help='Minimum fraction keeping substitution')
     parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
                                                                  not to be used for clusters with over ~500 reads)')
+    parser.add_argument('--max_seqs_to_spoa', type=int, default=200,  help='Maximum number of seqs to spoa')
     
-    parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance')
+    parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance smaller than this limit')
     parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
 
     parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
