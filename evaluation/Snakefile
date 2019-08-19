@@ -188,7 +188,7 @@ rule summary:
         for f in input.all_experiments: 
             nr_reads = f.split('/')[-2]
             dataset = f.split('/')[-3]
-            shell('echo -n  {dataset},{nr_reads},&& cat {f} >> {output.summary_table}')
+            shell('echo -n  {dataset},{nr_reads}, >> {output.summary_table} cat {f} >> {output.summary_table}')
 
 
 # rule sam_to_bam:
