@@ -186,7 +186,7 @@ rule summary:
     run:
         shell("> {output.summary_table}")
         for f in input.all_experiments: 
-            shell('cat {f} >> {output.summary_table}')
+            shell('echo -n  {wildcards.dataset},{wildcards.nr_reads},&& cat {f} >> {output.summary_table}')
 
 
 # rule sam_to_bam:
