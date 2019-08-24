@@ -6,6 +6,8 @@ import re
 import errno
 import itertools
 
+from collections import defaultdict
+
 import parasail
 import pysam
 
@@ -208,7 +210,7 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
     return "".join([s for s in r_line]), "".join([s for s in m_line]), "".join([s for s in q_line]), ins, del_, subs, matches
 
 
-def get_aln_stats_per_read(sam_file, reads, refs):
+def get_aln_stats_per_read(sam_file, reads, refs, args):
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     references = SAM_file.references
     alignments = {}
@@ -233,7 +235,8 @@ def get_aln_stats_per_read(sam_file, reads, refs):
                 sys.exit()
             
             alignments[read.query_name] = (ins, del_, subs, matches)
-            alignments_detailed[read.query_name] = (ref_alignment, m_line, read_alignment)
+            if args.align:
+                alignments_detailed[read.query_name] = (ref_alignment, m_line, read_alignment)
             # print()
             # return
         else:
@@ -255,6 +258,21 @@ def get_summary_stats(reads, quantile):
     sum_aln_bases = tot_ins + tot_del + tot_subs + tot_match
 
     return tot_ins, tot_del, tot_subs, tot_match, sum_aln_bases
+
+def print_detailed_values_to_file(alignments_dict, annotations_dict, cluster_sizes, reads, outfile, read_type):
+    # read_calss is FSM, NIC, NNC, ISM
+    # donwnload human gtf file to compare against, check how sqanti does it.
+    # also sent isONclust tsv file to this script to get cluster size 
+    alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
+
+    for (acc, (ins, del_, subs, matches)) in alignments_sorted:
+        error_rate = (ins + del_ + subs) /float( (ins + del_ + subs + matches) ) 
+        read_class = "NA" # annotations_dict[acc]
+        nr_perfect_splice_sites = "NA" #annotations_dict[acc]
+        cluster_size = cluster_sizes[acc]
+        read_length = len(reads[acc])
+        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, read_class, nr_perfect_splice_sites )
+        outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(*info_tuple))
 
 
 def print_quantile_values(alignments_dict):
@@ -353,14 +371,120 @@ def parasail_alignment(read, reference, x_acc = "", y_acc = "", match_score = 2,
     read_alignment, ref_alignment = cigar_to_seq(cigar_string, read, reference)
     return read_alignment, ref_alignment
 
+def get_cluster_sizes(cluster_file):
+    cluster_sizes = defaultdict(int)
+    for line in open(args.cluster_file, "r"):
+        cl_id, acc = line.split() 
+        cluster_sizes[acc] += 1
+    return cluster_sizes
+
+
+def get_splice_sites(cigar_tuples, first_exon_start):
+    splice_sites = []
+    ref_pos = first_exon_start
+    
+    for i, (l,t) in enumerate(cigar_tuples):
+        if t == "=" or t== "D" or  t== "M" or t == "X":
+            ref_pos += l
+        elif t == "N":
+            splice_start = ref_pos
+            ref_pos += l
+            splice_stop = ref_pos
+
+            splice_sites.append( (splice_start, splice_stop) )
+
+        elif t == "I" or t == "S": # insertion or softclip
+            ref_pos += 0
+
+        else: # reference skip or soft/hardclip "~", or match =
+            print("UNEXPECTED!", t)
+            sys.exit()
+
+    return splice_sites
+
+def get_read_splice_sites(q_isoform):
+    # compare cs tag at intron sites
+    q_cigar = q_isoform.cigarstring
+    q_start = q_isoform.reference_start
+    q_end = q_isoform.reference_end
+    q_cigar_tuples = []
+    result = re.split(r'[=DXSMIN]+', q_cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = q_cigar[i]
+        i += 1
+        q_cigar_tuples.append((int(length), type_ ))    
+    q_splice_sites = get_splice_sites(q_cigar_tuples, q_start)
+    return q_splice_sites
+
+def get_reference_splice_sites(ref_gff_file, outfolder):
+    fn = gffutils.example_filename(ref_gff_file)
+    db = gffutils.create_db(fn, dbfn='test.db', force=True, keep_order=True, merge_strategy='merge', sort_attribute_values=True)
+    db = gffutils.FeatureDB('test.db', keep_order=True)
+    gene = db["PB.1016"]
+    # print(transcript)
+    ref_isoforms = {}
+    for tr in db.children(gene, featuretype='transcript', order_by='start'):
+        # print(tr.id, dir(tr)) 
+        splice_sites = []
+        for j in db.children(tr, featuretype='exon', order_by='start'):
+            # print(j, j.start, j.end)
+            splice_sites.append(j.start -1)
+            splice_sites.append(j.end)
+        splice_sites_tmp = splice_sites[1:-1]
+        splice_sites = []
+        for i in range(0, len(splice_sites_tmp),2):
+            splice_sites.append( (splice_sites_tmp[i], splice_sites_tmp[i+1]) )
+        # splice_sites = [item for item in zip(splice_sites[:-1], splice_sites[1:])]
+        ref_isoforms[tr.id] = splice_sites
+
+    # print(dir(db))
+    gene_graphs = {} # gene_id : { (exon_start, exon_stop) : set() }
+    collapsed_exon_to_transcript = {}
+    for gene in db.features_of_type('gene'):
+        # print(dir(gene))
+        # print(gene.id, gene.seqid, gene.start, gene.stop, gene.attributes)
+        gene_graph = nx.DiGraph(chr=str(gene.seqid))
+        print( gene_graph.graph)
+        collapsed_exon_to_transcript[gene.id] = defaultdict(set)
+        already_parsed_exons = set()
+        
+        #add nodes
+        for exon in db.children(gene, featuretype='exon', order_by='start'):
+            collapsed_exon_to_transcript[gene.id][ (exon.start, exon.stop) ].update([ transcript_tmp for transcript_tmp in  exon.attributes['transcript_id']])
+            # if (exon.start, exon.stop) in already_parsed_exons:
+                
+            gene_graph.add_node( (exon.start, exon.stop), weight=1  )
+            # print(gene_graph.nodes[(exon.start, exon.stop)])
+
+        #add edges
+        for transcript in db.children(gene, featuretype='transcript', order_by='start'):
+            # print(dir(transcript))
+            consecutive_exons = [exon for exon in db.children(transcript, featuretype='exon', order_by='start')]
+            print('transcript', transcript.id, transcript.start, transcript.stop, [ (exon.start, exon.stop) for exon in db.children(transcript, featuretype='exon', order_by='start')])
+
+            for e1,e2 in zip(consecutive_exons[:-1], consecutive_exons[1:]):
+                # print('exon', exon.id, exon.start, exon.stop)
+                gene_graph.add_edge( (e1.start, e1.stop),  (e2.start, e2.stop) )
+                
+
+        # print(gene_graph.edges())
+        gene_graphs[gene.id] = gene_graph
+        
+    # print(collapsed_exon_to_transcript)
+    return gene_graphs, collapsed_exon_to_transcript
+
+
+
 
 def main(args):
     reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
     corr_reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
     refs = { acc : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
     # print(refs)
-    orig, orig_detailed = get_aln_stats_per_read(args.orig_sam, reads, refs)
-    corr, corr_detailed = get_aln_stats_per_read(args.corr_sam, corr_reads, refs)
+    orig, orig_detailed = get_aln_stats_per_read(args.orig_sam, reads, refs, args)
+    corr, corr_detailed = get_aln_stats_per_read(args.corr_sam, corr_reads, refs, args)
 
     if args.align:
         tot = 0
@@ -398,6 +522,15 @@ def main(args):
 
     quantile_tot_orig, quantile_insertions_orig, quantile_deletions_orig, quantile_substitutions_orig = print_quantile_values(orig)
     quantile_tot_corr, quantile_insertions_corr, quantile_deletions_corr, quantile_substitutions_corr = print_quantile_values(corr)
+
+    
+    detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
+    annotations_dict_corrected = {} # get_annotation_of_reads(gff_file, corr_reads)
+    annotations_dict_original = {} # get_annotation_of_reads(gff_file, reads)
+    cluster_sizes = get_cluster_sizes(args.cluster_file)
+    print_detailed_values_to_file(corr, annotations_dict_corrected, cluster_sizes, reads, detailed_results_outfile, "corrected")    
+    print_detailed_values_to_file(orig, annotations_dict_original, cluster_sizes, corr_reads, detailed_results_outfile, "original")
+    detailed_results_outfile.close()
 
     # alignments_stats = get_summary_stats(alignments_dict, 1.0)
     # print("Original reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*alignments_stats[:-1]), "tot aligned region (ins+del+subs+match):", alignments_stats[-1] )
@@ -454,6 +587,7 @@ def main(args):
     outfile.close()
 
     print("Reads successfully aligned:", len(orig),len(corr))
+
     # print(orig_sorted)
     # print(",".join([s for s in orig_stats]))
     # print(",".join([s for s in corr_stats]))
@@ -467,6 +601,7 @@ if __name__ == '__main__':
     parser.add_argument('reads', type=str, help='Path to the read file')
     parser.add_argument('corr_reads', type=str, help='Path to the corrected read file')
     parser.add_argument('refs', type=str, help='Path to the refs file')
+    parser.add_argument('cluster_file', type=str, help='Path to the refs file')
     parser.add_argument('outfolder', type=str, help='Output path of results')
     parser.add_argument('--align', action= "store_true", help='Include pairwise alignment of original and corrected read.')
 
