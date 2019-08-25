@@ -261,7 +261,7 @@ def get_summary_stats(reads, quantile):
 
     return tot_ins, tot_del, tot_subs, tot_match, sum_aln_bases
 
-def print_detailed_values_to_file(alignments_dict, annotations_dict, cluster_sizes, reads, outfile, read_type):
+def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cluster_size, reads, outfile, read_type):
     # read_calss is FSM, NIC, NNC, ISM
     # donwnload human gtf file to compare against, check how sqanti does it.
     # also sent isONclust tsv file to this script to get cluster size 
@@ -271,10 +271,10 @@ def print_detailed_values_to_file(alignments_dict, annotations_dict, cluster_siz
         error_rate = (ins + del_ + subs) /float( (ins + del_ + subs + matches) ) 
         read_class = "NA" # annotations_dict[acc]
         nr_perfect_splice_sites = "NA" #annotations_dict[acc]
-        cluster_size = cluster_sizes[acc]
+        cluster_size = reads_to_cluster_size[acc]
         read_length = len(reads[acc])
         info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, read_class, nr_perfect_splice_sites )
-        outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8}\n".format(*info_tuple))
+        outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(*info_tuple))
 
 
 def print_quantile_values(alignments_dict):
@@ -375,24 +375,44 @@ def parasail_alignment(read, reference, x_acc = "", y_acc = "", match_score = 2,
 
 def get_cluster_sizes(cluster_file):
     cluster_sizes = defaultdict(int)
+    tmp_reads = {}
     for line in open(args.cluster_file, "r"):
         cl_id, acc = line.split() 
-        cluster_sizes[acc] += 1
-    return cluster_sizes
+        cluster_sizes[cl_id] += 1  
+        tmp_reads[acc] = cl_id
+
+    reads_to_cluster_size = {}
+    for acc, cl_id in tmp_reads.items():
+        reads_to_cluster_size[acc] = cluster_sizes[cl_id]
+
+    return reads_to_cluster_size
 
 
-def get_splice_sites(cigar_tuples, first_exon_start):
+def get_splice_sites(cigar_tuples, first_exon_start, minimum_annotated_intron):
     splice_sites = []
     ref_pos = first_exon_start
     
     for i, (l,t) in enumerate(cigar_tuples):
-        if t == "=" or t== "D" or  t== "M" or t == "X":
+        if t == "D":
+            if l >= minimum_annotated_intron -1:
+                # print("long del", l)
+                splice_start = ref_pos
+                ref_pos += l
+                splice_stop = ref_pos
+                splice_sites.append( (splice_start, splice_stop) )
+            else:
+                ref_pos += l
+
+                # if l > 15:
+                #     print("Large deletion!!!", l)
+
+
+        elif t == "=" or t== "M" or t == "X":
             ref_pos += l
         elif t == "N":
             splice_start = ref_pos
             ref_pos += l
             splice_stop = ref_pos
-
             splice_sites.append( (splice_start, splice_stop) )
 
         elif t == "I" or t == "S" or t == "H": # insertion or softclip
@@ -404,7 +424,7 @@ def get_splice_sites(cigar_tuples, first_exon_start):
 
     return splice_sites
 
-def get_read_splice_sites(sam_file):
+def get_read_splice_sites(sam_file, minimum_annotated_intron):
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     references = SAM_file.references
     read_splice_sites = {}
@@ -423,8 +443,8 @@ def get_read_splice_sites(sam_file):
                 i += 1
                 read_cigar_tuples.append((int(length), type_ ))  
             read_splice_sites[read.query_name] = {}  
-            read_splice_sites[read.query_name][read.reference_name] = get_splice_sites(read_cigar_tuples, q_start)
-            print("read", read_splice_sites[read.query_name][read.reference_name])
+            read_splice_sites[read.query_name][read.reference_name] = get_splice_sites(read_cigar_tuples, q_start, minimum_annotated_intron)
+            # print("read", read_splice_sites[read.query_name][read.reference_name])
     return read_splice_sites
 
 
@@ -453,6 +473,7 @@ def get_annotated_splicesites(ref_gff_file):
 
     # gene_graphs = {} # gene_id : { (exon_start, exon_stop) : set() }
     # collapsed_exon_to_transcript = {}
+    minimum_annotated_intron = 1000000000
     for gene in db.features_of_type('gene'):
         chromosome = str(gene.seqid)
         if chromosome not in ref_isoforms:
@@ -480,17 +501,21 @@ def get_annotated_splicesites(ref_gff_file):
             tmp_splice_sites = []
             for e1,e2 in zip(consecutive_exons[:-1], consecutive_exons[1:]):
                 tmp_splice_sites.append( (e1.stop, e2.start -1 ))
+
+                if e2.start -1 - e1.stop < minimum_annotated_intron:
+                    minimum_annotated_intron = e2.start -1 - e1.stop
                 # print('exon', exon.id, exon.start, exon.stop)
             
             ref_isoforms[chromosome][tuple(tmp_splice_sites)] = transcript.id
       
-    return ref_isoforms, splice_coordinates
+    return ref_isoforms, splice_coordinates, minimum_annotated_intron
 
 
 def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, all_reads_splice_sites):
     total_true = 0
     total = 0
     total_reads = 0
+    total_fsm = 0
     for read_acc in all_reads_splice_sites:
         total_reads += 1
         assert len(all_reads_splice_sites[read_acc]) == 1
@@ -500,12 +525,22 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
             annotated_sites = annotated_splice_coordinates[chr_id]
             # print(chr_id)
             for read_splice_sites in all_reads_splice_sites[read_acc][chr_id]:
+                # print(read_splice_sites)
                 for sp in read_splice_sites:
+                    # print(sp)
+                    # print(annotated_sites)
+                    total += 1
                     if sp in annotated_sites:
                         total_true += 1
 
-                total += 1
-    print("Total:", total, "total true:", total_true, "total_reads:", total_reads)
+            # check set intersection between read splice sites and annotated splice sites
+            if tuple(all_reads_splice_sites[read_acc][chr_id]) in annotated_ref_isoforms[chr_id]:
+                total_fsm += 1
+                # print("FSM!!")
+    # print(annotated_ref_isoforms[chr_id])
+    # print( tuple(all_reads_splice_sites[read_acc][chr_id]))
+    print("Total splice sizes found in cigar in reads:", total, "total matching annotations:", total_true, "total reads aligned:", total_reads)
+    print("total FSM:", total_fsm)
 
 
 
@@ -557,21 +592,22 @@ def main(args):
 
     
     ## Splice site analysis
-    annotated_ref_isoforms, annotated_splice_coordinates = get_annotated_splicesites(args.gff_file)
-    print(annotated_ref_isoforms)
-    print(annotated_splice_coordinates)
-    corrected_splice_sites = get_read_splice_sites(args.corr_sam)
-    original_splice_sites = get_read_splice_sites(args.orig_sam)
+    annotated_ref_isoforms, annotated_splice_coordinates, minimum_annotated_intron = get_annotated_splicesites(args.gff_file)
+    # print(annotated_ref_isoforms)
+    # print(annotated_splice_coordinates)
+    print("SHORTEST INTRON:", minimum_annotated_intron)
+    corrected_splice_sites = get_read_splice_sites(args.corr_sam, minimum_annotated_intron)
+    original_splice_sites = get_read_splice_sites(args.orig_sam, minimum_annotated_intron)
     corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, corrected_splice_sites)
     orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, original_splice_sites)
 
     annotations_dict_corrected = {} # get_annotation_of_reads(gff_file, corr_reads)
     annotations_dict_original = {} # get_annotation_of_reads(gff_file, reads)
-    cluster_sizes = get_cluster_sizes(args.cluster_file)
+    reads_to_cluster_size = get_cluster_sizes(args.cluster_file)
 
     detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
-    print_detailed_values_to_file(corr, annotations_dict_corrected, cluster_sizes, reads, detailed_results_outfile, "corrected")    
-    print_detailed_values_to_file(orig, annotations_dict_original, cluster_sizes, corr_reads, detailed_results_outfile, "original")
+    print_detailed_values_to_file(corr, annotations_dict_corrected, reads_to_cluster_size, reads, detailed_results_outfile, "corrected")    
+    print_detailed_values_to_file(orig, annotations_dict_original, reads_to_cluster_size, corr_reads, detailed_results_outfile, "original")
     detailed_results_outfile.close()
 
     # alignments_stats = get_summary_stats(alignments_dict, 1.0)
