@@ -10,6 +10,7 @@ from collections import defaultdict
 
 import parasail
 import pysam
+import gffutils
 
 '''
     Below code taken from https://github.com/lh3/readfq/blob/master/readfq.py
@@ -242,6 +243,7 @@ def get_aln_stats_per_read(sam_file, reads, refs, args):
         else:
             pass
             # print("secondary", read.flag, read.reference_name) 
+    SAM_file.close()
     return alignments, alignments_detailed
 
 def get_summary_stats(reads, quantile):
@@ -402,78 +404,85 @@ def get_splice_sites(cigar_tuples, first_exon_start):
 
     return splice_sites
 
-def get_read_splice_sites(q_isoform):
-    # compare cs tag at intron sites
-    q_cigar = q_isoform.cigarstring
-    q_start = q_isoform.reference_start
-    q_end = q_isoform.reference_end
-    q_cigar_tuples = []
-    result = re.split(r'[=DXSMIN]+', q_cigar)
-    i = 0
-    for length in result[:-1]:
-        i += len(length)
-        type_ = q_cigar[i]
-        i += 1
-        q_cigar_tuples.append((int(length), type_ ))    
-    q_splice_sites = get_splice_sites(q_cigar_tuples, q_start)
-    return q_splice_sites
+def get_read_splice_sites(sam_file):
+    SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
+    references = SAM_file.references
+    read_splice_sites = {}
+    for read in SAM_file.fetch(until_eof=True):
 
-def get_reference_splice_sites(ref_gff_file, outfolder):
+        # compare cs tag at intron sites
+        q_cigar = read.cigarstring
+        q_start = read.reference_start
+        q_end = read.reference_end
+        read_cigar_tuples = []
+        result = re.split(r'[=DXSMIN]+', q_cigar)
+        i = 0
+        for length in result[:-1]:
+            i += len(length)
+            type_ = q_cigar[i]
+            i += 1
+            read_cigar_tuples.append((int(length), type_ ))  
+        read_splice_sites[read.query_name] = {}  
+        read_splice_sites[read.query_name][read.reference_name] = get_splice_sites(read_cigar_tuples, q_start)
+    return read_splice_sites
+
+def get_annotated_splicesites(ref_gff_file):
     fn = gffutils.example_filename(ref_gff_file)
     db = gffutils.create_db(fn, dbfn='test.db', force=True, keep_order=True, merge_strategy='merge', sort_attribute_values=True)
     db = gffutils.FeatureDB('test.db', keep_order=True)
-    gene = db["PB.1016"]
-    # print(transcript)
-    ref_isoforms = {}
-    for tr in db.children(gene, featuretype='transcript', order_by='start'):
-        # print(tr.id, dir(tr)) 
-        splice_sites = []
-        for j in db.children(tr, featuretype='exon', order_by='start'):
-            # print(j, j.start, j.end)
-            splice_sites.append(j.start -1)
-            splice_sites.append(j.end)
-        splice_sites_tmp = splice_sites[1:-1]
-        splice_sites = []
-        for i in range(0, len(splice_sites_tmp),2):
-            splice_sites.append( (splice_sites_tmp[i], splice_sites_tmp[i+1]) )
-        # splice_sites = [item for item in zip(splice_sites[:-1], splice_sites[1:])]
-        ref_isoforms[tr.id] = splice_sites
+    
+    # for tr in db.children(gene, featuretype='transcript', order_by='start'):
+    #     # print(tr.id, dir(tr)) 
+    #     splice_sites = []
+    #     for j in db.children(tr, featuretype='exon', order_by='start'):
+    #         # print(j, j.start, j.end)
+    #         splice_sites.append(j.start -1)
+    #         splice_sites.append(j.end)
+    #     splice_sites_tmp = splice_sites[1:-1]
+    #     splice_sites = []
+    #     for i in range(0, len(splice_sites_tmp),2):
+    #         splice_sites.append( (splice_sites_tmp[i], splice_sites_tmp[i+1]) )
+    #     # splice_sites = [item for item in zip(splice_sites[:-1], splice_sites[1:])]
+    #     ref_isoforms[tr.id] = splice_sites
 
-    # print(dir(db))
-    gene_graphs = {} # gene_id : { (exon_start, exon_stop) : set() }
-    collapsed_exon_to_transcript = {}
+
+    splice_coordinates = {} # to calc individual fraction of correct sites and NIC
+    ref_isoforms = {} # To calculate Full splice matches
+
+    # gene_graphs = {} # gene_id : { (exon_start, exon_stop) : set() }
+    # collapsed_exon_to_transcript = {}
     for gene in db.features_of_type('gene'):
-        # print(dir(gene))
-        # print(gene.id, gene.seqid, gene.start, gene.stop, gene.attributes)
-        gene_graph = nx.DiGraph(chr=str(gene.seqid))
-        print( gene_graph.graph)
-        collapsed_exon_to_transcript[gene.id] = defaultdict(set)
-        already_parsed_exons = set()
+        chromosome = str(gene.seqid)
+        if chromosome not in ref_isoforms:
+            ref_isoforms[chromosome] = {}
+        if chromosome not in splice_coordinates:
+            splice_coordinates[chromosome] = set()
+
         
-        #add nodes
+        #add splice sites
         for exon in db.children(gene, featuretype='exon', order_by='start'):
-            collapsed_exon_to_transcript[gene.id][ (exon.start, exon.stop) ].update([ transcript_tmp for transcript_tmp in  exon.attributes['transcript_id']])
-            # if (exon.start, exon.stop) in already_parsed_exons:
-                
-            gene_graph.add_node( (exon.start, exon.stop), weight=1  )
+            exon_start, exon_end = exon.start - 1, exon.stop # double check if gff is 1-indexed here!
+            splice_coordinates[chromosome].add(exon_start)
+            splice_coordinates[chromosome].add(exon_end)
+            
+            # collapsed_exon_to_transcript[gene.id][ (exon.start, exon.stop) ].update([ transcript_tmp for transcript_tmp in  exon.attributes['transcript_id']])
+            # if (exon.start, exon.stop) in already_parsed_exons: 
+            # gene_graph.add_node( (exon.start, exon.stop), weight=1  )
             # print(gene_graph.nodes[(exon.start, exon.stop)])
 
-        #add edges
+        #add annotated transcripts
         for transcript in db.children(gene, featuretype='transcript', order_by='start'):
             # print(dir(transcript))
             consecutive_exons = [exon for exon in db.children(transcript, featuretype='exon', order_by='start')]
-            print('transcript', transcript.id, transcript.start, transcript.stop, [ (exon.start, exon.stop) for exon in db.children(transcript, featuretype='exon', order_by='start')])
-
+            # print('transcript', transcript.id, transcript.start, transcript.stop, [ (exon.start, exon.stop) for exon in db.children(transcript, featuretype='exon', order_by='start')])
+            tmp_splice_sites = []
             for e1,e2 in zip(consecutive_exons[:-1], consecutive_exons[1:]):
+                tmp_splice_sites.append( (e1.stop, e2.start -1 ))
                 # print('exon', exon.id, exon.start, exon.stop)
-                gene_graph.add_edge( (e1.start, e1.stop),  (e2.start, e2.stop) )
-                
-
-        # print(gene_graph.edges())
-        gene_graphs[gene.id] = gene_graph
-        
-    # print(collapsed_exon_to_transcript)
-    return gene_graphs, collapsed_exon_to_transcript
+            
+            ref_isoforms[chromosome][tuple(tmp_splice_sites)] = transcript.id
+      
+    return ref_isoforms, splice_coordinates
 
 
 
@@ -524,10 +533,20 @@ def main(args):
     quantile_tot_corr, quantile_insertions_corr, quantile_deletions_corr, quantile_substitutions_corr = print_quantile_values(corr)
 
     
-    detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
+    ## Splice site analysis
+    annotated_ref_isoforms, annotated_splice_coordinates = get_annotated_splicesites(args.gff_file)
+    print(annotated_ref_isoforms)
+    print(annotated_splice_coordinates)
+    corrected_splice_sites = get_read_splice_sites(args.corr_sam)
+    original_splice_sites = get_read_splice_sites(args.orig_sam)
+    corr_splice_results = get_splice_classifications(true_splice_sites, corrected_splice_sites)
+    orig_splice_results = get_splice_classifications(true_splice_sites, corrected_splice_sites)
+
     annotations_dict_corrected = {} # get_annotation_of_reads(gff_file, corr_reads)
     annotations_dict_original = {} # get_annotation_of_reads(gff_file, reads)
     cluster_sizes = get_cluster_sizes(args.cluster_file)
+
+    detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
     print_detailed_values_to_file(corr, annotations_dict_corrected, cluster_sizes, reads, detailed_results_outfile, "corrected")    
     print_detailed_values_to_file(orig, annotations_dict_original, cluster_sizes, corr_reads, detailed_results_outfile, "original")
     detailed_results_outfile.close()
@@ -602,6 +621,7 @@ if __name__ == '__main__':
     parser.add_argument('corr_reads', type=str, help='Path to the corrected read file')
     parser.add_argument('refs', type=str, help='Path to the refs file')
     parser.add_argument('cluster_file', type=str, help='Path to the refs file')
+    parser.add_argument('gff_file', type=str, help='Path to the refs file')
     parser.add_argument('outfolder', type=str, help='Output path of results')
     parser.add_argument('--align', action= "store_true", help='Include pairwise alignment of original and corrected read.')
 
