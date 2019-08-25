@@ -395,7 +395,7 @@ def get_splice_sites(cigar_tuples, first_exon_start):
 
             splice_sites.append( (splice_start, splice_stop) )
 
-        elif t == "I" or t == "S": # insertion or softclip
+        elif t == "I" or t == "S" or t == "H": # insertion or softclip
             ref_pos += 0
 
         else: # reference skip or soft/hardclip "~", or match =
@@ -409,22 +409,24 @@ def get_read_splice_sites(sam_file):
     references = SAM_file.references
     read_splice_sites = {}
     for read in SAM_file.fetch(until_eof=True):
-
-        # compare cs tag at intron sites
-        q_cigar = read.cigarstring
-        q_start = read.reference_start
-        q_end = read.reference_end
-        read_cigar_tuples = []
-        result = re.split(r'[=DXSMIN]+', q_cigar)
-        i = 0
-        for length in result[:-1]:
-            i += len(length)
-            type_ = q_cigar[i]
-            i += 1
-            read_cigar_tuples.append((int(length), type_ ))  
-        read_splice_sites[read.query_name] = {}  
-        read_splice_sites[read.query_name][read.reference_name] = get_splice_sites(read_cigar_tuples, q_start)
+        if read.flag == 0 or read.flag == 16:
+            # compare cs tag at intron sites
+            q_cigar = read.cigarstring
+            q_start = read.reference_start
+            q_end = read.reference_end
+            read_cigar_tuples = []
+            result = re.split(r'[=DXSMINH]+', q_cigar)
+            i = 0
+            for length in result[:-1]:
+                i += len(length)
+                type_ = q_cigar[i]
+                i += 1
+                read_cigar_tuples.append((int(length), type_ ))  
+            read_splice_sites[read.query_name] = {}  
+            read_splice_sites[read.query_name][read.reference_name] = get_splice_sites(read_cigar_tuples, q_start)
+            print("read", read_splice_sites[read.query_name][read.reference_name])
     return read_splice_sites
+
 
 def get_annotated_splicesites(ref_gff_file):
     fn = gffutils.example_filename(ref_gff_file)
@@ -485,6 +487,27 @@ def get_annotated_splicesites(ref_gff_file):
     return ref_isoforms, splice_coordinates
 
 
+def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, all_reads_splice_sites):
+    total_true = 0
+    total = 0
+    total_reads = 0
+    for read_acc in all_reads_splice_sites:
+        total_reads += 1
+        assert len(all_reads_splice_sites[read_acc]) == 1
+        for chr_id in all_reads_splice_sites[read_acc]:
+            # print(chr_id)
+            # print(annotated_splice_coordinates)
+            annotated_sites = annotated_splice_coordinates[chr_id]
+            # print(chr_id)
+            for read_splice_sites in all_reads_splice_sites[read_acc][chr_id]:
+                for sp in read_splice_sites:
+                    if sp in annotated_sites:
+                        total_true += 1
+
+                total += 1
+    print("Total:", total, "total true:", total_true, "total_reads:", total_reads)
+
+
 
 
 def main(args):
@@ -539,8 +562,8 @@ def main(args):
     print(annotated_splice_coordinates)
     corrected_splice_sites = get_read_splice_sites(args.corr_sam)
     original_splice_sites = get_read_splice_sites(args.orig_sam)
-    corr_splice_results = get_splice_classifications(true_splice_sites, corrected_splice_sites)
-    orig_splice_results = get_splice_classifications(true_splice_sites, corrected_splice_sites)
+    corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, corrected_splice_sites)
+    orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, original_splice_sites)
 
     annotations_dict_corrected = {} # get_annotation_of_reads(gff_file, corr_reads)
     annotations_dict_original = {} # get_annotation_of_reads(gff_file, reads)
