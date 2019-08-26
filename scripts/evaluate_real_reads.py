@@ -269,12 +269,13 @@ def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cl
 
     for (acc, (ins, del_, subs, matches)) in alignments_sorted:
         error_rate = (ins + del_ + subs) /float( (ins + del_ + subs + matches) ) 
-        read_class = "NA" # annotations_dict[acc]
-        nr_perfect_splice_sites = "NA" #annotations_dict[acc]
+        read_class = annotations_dict[acc] #"NA" # annotations_dict[acc]
         cluster_size = reads_to_cluster_size[acc]
         read_length = len(reads[acc])
-        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, read_class, nr_perfect_splice_sites )
-        outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(*info_tuple))
+        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, *read_class) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
+        # print(*info_tuple)
+        # outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(*info_tuple))
+        outfile.write( ",".join( [str(item) for item in info_tuple] ) + "\n")
 
 
 def print_quantile_values(alignments_dict):
@@ -469,6 +470,7 @@ def get_annotated_splicesites(ref_gff_file):
 
 
     splice_coordinates = {} # to calc individual fraction of correct sites and NIC
+    splice_coordinates_pairs = {} 
     ref_isoforms = {} # To calculate Full splice matches
 
     # gene_graphs = {} # gene_id : { (exon_start, exon_stop) : set() }
@@ -480,13 +482,24 @@ def get_annotated_splicesites(ref_gff_file):
             ref_isoforms[chromosome] = {}
         if chromosome not in splice_coordinates:
             splice_coordinates[chromosome] = set()
+            splice_coordinates_pairs[chromosome] = set()
+
 
         
-        #add splice sites
-        for exon in db.children(gene, featuretype='exon', order_by='start'):
-            exon_start, exon_end = exon.start - 1, exon.stop # double check if gff is 1-indexed here!
-            splice_coordinates[chromosome].add(exon_start)
-            splice_coordinates[chromosome].add(exon_end)
+        # #add splice sites
+        # splice_sites_tmp = []
+        # for exon in db.children(gene, featuretype='exon', order_by='start'):
+        #     exon_start, exon_end = exon.start - 1, exon.stop # double check if gff is 1-indexed here!
+        #     splice_sites_tmp.append(exon_start)
+        #     splice_sites_tmp.append(exon_end)
+
+        # splice_sites = []
+        # for i in range(0, len(splice_sites_tmp[1:-1]),2):
+        #     splice_start, splice_stop = splice_sites_tmp[i], splice_sites_tmp[i+1]
+        #     splice_sites.append( (splice_start, splice_stop) )
+        #     splice_coordinates[chromosome].add(splice_start)
+        #     splice_coordinates[chromosome].add(splice_stop)
+        #     splice_coordinates_pairs[chromosome].add( (splice_start, splice_stop) )
             
             # collapsed_exon_to_transcript[gene.id][ (exon.start, exon.stop) ].update([ transcript_tmp for transcript_tmp in  exon.attributes['transcript_id']])
             # if (exon.start, exon.stop) in already_parsed_exons: 
@@ -500,49 +513,131 @@ def get_annotated_splicesites(ref_gff_file):
             # print('transcript', transcript.id, transcript.start, transcript.stop, [ (exon.start, exon.stop) for exon in db.children(transcript, featuretype='exon', order_by='start')])
             tmp_splice_sites = []
             for e1,e2 in zip(consecutive_exons[:-1], consecutive_exons[1:]):
-                tmp_splice_sites.append( (e1.stop, e2.start -1 ))
+                tmp_splice_sites.append( (e1.stop, e2.start -1 ))           
+                splice_coordinates[chromosome].add(e1.stop)
+                splice_coordinates[chromosome].add(e2.start -1 )
+                splice_coordinates_pairs[chromosome].add( (e1.stop, e2.start -1 ) )
 
                 if e2.start -1 - e1.stop < minimum_annotated_intron:
                     minimum_annotated_intron = e2.start -1 - e1.stop
                 # print('exon', exon.id, exon.start, exon.stop)
             
             ref_isoforms[chromosome][tuple(tmp_splice_sites)] = transcript.id
+
       
-    return ref_isoforms, splice_coordinates, minimum_annotated_intron
+    return ref_isoforms, splice_coordinates, splice_coordinates_pairs, minimum_annotated_intron
 
+from collections import namedtuple
+def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs,  all_reads_splice_sites, ref_seqs):
 
-def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, all_reads_splice_sites):
-    total_true = 0
-    total = 0
     total_reads = 0
-    total_fsm = 0
+    
+    #individual splice sites
+    total_individual_true = 0
+    total_individual_in_data = 0
+
+    #pairs of splice sites
+    total_pairs_in_data = 0
+    tot_nic_pairs = 0
+    tot_sm_pairs = 0
+
+    #whole structure
+    total_transcript_fsm = 0
+    total_transcript_nic = 0
+    total_transcript_ism = 0
+    total_transcript_nnc = 0
+    total_transcript_no_splices = 0
+
+    read_annotations = {}
     for read_acc in all_reads_splice_sites:
+        read_annotations[read_acc] = {}
         total_reads += 1
         assert len(all_reads_splice_sites[read_acc]) == 1
         for chr_id in all_reads_splice_sites[read_acc]:
             # print(chr_id)
             # print(annotated_splice_coordinates)
             annotated_sites = annotated_splice_coordinates[chr_id]
-            # print(chr_id)
+            annotated_pairs = annotated_splice_coordinates_pairs[chr_id]
+            # print(annotated_pairs)
+            # print( all_reads_splice_sites[read_acc][chr_id])
+            # print(annotated_ref_isoforms[chr_id])
+            read_sm_junctions = 0
+            read_nic_junctions = 0
+            read_splice_letters = []
             for read_splice_sites in all_reads_splice_sites[read_acc][chr_id]:
+                start_sp, stop_sp = read_splice_sites
+
+                donor = ref_seqs[chr_id][start_sp: start_sp + 2] 
+                acceptor = ref_seqs[chr_id][stop_sp: stop_sp + 2]
+                read_splice_letters.append( donor + str("-") + acceptor )
                 # print(read_splice_sites)
-                for sp in read_splice_sites:
-                    # print(sp)
-                    # print(annotated_sites)
-                    total += 1
-                    if sp in annotated_sites:
-                        total_true += 1
+                total_individual_in_data += 2
+                total_pairs_in_data += 1
+                if (start_sp, stop_sp) in annotated_pairs:
+                    tot_sm_pairs += 1 
+                    total_individual_true += 2
+                    read_sm_junctions += 1
+
+                elif start_sp in annotated_sites and stop_sp in annotated_sites:
+                    # print((start_sp, stop_sp), annotated_pairs )
+                    tot_nic_pairs += 1
+                    total_individual_true += 2
+                    read_nic_junctions += 1
+
+                elif start_sp in annotated_sites:
+                    total_individual_true += 1  
+
+                elif stop_sp in annotated_sites:
+                    total_individual_true += 1  
+
+                # for sp in read_splice_sites:
+                #     # print(sp)
+                #     # print(annotated_sites)
+                #     total += 1
+                #     if sp in annotated_sites:
+                #         total_true += 1
 
             # check set intersection between read splice sites and annotated splice sites
-            if tuple(all_reads_splice_sites[read_acc][chr_id]) in annotated_ref_isoforms[chr_id]:
-                total_fsm += 1
+            read_fsm, read_nic, read_ism, read_nnc, read_no_splices = 0,0,0,0,0
+            if  len(all_reads_splice_sites[read_acc][chr_id]) > 0:
+
+                if tuple(all_reads_splice_sites[read_acc][chr_id]) in annotated_ref_isoforms[chr_id]:
+                    total_transcript_fsm += 1
+                    read_fsm = 1
+                    # print(annotated_ref_isoforms[chr_id][tuple(all_reads_splice_sites[read_acc][chr_id])], tuple(all_reads_splice_sites[read_acc][chr_id]))
+
+                elif len(all_reads_splice_sites[read_acc][chr_id]) == read_sm_junctions + read_nic_junctions:
+                    if read_nic_junctions >= 1:
+                        total_transcript_nic += 1
+                        read_nic = 1
+                    else:
+                        total_transcript_ism += 1
+                        read_ism = 1
+                else:
+                    total_transcript_nnc += 1
+                    read_nnc = 1
+            else:
+                total_transcript_no_splices += 1                
+                read_no_splices = 1
+
+        read_annotation = namedtuple('Annotation', ['tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices', "donor_acceptors" ])
+        if read_splice_letters:
+            donor_acceptors = ":".join([str(item) for item in read_splice_letters])
+        else: 
+            donor_acceptors = "NA"
+        read_annotations[read_acc] = read_annotation( len(all_reads_splice_sites[read_acc][chr_id]), read_sm_junctions, read_nic_junctions, read_fsm, read_nic, read_ism, read_nnc, read_no_splices, donor_acceptors )
                 # print("FSM!!")
     # print(annotated_ref_isoforms[chr_id])
     # print( tuple(all_reads_splice_sites[read_acc][chr_id]))
-    print("Total splice sizes found in cigar in reads:", total, "total matching annotations:", total_true, "total reads aligned:", total_reads)
-    print("total FSM:", total_fsm)
+    print("Total splice sizes found in cigar in reads (individual, pairs):", total_individual_in_data, total_pairs_in_data, "total matching annotations (individual):", total_individual_true,
+             "total annotated junctions (splice match pairs):", tot_sm_pairs,  "total NIC junctions in (pairs):", tot_nic_pairs, "total reads aligned:", total_reads)
+    print("total transcripts FSM:", total_transcript_fsm)
+    print("total transcripts NIC:", total_transcript_nic)
+    print("total transcripts ISM:", total_transcript_ism)
+    print("total transcripts NNC:", total_transcript_nnc)
+    print("total transcripts no splice sites:", total_transcript_no_splices)
 
-
+    return read_annotations
 
 
 def main(args):
@@ -592,22 +687,19 @@ def main(args):
 
     
     ## Splice site analysis
-    annotated_ref_isoforms, annotated_splice_coordinates, minimum_annotated_intron = get_annotated_splicesites(args.gff_file)
+    annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file)
     # print(annotated_ref_isoforms)
     # print(annotated_splice_coordinates)
     print("SHORTEST INTRON:", minimum_annotated_intron)
     corrected_splice_sites = get_read_splice_sites(args.corr_sam, minimum_annotated_intron)
     original_splice_sites = get_read_splice_sites(args.orig_sam, minimum_annotated_intron)
-    corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, corrected_splice_sites)
-    orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, original_splice_sites)
-
-    annotations_dict_corrected = {} # get_annotation_of_reads(gff_file, corr_reads)
-    annotations_dict_original = {} # get_annotation_of_reads(gff_file, reads)
+    corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, corrected_splice_sites, refs)
+    orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, original_splice_sites, refs)
     reads_to_cluster_size = get_cluster_sizes(args.cluster_file)
 
     detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
-    print_detailed_values_to_file(corr, annotations_dict_corrected, reads_to_cluster_size, reads, detailed_results_outfile, "corrected")    
-    print_detailed_values_to_file(orig, annotations_dict_original, reads_to_cluster_size, corr_reads, detailed_results_outfile, "original")
+    print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, "corrected")    
+    print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, "original")
     detailed_results_outfile.close()
 
     # alignments_stats = get_summary_stats(alignments_dict, 1.0)
