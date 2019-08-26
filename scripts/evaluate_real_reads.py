@@ -261,7 +261,7 @@ def get_summary_stats(reads, quantile):
 
     return tot_ins, tot_del, tot_subs, tot_match, sum_aln_bases
 
-def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cluster_size, reads, outfile, read_type):
+def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cluster_size, reads, outfile, reads_unaligned_in_other_method, read_type):
     # read_calss is FSM, NIC, NNC, ISM
     # donwnload human gtf file to compare against, check how sqanti does it.
     # also sent isONclust tsv file to this script to get cluster size 
@@ -272,7 +272,8 @@ def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cl
         read_class = annotations_dict[acc] #"NA" # annotations_dict[acc]
         cluster_size = reads_to_cluster_size[acc]
         read_length = len(reads[acc])
-        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, *read_class) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
+        is_unaligned_in_other_method = 1 if acc in reads_unaligned_in_other_method else 0
+        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, is_unaligned_in_other_method, *read_class) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
         # print(*info_tuple)
         # outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(*info_tuple))
         outfile.write( ",".join( [str(item) for item in info_tuple] ) + "\n")
@@ -697,11 +698,24 @@ def main(args):
     orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, original_splice_sites, refs)
     reads_to_cluster_size = get_cluster_sizes(args.cluster_file)
 
+    reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
+    bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
+    reads_unaligned_in_original = (set(corrected_splice_sites.keys()) | reads_missing_from_clustering_correction_output) - set(original_splice_sites.keys())
+    reads_unaligned_after_correction = (set(reads.keys()) -  reads_missing_from_clustering_correction_output) -  set(corrected_splice_sites.keys()) 
+
     detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
-    print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, "corrected")    
-    print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, "original")
+    print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_in_original, "corrected")    
+    print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_after_correction, "original")
     detailed_results_outfile.close()
 
+    # reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
+    # bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
+    # reads_unaligned_in_original = (set(corrected_splice_sites.keys()) | reads_missing_from_clustering_correction_output) - set(original_splice_sites.keys())
+    # reads_unaligned_after_correction = (set(reads.keys()) -  reads_missing_from_clustering_correction_output) -  set(corrected_splice_sites.keys()) 
+
+    print("READS MISSING FROM CLUSTERING/CORRECTION INPUT:", len(reads_missing_from_clustering_correction_output))
+    print("READS UNALIGNED (ORIGINAL/CORRECTED):", len(reads_unaligned_in_original), len(reads_unaligned_after_correction) )
+    print("BUG IF NOT EMPTY:",len(bug_if_not_empty),)
     # alignments_stats = get_summary_stats(alignments_dict, 1.0)
     # print("Original reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*alignments_stats[:-1]), "tot aligned region (ins+del+subs+match):", alignments_stats[-1] )
     # print("Original reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/alignments_stats[-1] , 1) for s in alignments_stats[:-1]]))
