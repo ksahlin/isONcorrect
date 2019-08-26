@@ -24,7 +24,7 @@ def readfq(fp): # this is a generator function
                     last = l[:-1] # save this line
                     break
         if not last: break
-        name, seqs, last = last[1:].replace(" ", "_"), [], None
+        name, seqs, last = last[1:], [], None
         for l in fp: # read the sequence
             if l[0] in '@+>':
                 last = l[:-1]
@@ -232,6 +232,8 @@ def get_aln_stats_per_read(sam_file, reads, refs, args):
             #     print(ins, del_, subs, matches)
 
             if read.query_name in alignments:
+                print(alignments[read.query_name])
+                print(read.flag, read.query_name)
                 print("BUG")
                 sys.exit()
             
@@ -642,9 +644,9 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
 
 
 def main(args):
-    reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
-    corr_reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
-    refs = { acc : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
+    reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
+    corr_reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
+    refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
     # print(refs)
     orig, orig_detailed = get_aln_stats_per_read(args.orig_sam, reads, refs, args)
     corr, corr_detailed = get_aln_stats_per_read(args.corr_sam, corr_reads, refs, args)
