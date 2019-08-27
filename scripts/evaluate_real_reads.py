@@ -211,41 +211,60 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
     return "".join([s for s in r_line]), "".join([s for s in m_line]), "".join([s for s in q_line]), ins, del_, subs, matches
 
 
-def get_aln_stats_per_read(sam_file, reads, refs, args):
+def get_aln_stats_per_read(sam_file, reads, args, reference = {}):
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     references = SAM_file.references
-    alignments = {}
+    alignments = defaultdict(list)
     alignments_detailed = {}
+    read_index = 0
     for read in SAM_file.fetch(until_eof=True):
         if read.flag == 0 or read.flag == 16:
             # print(read.is_reverse)
-            # print(read.cigartuples)
-            read_seq = reads[read.query_name]
-            ref_seq = refs[read.reference_name]
-            ref_alignment, m_line, read_alignment, ins, del_, subs, matches = cigar_to_seq_mm2_local(read, ref_seq, read_seq)
-            # if read.query_name == 'b1d0ee62-7557-4645-8d1e-c1ccfb60c997_runid=8c239806e6f576cd17d6b7d532976b1fe830f9c6_sampleid=pcs109_sirv_mix2_LC_read=29302_ch=69_start_time=2019-04-12T22:47:30Z_strand=-':
-            #     print(read.query_alignment_start)
-            #     print(read.query_name, "primary", read.flag, read.reference_name) 
-            #     print(ref_alignment)
-            #     print(m_line)
-            #     print(read_alignment)
-            #     print(ins, del_, subs, matches)
+            read_index += 1
 
-            if read.query_name in alignments:
-                print(alignments[read.query_name])
-                print(read.flag, read.query_name)
-                print("BUG")
-                sys.exit()
-            
-            alignments[read.query_name] = (ins, del_, subs, matches)
             if args.align:
+                read_seq = reads[read.query_name]
+                ref_seq = reference[read.reference_name]
+                ref_alignment, m_line, read_alignment, ins, del_, subs, matches = cigar_to_seq_mm2_local(read, ref_seq, read_seq)
                 alignments_detailed[read.query_name] = (ref_alignment, m_line, read_alignment)
-            # print()
-            # return
+
+                # if read.query_name == 'b1d0ee62-7557-4645-8d1e-c1ccfb60c997_runid=8c239806e6f576cd17d6b7d532976b1fe830f9c6_sampleid=pcs109_sirv_mix2_LC_read=29302_ch=69_start_time=2019-04-12T22:47:30Z_strand=-':
+                #     print(read.query_alignment_start)
+                #     print(read.query_name, "primary", read.flag, read.reference_name) 
+                #     print(ref_alignment)
+                #     print(m_line)
+                #     print(read_alignment)
+                #     print(ins, del_, subs, matches)
+            else:
+                # print(read.cigartuples)
+                ins = sum([length for type_, length in read.cigartuples if type_ == 1])
+                del_ = sum([length for type_, length in read.cigartuples if type_ == 2])
+                subs = sum([length for type_, length in read.cigartuples if type_ == 8])
+                matches = sum([length for type_, length in read.cigartuples if type_ == 7])
+
+            # if tot_ins != ins or tot_subs != subs or tot_del != del_ or tot_match != matches:
+            #     print(tot_ins, ins, tot_subs, subs, tot_del, del_, tot_match, matches)
+            
+            # if read.query_name in alignments:
+            #     print("read", read_index, alignments[read.query_name], read.reference_name)
+            #     print("New:", (ins, del_, subs, matches))
+            #     print(read.flag, read.query_name)
+            #     print("BUG")
+            #     # sys.exit()
+
+            alignments[read.query_name].append((ins, del_, subs, matches, read.reference_name, read.reference_start, read.reference_end + 1, read.flag, read_index))
+
         else:
             pass
             # print("secondary", read.flag, read.reference_name) 
     SAM_file.close()
+
+    multiple_alingment_counter = 0
+    for read in alignments:
+        if len(alignments[read]) > 1:
+            # print(alignments[read])
+            multiple_alingment_counter += 1
+    print("Nr reads with multiple primary alignments:", multiple_alingment_counter)
     return alignments, alignments_detailed
 
 def get_summary_stats(reads, quantile):
@@ -286,11 +305,11 @@ def print_quantile_values(alignments_dict):
     alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
     print(alignments_sorted[-5:])
 
-    sorted_error_rates = [ sum(tup[0:3])/float(sum(tup)) for acc, tup in alignments_sorted]
+    sorted_error_rates = [ sum(tup[0:3])/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
 
-    insertions = [ tup[0]/float(sum(tup)) for acc, tup in alignments_sorted]
-    deletions = [ tup[1]/float(sum(tup)) for acc, tup in alignments_sorted]
-    substitutions = [ tup[2]/float(sum(tup)) for acc, tup in alignments_sorted]
+    insertions = [ tup[0]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+    deletions = [ tup[1]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+    substitutions = [ tup[2]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
 
     n = len(sorted_error_rates)
     quantiles = [0, 1.0/20, 1.0/10, 1.0/4, 1.0/2, 3.0/4, 9.0/10, 19.0/20, 1 ]
@@ -452,10 +471,18 @@ def get_read_splice_sites(sam_file, minimum_annotated_intron):
     return read_splice_sites
 
 
-def get_annotated_splicesites(ref_gff_file):
-    fn = gffutils.example_filename(ref_gff_file)
-    db = gffutils.create_db(fn, dbfn='test.db', force=True, keep_order=True, merge_strategy='merge', sort_attribute_values=True)
-    db = gffutils.FeatureDB('test.db', keep_order=True)
+def get_annotated_splicesites(ref_gff_file, infer_genes):
+    if infer_genes:
+        fn = gffutils.example_filename(ref_gff_file)
+        db = gffutils.create_db(fn, dbfn='test.db', force=True, keep_order=True, merge_strategy='merge', 
+                                sort_attribute_values=True)
+        db = gffutils.FeatureDB('test.db', keep_order=True)
+    else:
+        fn = gffutils.example_filename(ref_gff_file)
+        db = gffutils.create_db(fn, dbfn='test.db', force=True, keep_order=True, merge_strategy='merge', 
+                                sort_attribute_values=True, disable_infer_genes=True, disable_infer_transcripts=True)
+        db = gffutils.FeatureDB('test.db', keep_order=True)
+
     
     # for tr in db.children(gene, featuretype='transcript', order_by='start'):
     #     # print(tr.id, dir(tr)) 
@@ -646,10 +673,15 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
 def main(args):
     reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
     corr_reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
-    refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
-    # print(refs)
-    orig, orig_detailed = get_aln_stats_per_read(args.orig_sam, reads, refs, args)
-    corr, corr_detailed = get_aln_stats_per_read(args.corr_sam, corr_reads, refs, args)
+
+    refs = {}
+    if args.align:
+        refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
+        orig, orig_detailed = get_aln_stats_per_read(args.orig_sam, reads, args, reference = refs)
+        corr, corr_detailed = get_aln_stats_per_read(args.corr_sam, corr_reads, args, reference = refs)
+    else: 
+        orig, orig_detailed = get_aln_stats_per_read(args.orig_sam, reads, args)
+        corr, corr_detailed = get_aln_stats_per_read(args.corr_sam, corr_reads, args)
 
     if args.align:
         tot = 0
@@ -685,17 +717,19 @@ def main(args):
         print("TOT structural diffs:", tot)
     print( "Reads successfully aligned:", len(orig),len(corr))
 
-    quantile_tot_orig, quantile_insertions_orig, quantile_deletions_orig, quantile_substitutions_orig = print_quantile_values(orig)
-    quantile_tot_corr, quantile_insertions_corr, quantile_deletions_corr, quantile_substitutions_corr = print_quantile_values(corr)
+
 
     
     ## Splice site analysis
-    annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file)
+    annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes)
     # print(annotated_ref_isoforms)
     # print(annotated_splice_coordinates)
     print("SHORTEST INTRON:", minimum_annotated_intron)
     corrected_splice_sites = get_read_splice_sites(args.corr_sam, minimum_annotated_intron)
     original_splice_sites = get_read_splice_sites(args.orig_sam, minimum_annotated_intron)
+    if len(refs) == 0:
+        refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
+
     corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, corrected_splice_sites, refs)
     orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, original_splice_sites, refs)
     reads_to_cluster_size = get_cluster_sizes(args.cluster_file)
@@ -723,6 +757,8 @@ def main(args):
     # print("Original reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/alignments_stats[-1] , 1) for s in alignments_stats[:-1]]))
     # print( "Num_aligned_reads", "Aligned bases", "tot_errors", "avg_error_rate", "median_read_error_rate", "upper_25_quant", "lower_25_quant", "min", "max")
 
+    quantile_tot_orig, quantile_insertions_orig, quantile_deletions_orig, quantile_substitutions_orig = print_quantile_values(orig)
+    quantile_tot_corr, quantile_insertions_corr, quantile_deletions_corr, quantile_substitutions_corr = print_quantile_values(corr)
 
     orig_stats = get_summary_stats(orig, 1.0)
     # print("Original reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*orig_stats[:-1]), "tot aligned region (ins+del+subs+match):", orig_stats[-1] )
@@ -790,6 +826,7 @@ if __name__ == '__main__':
     parser.add_argument('cluster_file', type=str, help='Path to the refs file')
     parser.add_argument('gff_file', type=str, help='Path to the refs file')
     parser.add_argument('outfolder', type=str, help='Output path of results')
+    parser.add_argument('--infer_genes', action= "store_true", help='Include pairwise alignment of original and corrected read.')
     parser.add_argument('--align', action= "store_true", help='Include pairwise alignment of original and corrected read.')
 
     args = parser.parse_args()
