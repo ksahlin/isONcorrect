@@ -746,6 +746,38 @@ def pickle_load(filename):
         data = pickle.load(f)
     return data
 
+def print_exact_alignments(reads, corr_reads):
+    tot = 0
+    for acc in reads:
+        if acc not in corr_reads:
+            print(acc, "Not in corrected reads")
+        else:
+            orig_seq = reads[acc]
+            corr_seq = corr_reads[acc]
+            read_alignment, ref_alignment = parasail_alignment(orig_seq, corr_seq)
+            orig_dlen = [d_len for ch, d_len in  [(ch, len(list(_))) for ch, _ in itertools.groupby(read_alignment)] if ch == "-" ]
+            corr_dlen = [d_len for ch, d_len in  [(ch, len(list(_))) for ch, _ in itertools.groupby(ref_alignment)] if ch == "-" ] 
+            if corr_dlen:
+                max_orig_dlen = max( orig_dlen )
+            else:
+                max_orig_dlen = 0
+            if corr_dlen:
+                max_corr_dlen = max( corr_dlen )
+            else:
+                max_corr_dlen = 0
+
+            if max_corr_dlen > 10 or max_orig_dlen > 10:
+                print("orig", acc, read_alignment)
+                print(orig[acc])
+                print("corr", acc, ref_alignment)
+                print(corr[acc])
+                print(corr_detailed[acc][0])
+                print(corr_detailed[acc][1])
+                print(corr_detailed[acc][2])
+
+                tot += 1
+                print()
+    print("TOT structural diffs:", tot)
 
 def main(args):
     reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
@@ -762,39 +794,10 @@ def main(args):
         orig, orig_detailed = get_aln_stats_per_read(orig_primary_locations, reads, args)
         corr, corr_detailed = get_aln_stats_per_read(corr_primary_locations, corr_reads, args)
 
-    if args.align:
-        tot = 0
-        for acc in reads:
-            if acc not in corr_reads:
-                print(acc, "Not in corrected reads")
-            else:
-                orig_seq = reads[acc]
-                corr_seq = corr_reads[acc]
-                read_alignment, ref_alignment = parasail_alignment(orig_seq, corr_seq)
-                orig_dlen = [d_len for ch, d_len in  [(ch, len(list(_))) for ch, _ in itertools.groupby(read_alignment)] if ch == "-" ]
-                corr_dlen = [d_len for ch, d_len in  [(ch, len(list(_))) for ch, _ in itertools.groupby(ref_alignment)] if ch == "-" ] 
-                if corr_dlen:
-                    max_orig_dlen = max( orig_dlen )
-                else:
-                    max_orig_dlen = 0
-                if corr_dlen:
-                    max_corr_dlen = max( corr_dlen )
-                else:
-                    max_corr_dlen = 0
-
-                if max_corr_dlen > 10 or max_orig_dlen > 10:
-                    print("orig", acc, read_alignment)
-                    print(orig[acc])
-                    print("corr", acc, ref_alignment)
-                    print(corr[acc])
-                    print(corr_detailed[acc][0])
-                    print(corr_detailed[acc][1])
-                    print(corr_detailed[acc][2])
-
-                    tot += 1
-                    print()
-        print("TOT structural diffs:", tot)
     print( "Reads successfully aligned:", len(orig),len(corr))
+
+    if args.align:
+        print_exact_alignments(reads, corr_reads)
 
 
     quantile_tot_orig, quantile_insertions_orig, quantile_deletions_orig, quantile_substitutions_orig = print_quantile_values(orig)
