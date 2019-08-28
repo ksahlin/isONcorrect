@@ -6,6 +6,8 @@ import re
 import errno
 import itertools
 
+import pickle
+
 from collections import defaultdict
 
 import parasail
@@ -211,13 +213,65 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
     return "".join([s for s in r_line]), "".join([s for s in m_line]), "".join([s for s in q_line]), ins, del_, subs, matches
 
 
-def get_aln_stats_per_read(sam_file, reads, args, reference = {}):
+def decide_primary_locations(sam_file, args): # maybe this function is not needed if only one primary alignment from minimap2
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
-    references = SAM_file.references
-    alignments = defaultdict(list)
+    reads_primary = {}
+    reads_tmp = {}
+    total_multiple_primary = 0
+
+    for read in SAM_file.fetch(until_eof=True):
+        if read.flag == 0 or read.flag == 16:
+            ins = sum([length for type_, length in read.cigartuples if type_ == 1])
+            del_ = sum([length for type_, length in read.cigartuples if type_ == 2 and length < args.min_intron ])
+            subs = sum([length for type_, length in read.cigartuples if type_ == 8])
+            matches = sum([length for type_, length in read.cigartuples if type_ == 7])
+            tot_align = ins + del_ + subs + matches
+            identity = matches/float(tot_align)
+
+            # has_large_del = [length for type_, length in read.cigartuples if type_ == 2 and length >=  args.min_intron ]
+            # if has_large_del:
+            #     print(has_large_del)
+            if read.query_name in reads_primary:
+                total_multiple_primary += 1
+                if identity >= reads_tmp[read.query_name][0] and  matches >= reads_tmp[read.query_name][1]:
+                    reads_primary[read.query_name] = read
+                    reads_tmp[read.query_name] = (identity, matches)
+                elif identity <= reads_tmp[read.query_name][0] and  matches <= reads_tmp[read.query_name][1]:
+                    continue
+                else:
+                    if identity * matches > reads_tmp[read.query_name][0] * reads_tmp[read.query_name][1]:
+                        reads_primary[read.query_name] = read
+                        reads_tmp[read.query_name] = (identity, matches)
+                    else: 
+                        continue
+
+                        
+                    # print( "Ambiguous, prefferred:", round(reads_tmp[read.query_name][0],2), reads_tmp[read.query_name][1], "over", round(identity,2), matches)
+
+                #     if tot_align >= reads_tmp[read.query_name][1]:
+                #         reads_primary[read.query_name] = read
+                #     else:
+                #         continue
+                # elif tot_align >= reads_tmp[read.query_name][1]:
+                #     if identity >= reads_tmp[read.query_name][0]:
+                #         reads_primary[read.query_name] = read
+                #     else:
+                #         continue
+
+            else:
+                reads_primary[read.query_name] = read
+                reads_tmp[read.query_name] = (identity, matches)
+    print("TOTAL READS FLAGGED WITH MULTIPLE PRIMARY:", total_multiple_primary)
+    return reads_primary     
+
+
+def get_aln_stats_per_read(reads_primary_locations, reads, args, reference = {}):
+    # SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
+    alignments = {}
     alignments_detailed = {}
     read_index = 0
-    for read in SAM_file.fetch(until_eof=True):
+    for acc in reads_primary_locations:
+        read = reads_primary_locations[acc]
         if read.flag == 0 or read.flag == 16:
             # print(read.is_reverse)
             read_index += 1
@@ -238,7 +292,7 @@ def get_aln_stats_per_read(sam_file, reads, args, reference = {}):
             else:
                 # print(read.cigartuples)
                 ins = sum([length for type_, length in read.cigartuples if type_ == 1])
-                del_ = sum([length for type_, length in read.cigartuples if type_ == 2])
+                del_ = sum([length for type_, length in read.cigartuples if type_ == 2 and length <  args.min_intron])
                 subs = sum([length for type_, length in read.cigartuples if type_ == 8])
                 matches = sum([length for type_, length in read.cigartuples if type_ == 7])
 
@@ -251,26 +305,27 @@ def get_aln_stats_per_read(sam_file, reads, args, reference = {}):
             #     print(read.flag, read.query_name)
             #     print("BUG")
             #     # sys.exit()
-
-            alignments[read.query_name].append((ins, del_, subs, matches, read.reference_name, read.reference_start, read.reference_end + 1, read.flag, read_index))
+            assert read.query_name not in alignments
+            alignments[read.query_name] = (ins, del_, subs, matches, read.reference_name, read.reference_start, read.reference_end + 1, read.flag, read_index)
 
         else:
             pass
             # print("secondary", read.flag, read.reference_name) 
-    SAM_file.close()
+    # SAM_file.close()
 
-    multiple_alingment_counter = 0
-    for read in alignments:
-        if len(alignments[read]) > 1:
-            # print(alignments[read])
-            multiple_alingment_counter += 1
-    print("Nr reads with multiple primary alignments:", multiple_alingment_counter)
+    # multiple_alingment_counter = 0
+    # for read in alignments:
+    #     if len(alignments[read]) > 1:
+    #         # print(alignments[read])
+    #         multiple_alingment_counter += 1
+    # print("Nr reads with multiple primary alignments:", multiple_alingment_counter)
+    # sys.exit()
     return alignments, alignments_detailed
 
 def get_summary_stats(reads, quantile):
     tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
-    sorted_reads = sorted(reads.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
-    for acc, (ins, del_, subs, matches) in sorted_reads[ : int(len(sorted_reads)*quantile)]:
+    sorted_reads = sorted(reads.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1][0:4])) )
+    for acc, (ins, del_, subs, matches, chr_id, reference_start, reference_end, sam_flag, read_index) in sorted_reads[ : int(len(sorted_reads)*quantile)]:
         # (ins, del_, subs, matches) = reads[acc]
 
         tot_ins += ins
@@ -286,15 +341,15 @@ def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cl
     # read_calss is FSM, NIC, NNC, ISM
     # donwnload human gtf file to compare against, check how sqanti does it.
     # also sent isONclust tsv file to this script to get cluster size 
-    alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
+    alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1][0:4])) )
 
-    for (acc, (ins, del_, subs, matches)) in alignments_sorted:
+    for (acc, (ins, del_, subs, matches, chr_id, reference_start, reference_end, sam_flag, read_index)) in alignments_sorted:
         error_rate = (ins + del_ + subs) /float( (ins + del_ + subs + matches) ) 
         read_class = annotations_dict[acc] #"NA" # annotations_dict[acc]
         cluster_size = reads_to_cluster_size[acc]
         read_length = len(reads[acc])
         is_unaligned_in_other_method = 1 if acc in reads_unaligned_in_other_method else 0
-        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, is_unaligned_in_other_method, *read_class) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
+        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, is_unaligned_in_other_method, *read_class, chr_id, reference_start, reference_end + 1, sam_flag) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
         # print(*info_tuple)
         # outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(*info_tuple))
         outfile.write( ",".join( [str(item) for item in info_tuple] ) + "\n")
@@ -302,7 +357,7 @@ def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cl
 
 def print_quantile_values(alignments_dict):
 
-    alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
+    alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1][0:4])) )
     print(alignments_sorted[-5:])
 
     sorted_error_rates = [ sum(tup[0:3])/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
@@ -447,11 +502,10 @@ def get_splice_sites(cigar_tuples, first_exon_start, minimum_annotated_intron):
 
     return splice_sites
 
-def get_read_splice_sites(sam_file, minimum_annotated_intron):
-    SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
-    references = SAM_file.references
+def get_read_splice_sites(reads_primary_locations, minimum_annotated_intron):
     read_splice_sites = {}
-    for read in SAM_file.fetch(until_eof=True):
+    for acc in reads_primary_locations:
+        read = reads_primary_locations[acc]
         if read.flag == 0 or read.flag == 16:
             # compare cs tag at intron sites
             q_cigar = read.cigarstring
@@ -579,6 +633,11 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
     total_transcript_no_splices = 0
 
     read_annotations = {}
+    alignments_not_matching_annotated_sites = 0
+    # print(annotated_ref_isoforms["SIRV5"])
+    # for tr in annotated_ref_isoforms["SIRV5"]:
+    #     print(tr)
+
     for read_acc in all_reads_splice_sites:
         read_annotations[read_acc] = {}
         total_reads += 1
@@ -586,10 +645,15 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
         for chr_id in all_reads_splice_sites[read_acc]:
             # print(chr_id)
             # print(annotated_splice_coordinates)
-            annotated_sites = annotated_splice_coordinates[chr_id]
-            annotated_pairs = annotated_splice_coordinates_pairs[chr_id]
+            if chr_id not in annotated_splice_coordinates:
+                alignments_not_matching_annotated_sites += 1
+                annotated_sites = set()
+                annotated_pairs = set()
+            else:
+                annotated_sites = annotated_splice_coordinates[chr_id]
+                annotated_pairs = annotated_splice_coordinates_pairs[chr_id]
             # print(annotated_pairs)
-            # print( all_reads_splice_sites[read_acc][chr_id])
+            # print( chr_id, all_reads_splice_sites[read_acc][chr_id])
             # print(annotated_ref_isoforms[chr_id])
             read_sm_junctions = 0
             read_nic_junctions = 0
@@ -669,19 +733,34 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
 
     return read_annotations
 
+def pickle_dump(data, filename):
+    with open(os.path.join(args.outfolder,filename), 'wb') as f:
+        # Pickle the 'data' dictionary using the highest protocol available.
+        pickle.dump(data, f, pickle.HIGHEST_PROTOCOL)
+
+
+def pickle_load(filename):
+    with open(filename, 'rb') as f:
+        # The protocol version used is detected automatically, so we do not
+        # have to specify it.
+        data = pickle.load(f)
+    return data
+
 
 def main(args):
     reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
     corr_reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
-
+    orig_primary_locations = decide_primary_locations(args.orig_sam, args)
+    corr_primary_locations = decide_primary_locations(args.corr_sam, args)
+    # sys.exit()
     refs = {}
     if args.align:
         refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
-        orig, orig_detailed = get_aln_stats_per_read(args.orig_sam, reads, args, reference = refs)
-        corr, corr_detailed = get_aln_stats_per_read(args.corr_sam, corr_reads, args, reference = refs)
+        orig, orig_detailed = get_aln_stats_per_read(orig_primary_locations, reads, args, reference = refs)
+        corr, corr_detailed = get_aln_stats_per_read(corr_primary_locations, corr_reads, args, reference = refs)
     else: 
-        orig, orig_detailed = get_aln_stats_per_read(args.orig_sam, reads, args)
-        corr, corr_detailed = get_aln_stats_per_read(args.corr_sam, corr_reads, args)
+        orig, orig_detailed = get_aln_stats_per_read(orig_primary_locations, reads, args)
+        corr, corr_detailed = get_aln_stats_per_read(corr_primary_locations, corr_reads, args)
 
     if args.align:
         tot = 0
@@ -718,75 +797,11 @@ def main(args):
     print( "Reads successfully aligned:", len(orig),len(corr))
 
 
-
-    
-    ## Splice site analysis
-    annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes)
-    # print(annotated_ref_isoforms)
-    # print(annotated_splice_coordinates)
-    print("SHORTEST INTRON:", minimum_annotated_intron)
-    corrected_splice_sites = get_read_splice_sites(args.corr_sam, minimum_annotated_intron)
-    original_splice_sites = get_read_splice_sites(args.orig_sam, minimum_annotated_intron)
-    if len(refs) == 0:
-        refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
-
-    corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, corrected_splice_sites, refs)
-    orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, original_splice_sites, refs)
-    reads_to_cluster_size = get_cluster_sizes(args.cluster_file)
-
-    reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
-    bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
-    reads_unaligned_in_original = (set(corrected_splice_sites.keys()) | reads_missing_from_clustering_correction_output) - set(original_splice_sites.keys())
-    reads_unaligned_after_correction = (set(reads.keys()) -  reads_missing_from_clustering_correction_output) -  set(corrected_splice_sites.keys()) 
-
-    detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
-    print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_in_original, "corrected")    
-    print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_after_correction, "original")
-    detailed_results_outfile.close()
-
-    # reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
-    # bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
-    # reads_unaligned_in_original = (set(corrected_splice_sites.keys()) | reads_missing_from_clustering_correction_output) - set(original_splice_sites.keys())
-    # reads_unaligned_after_correction = (set(reads.keys()) -  reads_missing_from_clustering_correction_output) -  set(corrected_splice_sites.keys()) 
-
-    print("READS MISSING FROM CLUSTERING/CORRECTION INPUT:", len(reads_missing_from_clustering_correction_output))
-    print("READS UNALIGNED (ORIGINAL/CORRECTED):", len(reads_unaligned_in_original), len(reads_unaligned_after_correction) )
-    print("BUG IF NOT EMPTY:",len(bug_if_not_empty),)
-    # alignments_stats = get_summary_stats(alignments_dict, 1.0)
-    # print("Original reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*alignments_stats[:-1]), "tot aligned region (ins+del+subs+match):", alignments_stats[-1] )
-    # print("Original reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/alignments_stats[-1] , 1) for s in alignments_stats[:-1]]))
-    # print( "Num_aligned_reads", "Aligned bases", "tot_errors", "avg_error_rate", "median_read_error_rate", "upper_25_quant", "lower_25_quant", "min", "max")
-
     quantile_tot_orig, quantile_insertions_orig, quantile_deletions_orig, quantile_substitutions_orig = print_quantile_values(orig)
     quantile_tot_corr, quantile_insertions_corr, quantile_deletions_corr, quantile_substitutions_corr = print_quantile_values(corr)
 
     orig_stats = get_summary_stats(orig, 1.0)
-    # print("Original reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*orig_stats[:-1]), "tot aligned region (ins+del+subs+match):", orig_stats[-1] )
-    # print("Original reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/orig_stats[-1] , 1) for s in orig_stats[:-1]]))
-
     corr_stats = get_summary_stats(corr, 1.0)
-    # print("Corrected reads (total): ins:{0}, del:{1}, subs:{2}, match:{3}".format(*corr_stats[:-1]), "tot aligned region (ins+del+subs+match):", corr_stats[-1])
-    # print("Corrected reads percent:{0}, del:{1}, subs:{2}, match:{3}".format(*[round(100*float(s)/corr_stats[-1] , 1) for s in corr_stats[:-1]]))
-
-
-    # print( "Num_aligned_reads", "Aligned bases", "tot_errors", "avg_error_rate", "median_read_error_rate", "upper_25_quant", "lower_25_quant", "min", "max")
-    # orig_sorted = sorted(orig.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
-    # print(orig_sorted[-5:])
-
-    # orig_sorted_error_rates = [ sum(tup[0:3])/float(sum(tup)) for acc, tup in orig_sorted]
-    # orig_vals = [orig_sorted_error_rates[0], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/20)], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/10)], 
-    #             orig_sorted_error_rates[int(len(orig_sorted_error_rates)/4)], orig_sorted_error_rates[int(len(orig_sorted_error_rates)/2)], 
-    #             orig_sorted_error_rates[int(3*len(orig_sorted_error_rates)/4)], orig_sorted_error_rates[int(9*len(orig_sorted_error_rates)/10)], orig_sorted_error_rates[int(19*len(orig_sorted_error_rates)/20)], 
-    #             orig_sorted_error_rates[-1]]
-
-
-    # corr_sorted = sorted(corr.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1])) )
-    # print(corr_sorted[-5:])
-    # corr_sorted_error_rates = [ sum(tup[0:3])/float(sum(tup)) for acc, tup in corr_sorted]
-    # corr_vals = [corr_sorted_error_rates[0],corr_sorted_error_rates[int(len(corr_sorted_error_rates)/20)], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/10)],
-    #              corr_sorted_error_rates[int(len(corr_sorted_error_rates)/4)], corr_sorted_error_rates[int(len(corr_sorted_error_rates)/2)],
-    #               corr_sorted_error_rates[int(3*len(corr_sorted_error_rates)/4)], corr_sorted_error_rates[int(9*len(corr_sorted_error_rates)/10)], corr_sorted_error_rates[int(19*len(corr_sorted_error_rates)/20)],
-    #               corr_sorted_error_rates[-1]]
     
     print("Distribution of error rates (Percent)")
     print("Reads, Best, top 5%, top 10%, top 25%, Median, top 75%, top 90%, top 95%, Worst")
@@ -809,6 +824,57 @@ def main(args):
     outfile.close()
 
     print("Reads successfully aligned:", len(orig),len(corr))
+    
+
+    ############# Splice site analysis ########################################
+    ###########################################################################
+    if args.load_database:
+        print()
+        print("LOADING FROM PRECOMPUTED DATABASE")
+        print()
+        annotated_ref_isoforms = pickle_load(os.path.join( args.outfolder, 'annotated_ref_isoforms.pickle') )
+        annotated_splice_coordinates = pickle_load(os.path.join( args.outfolder, 'annotated_splice_coordinates.pickle') )
+        annotated_splice_coordinates_pairs = pickle_load(os.path.join( args.outfolder, 'annotated_splice_coordinates_pairs.pickle') )
+        minimum_annotated_intron = pickle_load(os.path.join( args.outfolder, 'minimum_annotated_intron.pickle') )
+        # annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes)
+    else:
+        annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes)
+        pickle_dump(annotated_ref_isoforms, os.path.join( args.outfolder, 'annotated_ref_isoforms.pickle') )
+        pickle_dump(annotated_splice_coordinates, os.path.join( args.outfolder, 'annotated_splice_coordinates.pickle') )
+        pickle_dump(annotated_splice_coordinates_pairs, os.path.join( args.outfolder, 'annotated_splice_coordinates_pairs.pickle') )
+        pickle_dump(minimum_annotated_intron, os.path.join( args.outfolder, 'minimum_annotated_intron.pickle') )
+    # print(annotated_ref_isoforms)
+    # print(annotated_splice_coordinates)
+    print("SHORTEST INTRON:", minimum_annotated_intron)
+    minimum_annotated_intron = max(minimum_annotated_intron,  args.min_intron)
+    corrected_splice_sites = get_read_splice_sites(corr_primary_locations, minimum_annotated_intron)
+    original_splice_sites = get_read_splice_sites(orig_primary_locations, minimum_annotated_intron)
+    if len(refs) == 0:
+        refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
+
+    corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, corrected_splice_sites, refs)
+    orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, original_splice_sites, refs)
+    reads_to_cluster_size = get_cluster_sizes(args.cluster_file)
+
+    reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
+    bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
+    reads_unaligned_in_original = (set(corrected_splice_sites.keys()) | reads_missing_from_clustering_correction_output) - set(original_splice_sites.keys())
+    reads_unaligned_after_correction = (set(reads.keys()) -  reads_missing_from_clustering_correction_output) -  set(corrected_splice_sites.keys()) 
+
+    detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
+    print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_in_original, "corrected")    
+    print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_after_correction, "original")
+    detailed_results_outfile.close()
+
+    print("READS MISSING FROM CLUSTERING/CORRECTION INPUT:", len(reads_missing_from_clustering_correction_output))
+    print("READS UNALIGNED (ORIGINAL/CORRECTED):", len(reads_unaligned_in_original), len(reads_unaligned_after_correction) )
+    print("BUG IF NOT EMPTY:",len(bug_if_not_empty),)
+
+    ###########################################################################
+    ###########################################################################
+
+
+
 
     # print(orig_sorted)
     # print(",".join([s for s in orig_stats]))
@@ -826,7 +892,9 @@ if __name__ == '__main__':
     parser.add_argument('cluster_file', type=str, help='Path to the refs file')
     parser.add_argument('gff_file', type=str, help='Path to the refs file')
     parser.add_argument('outfolder', type=str, help='Output path of results')
+    parser.add_argument('--min_intron', type=int, default=20, help='Threchold for what is counted as varation/intron in alignment as opposed to deletion.')
     parser.add_argument('--infer_genes', action= "store_true", help='Include pairwise alignment of original and corrected read.')
+    parser.add_argument('--load_database', action= "store_true", help='Load already computed splice junctions and transcript annotations instead of constructing a new database.')
     parser.add_argument('--align', action= "store_true", help='Include pairwise alignment of original and corrected read.')
 
     args = parser.parse_args()
