@@ -451,13 +451,17 @@ def parasail_alignment(read, reference, x_acc = "", y_acc = "", match_score = 2,
     read_alignment, ref_alignment = cigar_to_seq(cigar_string, read, reference)
     return read_alignment, ref_alignment
 
-def get_cluster_sizes(cluster_file):
+def get_cluster_sizes(cluster_file, reads):
     cluster_sizes = defaultdict(int)
     tmp_reads = {}
     for line in open(args.cluster_file, "r"):
         cl_id, acc = line.split() 
-        cluster_sizes[cl_id] += 1  
-        tmp_reads[acc] = cl_id
+        if acc in reads:
+            cluster_sizes[cl_id] += 1  
+            tmp_reads[acc] = cl_id
+        else:
+            cluster_sizes[cl_id] += 1  
+            tmp_reads[acc.split("_")[0]] = cl_id
 
     reads_to_cluster_size = {}
     for acc, cl_id in tmp_reads.items():
@@ -649,9 +653,12 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
                 alignments_not_matching_annotated_sites += 1
                 annotated_sites = set()
                 annotated_pairs = set()
+                annotated_isoforms = set()
             else:
                 annotated_sites = annotated_splice_coordinates[chr_id]
                 annotated_pairs = annotated_splice_coordinates_pairs[chr_id]
+                annotated_isoforms = annotated_ref_isoforms[chr_id]
+
             # print(annotated_pairs)
             # print( chr_id, all_reads_splice_sites[read_acc][chr_id])
             # print(annotated_ref_isoforms[chr_id])
@@ -695,7 +702,7 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
             read_fsm, read_nic, read_ism, read_nnc, read_no_splices = 0,0,0,0,0
             if  len(all_reads_splice_sites[read_acc][chr_id]) > 0:
 
-                if tuple(all_reads_splice_sites[read_acc][chr_id]) in annotated_ref_isoforms[chr_id]:
+                if tuple(all_reads_splice_sites[read_acc][chr_id]) in annotated_isoforms:
                     total_transcript_fsm += 1
                     read_fsm = 1
                     # print(annotated_ref_isoforms[chr_id][tuple(all_reads_splice_sites[read_acc][chr_id])], tuple(all_reads_splice_sites[read_acc][chr_id]))
@@ -857,7 +864,7 @@ def main(args):
 
     corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, corrected_splice_sites, refs)
     orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, original_splice_sites, refs)
-    reads_to_cluster_size = get_cluster_sizes(args.cluster_file)
+    reads_to_cluster_size = get_cluster_sizes(args.cluster_file, reads)
 
     reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
     bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
