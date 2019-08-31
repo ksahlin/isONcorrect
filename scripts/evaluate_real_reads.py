@@ -538,17 +538,18 @@ def get_read_splice_sites(reads_primary_locations, minimum_annotated_intron):
     return read_splice_sites
 
 
-def get_annotated_splicesites(ref_gff_file, infer_genes):
+def get_annotated_splicesites(ref_gff_file, infer_genes, outfolder):
+    db_name = os.path.join(outfolder, 'database.db')
     if infer_genes:
         fn = gffutils.example_filename(ref_gff_file)
-        db = gffutils.create_db(fn, dbfn='test.db', force=True, keep_order=True, merge_strategy='merge', 
+        db = gffutils.create_db(fn, dbfn=db_name, force=True, keep_order=True, merge_strategy='merge', 
                                 sort_attribute_values=True)
-        db = gffutils.FeatureDB('test.db', keep_order=True)
+        db = gffutils.FeatureDB(db_name, keep_order=True)
     else:
         fn = gffutils.example_filename(ref_gff_file)
-        db = gffutils.create_db(fn, dbfn='test.db', force=True, keep_order=True, merge_strategy='merge', 
+        db = gffutils.create_db(fn, dbfn=db_name, force=True, keep_order=True, merge_strategy='merge', 
                                 sort_attribute_values=True, disable_infer_genes=True, disable_infer_transcripts=True)
-        db = gffutils.FeatureDB('test.db', keep_order=True)
+        db = gffutils.FeatureDB(db_name, keep_order=True)
 
     
     # for tr in db.children(gene, featuretype='transcript', order_by='start'):
@@ -868,7 +869,7 @@ def main(args):
         minimum_annotated_intron = pickle_load(os.path.join( args.outfolder, 'minimum_annotated_intron.pickle') )
         # annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes)
     else:
-        annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes)
+        annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes, args.outfolder)
         pickle_dump(annotated_ref_isoforms, os.path.join( args.outfolder, 'annotated_ref_isoforms.pickle') )
         pickle_dump(annotated_splice_coordinates, os.path.join( args.outfolder, 'annotated_splice_coordinates.pickle') )
         pickle_dump(annotated_splice_coordinates_pairs, os.path.join( args.outfolder, 'annotated_splice_coordinates_pairs.pickle') )
