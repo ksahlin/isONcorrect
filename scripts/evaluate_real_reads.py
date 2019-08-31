@@ -893,8 +893,8 @@ def main(args):
     reads_unaligned_after_correction = (set(reads.keys()) -  reads_missing_from_clustering_correction_output) -  set(corrected_splice_sites.keys()) 
 
     detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
-    print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_in_original, "corrected")    
-    print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_after_correction, "original")
+    print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_in_original, "corrected")    
+    print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_after_correction, "original")
     detailed_results_outfile.close()
 
     print("READS MISSING FROM CLUSTERING/CORRECTION INPUT:", len(reads_missing_from_clustering_correction_output))
