@@ -7,7 +7,7 @@
 
     "ROOT_OUT" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval",
     "ROOT_IN" : "/galaxy/home/ksahlin/prefix/source/isONcorrect",
-    "ANNOTATIONS" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/gtf_annotations",
+    "ANNOTATION" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/gtf_annotations",
 
     "DATA" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/data/",
     "HG38_MMI" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/data/hg38/hg38.mmi",
