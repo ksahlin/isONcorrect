@@ -166,18 +166,30 @@ rule evaluate:
     input: original_reads = rules.subsample.output.subsampled_fastq,
             corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
             original_reads_aligned =  rules.align_original_reads_minimap2.output.original_reads_aligned,
-            corrected_reads_aligned =  rules.align_corrected_reads_minimap2.output.corrected_reads_aligned
+            corrected_reads_aligned =  rules.align_corrected_reads_minimap2.output.corrected_reads_aligned,
+            clusters_tsv = rules.isONclust.output.clusters,
+            gtf_annotation = config["ANNOTATION"] + "/{dataset}.gtf"
     output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}/results.csv"
     run:
         if wildcards.dataset == "SIRV":
             ref = config["SIRV"]
         elif wildcards.dataset == "NA12878":
             ref = config["HG38"]
+        elif wildcards.dataset == "drosophila":
+            ref =  config["drosophila"]
 
         eval_dir = config["ROOT_IN"] + "/scripts/"
         outfolder = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)  
         mkdir_p(outfolder) 
-        shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  {input.corrected_reads} {ref}  {outfolder} ")
+        if wildcards.dataset == "NA12878" or wildcards.dataset == "drosophila":
+            # shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
+            #                                             {input.corrected_reads} {ref} {clusters_tsv} {gtf_annotation} {outfolder} --load_database")
+
+            shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
+                                                        {input.corrected_reads} {ref} {clusters_tsv} {gtf_annotation} {outfolder}")
+        else:
+            shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
+                                                        {input.corrected_reads} {ref} {clusters_tsv} {gtf_annotation} {outfolder} --infer_genes")
 
 
 rule summary:

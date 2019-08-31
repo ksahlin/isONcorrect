@@ -216,8 +216,8 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
 def decide_primary_locations(sam_file, args): # maybe this function is not needed if only one primary alignment from minimap2
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     reads_primary = {}
+    reads_multiple_primary = set()
     reads_tmp = {}
-    total_multiple_primary = 0
 
     for read in SAM_file.fetch(until_eof=True):
         if read.flag == 0 or read.flag == 16:
@@ -232,7 +232,7 @@ def decide_primary_locations(sam_file, args): # maybe this function is not neede
             # if has_large_del:
             #     print(has_large_del)
             if read.query_name in reads_primary:
-                total_multiple_primary += 1
+                reads_multiple_primary.add(read.query_name)
                 if identity >= reads_tmp[read.query_name][0] and  matches >= reads_tmp[read.query_name][1]:
                     reads_primary[read.query_name] = read
                     reads_tmp[read.query_name] = (identity, matches)
@@ -261,8 +261,17 @@ def decide_primary_locations(sam_file, args): # maybe this function is not neede
             else:
                 reads_primary[read.query_name] = read
                 reads_tmp[read.query_name] = (identity, matches)
-    print("TOTAL READS FLAGGED WITH MULTIPLE PRIMARY:", total_multiple_primary)
+    print("TOTAL READS FLAGGED WITH MULTIPLE PRIMARY:", len(reads_multiple_primary))
     return reads_primary     
+
+
+def reverse_complement(string):
+    #rev_nuc = {'A':'T', 'C':'G', 'G':'C', 'T':'A', 'N':'N', 'X':'X'}
+    # Modified for Abyss output
+    rev_nuc = {'A':'T', 'C':'G', 'G':'C', 'T':'A', 'a':'t', 'c':'g', 'g':'c', 't':'a', 'N':'N', 'X':'X', 'n':'n', 'Y':'R', 'R':'Y', 'K':'M', 'M':'K', 'S':'S', 'W':'W', 'B':'V', 'V':'B', 'H':'D', 'D':'H', 'y':'r', 'r':'y', 'k':'m', 'm':'k', 's':'s', 'w':'w', 'b':'v', 'v':'b', 'h':'d', 'd':'h'}
+
+    rev_comp = ''.join([rev_nuc[nucl] for nucl in reversed(string)])
+    return(rev_comp)
 
 
 def get_aln_stats_per_read(reads_primary_locations, reads, args, reference = {}):
@@ -616,7 +625,7 @@ def get_annotated_splicesites(ref_gff_file, infer_genes):
     return ref_isoforms, splice_coordinates, splice_coordinates_pairs, minimum_annotated_intron
 
 from collections import namedtuple
-def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs,  all_reads_splice_sites, ref_seqs):
+def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs,  all_reads_splice_sites, ref_seqs, reads_primary_locations):
 
     total_reads = 0
     
@@ -641,7 +650,8 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
     # print(annotated_ref_isoforms["SIRV5"])
     # for tr in annotated_ref_isoforms["SIRV5"]:
     #     print(tr)
-
+    canonical_splice = 0
+    all_splice = 0
     for read_acc in all_reads_splice_sites:
         read_annotations[read_acc] = {}
         total_reads += 1
@@ -667,9 +677,17 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
             read_splice_letters = []
             for read_splice_sites in all_reads_splice_sites[read_acc][chr_id]:
                 start_sp, stop_sp = read_splice_sites
+                if reads_primary_locations[read_acc].flag == 0:
+                    donor = ref_seqs[chr_id][start_sp: start_sp + 2] 
+                    acceptor = ref_seqs[chr_id][stop_sp - 2: stop_sp]
+                else:
+                    acceptor = reverse_complement(ref_seqs[chr_id][start_sp: start_sp + 2])
+                    donor = reverse_complement(ref_seqs[chr_id][stop_sp - 2: stop_sp])
 
-                donor = ref_seqs[chr_id][start_sp: start_sp + 2] 
-                acceptor = ref_seqs[chr_id][stop_sp: stop_sp + 2]
+                if donor == "GT" and acceptor == "AG":
+                    canonical_splice += 1
+                all_splice += 1
+
                 read_splice_letters.append( donor + str("-") + acceptor )
                 # print(read_splice_sites)
                 total_individual_in_data += 2
@@ -737,6 +755,8 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
     print("total transcripts ISM:", total_transcript_ism)
     print("total transcripts NNC:", total_transcript_nnc)
     print("total transcripts no splice sites:", total_transcript_no_splices)
+    print("total splice sites:", all_splice)
+    print("GT-AG splice sites:", canonical_splice)
 
     return read_annotations
 
@@ -862,8 +882,8 @@ def main(args):
     if len(refs) == 0:
         refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
 
-    corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, corrected_splice_sites, refs)
-    orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, original_splice_sites, refs)
+    corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, corrected_splice_sites, refs, corr_primary_locations)
+    orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, original_splice_sites, refs, orig_primary_locations)
     reads_to_cluster_size = get_cluster_sizes(args.cluster_file, reads)
 
     reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
