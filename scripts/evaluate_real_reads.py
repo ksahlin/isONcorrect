@@ -274,11 +274,60 @@ def reverse_complement(string):
     return(rev_comp)
 
 
-def get_aln_stats_per_read(reads_primary_locations, reads, args, reference = {}):
+
+def get_deletion_sites(read):
+    deletion_sites = []
+    ref_pos = read.reference_start
+    
+    for i, (t,l) in enumerate(read.cigartuples):
+        if t == 2:
+            deletion_start = ref_pos
+            ref_pos += l
+            deletion_stop = ref_pos
+            deletion_sites.append( (deletion_start, deletion_stop, l) )
+
+        elif t == 7 or t== 0 or t == 8:
+            ref_pos += l
+        elif t == 3:
+            # splice_start = ref_pos
+            ref_pos += l
+            # splice_stop = ref_pos
+            # splice_sites.append( (splice_start, splice_stop) )
+
+        elif t == 1 or t == 4 or t == 5: # insertion or softclip
+            ref_pos += 0
+
+        else: # reference skip or soft/hardclip "~", or match =
+            print("UNEXPECTED!", t)
+            sys.exit()
+
+    return deletion_sites
+
+# def get_deletion_coordiantes(read):
+#     q_cigar = read.cigarstring
+#     q_start = read.reference_start
+#     q_end = read.reference_end
+#     read_cigar_tuples = []
+#     result = re.split(r'[=DXSMINH]+', q_cigar)
+#     i = 0
+#     for length in result[:-1]:
+#         i += len(length)
+#         type_ = q_cigar[i]
+#         i += 1
+#         read_cigar_tuples.append((int(length), type_ ))  
+
+#     for type_, length in read.cigartuples:
+    
+#     read_deletion_coordinate_pairs = get_deletion_sites(read_cigar_tuples, q_start)
+#     return read_deletion_coordinate_pairs
+
+
+def get_error_rate_stats_per_read(reads_primary_locations, reads, annotated_splice_coordinates_pairs, args, reference = {}):
     # SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     alignments = {}
     alignments_detailed = {}
     read_index = 0
+    all_called_intron_lengths = []
     for acc in reads_primary_locations:
         read = reads_primary_locations[acc]
         if read.flag == 0 or read.flag == 16:
@@ -300,11 +349,37 @@ def get_aln_stats_per_read(reads_primary_locations, reads, args, reference = {})
                 #     print(ins, del_, subs, matches)
             else:
                 # print(read.cigartuples)
+
                 ins = sum([length for type_, length in read.cigartuples if type_ == 1])
-                del_ = sum([length for type_, length in read.cigartuples if type_ == 2 and length <  args.min_intron])
+                del_old = sum([length for type_, length in read.cigartuples if type_ == 2 and length <  args.min_intron])
                 subs = sum([length for type_, length in read.cigartuples if type_ == 8])
                 matches = sum([length for type_, length in read.cigartuples if type_ == 7])
+                called_intron_lengths = [length for type_, length in read.cigartuples if type_ == 3]
 
+
+                # Deletion is treated separately because of potential short introns -- if in annotation
+                if read.reference_name in annotated_splice_coordinates_pairs:
+                    del_new = 0
+                    chr_coordinate_pairs = annotated_splice_coordinates_pairs[read.reference_name]
+                    read_deletion_coordinate_pairs = get_deletion_sites(read)
+                    for start_del, stop_del, del_length in read_deletion_coordinate_pairs:
+                        if (start_del, stop_del) not in chr_coordinate_pairs:
+                            del_new += del_length
+                        else:
+                            print("True intron masked as deletion, length:", del_length, read.reference_name, start_del, stop_del)
+
+                else:
+                    del_new = sum([length for type_, length in read.cigartuples if type_ == 2 and length <  args.min_intron])
+
+                # print(del_new, del_old)
+                # if del_new > del_old:
+                #     print("New:",del_new, "Old:", del_old) #, [length for type_, length in read.cigartuples if type_ == 2], read.cigarstring, read_deletion_coordinate_pairs)
+                    # print([length for type_, length in read.cigartuples if type_ == 2 and length >=  20])
+
+            all_called_intron_lengths.append(called_intron_lengths)
+            # if [length for type_, length in read.cigartuples if type_ == 2 and length >  20]:
+            #     print([length for type_, length in read.cigartuples if type_ == 2 and length >  20])
+            #     print(get_deletion_coordiantes(read))
             # if tot_ins != ins or tot_subs != subs or tot_del != del_ or tot_match != matches:
             #     print(tot_ins, ins, tot_subs, subs, tot_del, del_, tot_match, matches)
             
@@ -315,7 +390,7 @@ def get_aln_stats_per_read(reads_primary_locations, reads, args, reference = {})
             #     print("BUG")
             #     # sys.exit()
             assert read.query_name not in alignments
-            alignments[read.query_name] = (ins, del_, subs, matches, read.reference_name, read.reference_start, read.reference_end + 1, read.flag, read_index)
+            alignments[read.query_name] = (ins, del_new, subs, matches, read.reference_name, read.reference_start, read.reference_end + 1, read.flag, read_index)
 
         else:
             pass
@@ -328,6 +403,7 @@ def get_aln_stats_per_read(reads_primary_locations, reads, args, reference = {})
     #         # print(alignments[read])
     #         multiple_alingment_counter += 1
     # print("Nr reads with multiple primary alignments:", multiple_alingment_counter)
+    print( '100 smallest introns as N from the aligner:', sorted([l for lst in all_called_intron_lengths for l in lst])[:100] )
     # sys.exit()
     return alignments, alignments_detailed
 
@@ -482,7 +558,7 @@ def get_cluster_sizes(cluster_file, reads):
     return reads_to_cluster_size
 
 
-def get_splice_sites(cigar_tuples, first_exon_start, minimum_annotated_intron):
+def get_splice_sites(cigar_tuples, first_exon_start, minimum_annotated_intron, annotated_chr_coordinate_pairs):
     splice_sites = []
     ref_pos = first_exon_start
     
@@ -494,7 +570,11 @@ def get_splice_sites(cigar_tuples, first_exon_start, minimum_annotated_intron):
                 ref_pos += l
                 splice_stop = ref_pos
                 splice_sites.append( (splice_start, splice_stop) )
+                
             else:
+                if (ref_pos, ref_pos + l) in annotated_chr_coordinate_pairs:
+                    splice_sites.append( (ref_pos, ref_pos + l) )
+                    print("HEERE")
                 ref_pos += l
 
                 # if l > 15:
@@ -518,7 +598,7 @@ def get_splice_sites(cigar_tuples, first_exon_start, minimum_annotated_intron):
 
     return splice_sites
 
-def get_read_splice_sites(reads_primary_locations, minimum_annotated_intron):
+def get_read_candidate_splice_sites(reads_primary_locations, minimum_annotated_intron, annotated_splice_coordinates_pairs):
     read_splice_sites = {}
     for acc in reads_primary_locations:
         read = reads_primary_locations[acc]
@@ -535,9 +615,18 @@ def get_read_splice_sites(reads_primary_locations, minimum_annotated_intron):
                 type_ = q_cigar[i]
                 i += 1
                 read_cigar_tuples.append((int(length), type_ ))  
+
+            if read.reference_name in annotated_splice_coordinates_pairs:
+                annotated_chr_coordinate_pairs = annotated_splice_coordinates_pairs[read.reference_name]
+            else:
+                annotated_chr_coordinate_pairs = set()
+
             read_splice_sites[read.query_name] = {}  
-            read_splice_sites[read.query_name][read.reference_name] = get_splice_sites(read_cigar_tuples, q_start, minimum_annotated_intron)
-            # print("read", read_splice_sites[read.query_name][read.reference_name])
+            read_splice_sites[read.query_name][read.reference_name] = get_splice_sites(read_cigar_tuples, q_start, minimum_annotated_intron, annotated_chr_coordinate_pairs)
+
+            # read_deletion_coordinate_pairs = get_deletion_sites(read)
+            # read_splice_sites[read.query_name][read.reference_name] = read_deletion_coordinate_pairs
+
     return read_splice_sites
 
 
@@ -811,6 +900,22 @@ def print_exact_alignments(reads, corr_reads):
     print("TOT structural diffs:", tot)
 
 def main(args):
+    if args.load_database:
+        print()
+        print("LOADING FROM PRECOMPUTED DATABASE")
+        print()
+        annotated_ref_isoforms = pickle_load(os.path.join( args.outfolder, 'annotated_ref_isoforms.pickle') )
+        annotated_splice_coordinates = pickle_load(os.path.join( args.outfolder, 'annotated_splice_coordinates.pickle') )
+        annotated_splice_coordinates_pairs = pickle_load(os.path.join( args.outfolder, 'annotated_splice_coordinates_pairs.pickle') )
+        minimum_annotated_intron = pickle_load(os.path.join( args.outfolder, 'minimum_annotated_intron.pickle') )
+        # annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes)
+    else:
+        annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes, args.outfolder)
+        pickle_dump(annotated_ref_isoforms, os.path.join( args.outfolder, 'annotated_ref_isoforms.pickle') )
+        pickle_dump(annotated_splice_coordinates, os.path.join( args.outfolder, 'annotated_splice_coordinates.pickle') )
+        pickle_dump(annotated_splice_coordinates_pairs, os.path.join( args.outfolder, 'annotated_splice_coordinates_pairs.pickle') )
+        pickle_dump(minimum_annotated_intron, os.path.join( args.outfolder, 'minimum_annotated_intron.pickle') )
+
     reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
     corr_reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
     orig_primary_locations = decide_primary_locations(args.orig_sam, args)
@@ -819,11 +924,11 @@ def main(args):
     refs = {}
     if args.align:
         refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
-        orig, orig_detailed = get_aln_stats_per_read(orig_primary_locations, reads, args, reference = refs)
-        corr, corr_detailed = get_aln_stats_per_read(corr_primary_locations, corr_reads, args, reference = refs)
+        corr, corr_detailed = get_error_rate_stats_per_read(corr_primary_locations, corr_reads, annotated_splice_coordinates_pairs, args, reference = refs)
+        orig, orig_detailed = get_error_rate_stats_per_read(orig_primary_locations, reads, annotated_splice_coordinates_pairs, args, reference = refs)
     else: 
-        orig, orig_detailed = get_aln_stats_per_read(orig_primary_locations, reads, args)
-        corr, corr_detailed = get_aln_stats_per_read(corr_primary_locations, corr_reads, args)
+        corr, corr_detailed = get_error_rate_stats_per_read(corr_primary_locations, corr_reads, annotated_splice_coordinates_pairs, args)
+        orig, orig_detailed = get_error_rate_stats_per_read(orig_primary_locations, reads, annotated_splice_coordinates_pairs, args)
 
     print( "Reads successfully aligned:", len(orig),len(corr))
 
@@ -862,27 +967,13 @@ def main(args):
 
     ############# Splice site analysis ########################################
     ###########################################################################
-    if args.load_database:
-        print()
-        print("LOADING FROM PRECOMPUTED DATABASE")
-        print()
-        annotated_ref_isoforms = pickle_load(os.path.join( args.outfolder, 'annotated_ref_isoforms.pickle') )
-        annotated_splice_coordinates = pickle_load(os.path.join( args.outfolder, 'annotated_splice_coordinates.pickle') )
-        annotated_splice_coordinates_pairs = pickle_load(os.path.join( args.outfolder, 'annotated_splice_coordinates_pairs.pickle') )
-        minimum_annotated_intron = pickle_load(os.path.join( args.outfolder, 'minimum_annotated_intron.pickle') )
-        # annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes)
-    else:
-        annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes, args.outfolder)
-        pickle_dump(annotated_ref_isoforms, os.path.join( args.outfolder, 'annotated_ref_isoforms.pickle') )
-        pickle_dump(annotated_splice_coordinates, os.path.join( args.outfolder, 'annotated_splice_coordinates.pickle') )
-        pickle_dump(annotated_splice_coordinates_pairs, os.path.join( args.outfolder, 'annotated_splice_coordinates_pairs.pickle') )
-        pickle_dump(minimum_annotated_intron, os.path.join( args.outfolder, 'minimum_annotated_intron.pickle') )
+
     # print(annotated_ref_isoforms)
     # print(annotated_splice_coordinates)
     print("SHORTEST INTRON:", minimum_annotated_intron)
     minimum_annotated_intron = max(minimum_annotated_intron,  args.min_intron)
-    corrected_splice_sites = get_read_splice_sites(corr_primary_locations, minimum_annotated_intron)
-    original_splice_sites = get_read_splice_sites(orig_primary_locations, minimum_annotated_intron)
+    corrected_splice_sites = get_read_candidate_splice_sites(corr_primary_locations, minimum_annotated_intron, annotated_splice_coordinates_pairs)
+    original_splice_sites = get_read_candidate_splice_sites(orig_primary_locations, minimum_annotated_intron, annotated_splice_coordinates_pairs)
     if len(refs) == 0:
         refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
 
