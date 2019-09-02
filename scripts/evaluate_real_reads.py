@@ -1020,7 +1020,7 @@ if __name__ == '__main__':
     parser.add_argument('cluster_file', type=str, help='Path to the refs file')
     parser.add_argument('gff_file', type=str, help='Path to the refs file')
     parser.add_argument('outfolder', type=str, help='Output path of results')
-    parser.add_argument('--min_intron', type=int, default=20, help='Threchold for what is counted as varation/intron in alignment as opposed to deletion.')
+    parser.add_argument('--min_intron', type=int, default=30, help='Threchold for what is counted as varation/intron in alignment as opposed to deletion.')
     parser.add_argument('--infer_genes', action= "store_true", help='Include pairwise alignment of original and corrected read.')
     parser.add_argument('--load_database', action= "store_true", help='Load already computed splice junctions and transcript annotations instead of constructing a new database.')
     parser.add_argument('--align', action= "store_true", help='Include pairwise alignment of original and corrected read.')
