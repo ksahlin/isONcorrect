@@ -811,11 +811,13 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
 
             # check set intersection between read splice sites and annotated splice sites
             read_fsm, read_nic, read_ism, read_nnc, read_no_splices = 0,0,0,0,0
+            transcript_fsm_id = "NA"
             if  len(all_reads_splice_sites[read_acc][chr_id]) > 0:
 
                 if tuple(all_reads_splice_sites[read_acc][chr_id]) in annotated_isoforms:
                     total_transcript_fsm += 1
                     read_fsm = 1
+                    transcript_fsm_id = annotated_isoforms[ tuple(all_reads_splice_sites[read_acc][chr_id]) ]
                     # print(annotated_ref_isoforms[chr_id][tuple(all_reads_splice_sites[read_acc][chr_id])], tuple(all_reads_splice_sites[read_acc][chr_id]))
 
                 elif len(all_reads_splice_sites[read_acc][chr_id]) == read_sm_junctions + read_nic_junctions:
@@ -832,12 +834,12 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
                 total_transcript_no_splices += 1                
                 read_no_splices = 1
 
-        read_annotation = namedtuple('Annotation', ['tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices', "donor_acceptors" ])
+        read_annotation = namedtuple('Annotation', ['tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices', "donor_acceptors", "transcript_fsm_id" ])
         if read_splice_letters:
             donor_acceptors = ":".join([str(item) for item in read_splice_letters])
         else: 
             donor_acceptors = "NA"
-        read_annotations[read_acc] = read_annotation( len(all_reads_splice_sites[read_acc][chr_id]), read_sm_junctions, read_nic_junctions, read_fsm, read_nic, read_ism, read_nnc, read_no_splices, donor_acceptors )
+        read_annotations[read_acc] = read_annotation( len(all_reads_splice_sites[read_acc][chr_id]), read_sm_junctions, read_nic_junctions, read_fsm, read_nic, read_ism, read_nnc, read_no_splices, donor_acceptors, transcript_fsm_id )
                 # print("FSM!!")
     # print(annotated_ref_isoforms[chr_id])
     # print( tuple(all_reads_splice_sites[read_acc][chr_id]))
@@ -908,7 +910,6 @@ def main(args):
         annotated_splice_coordinates = pickle_load(os.path.join( args.outfolder, 'annotated_splice_coordinates.pickle') )
         annotated_splice_coordinates_pairs = pickle_load(os.path.join( args.outfolder, 'annotated_splice_coordinates_pairs.pickle') )
         minimum_annotated_intron = pickle_load(os.path.join( args.outfolder, 'minimum_annotated_intron.pickle') )
-        # annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes)
     else:
         annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, minimum_annotated_intron = get_annotated_splicesites(args.gff_file, args.infer_genes, args.outfolder)
         pickle_dump(annotated_ref_isoforms, os.path.join( args.outfolder, 'annotated_ref_isoforms.pickle') )
@@ -987,13 +988,14 @@ def main(args):
     reads_unaligned_after_correction = (set(reads.keys()) -  reads_missing_from_clustering_correction_output) -  set(corrected_splice_sites.keys()) 
 
     detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
+    detailed_results_outfile.write("acc,read_type,ins,del,subs,matches,error_rate,read_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag\n")
     print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_in_original, "corrected")    
     print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_after_correction, "original")
     detailed_results_outfile.close()
 
     print("READS MISSING FROM CLUSTERING/CORRECTION INPUT:", len(reads_missing_from_clustering_correction_output))
     print("READS UNALIGNED (ORIGINAL/CORRECTED):", len(reads_unaligned_in_original), len(reads_unaligned_after_correction) )
-    print("BUG IF NOT EMPTY:",len(bug_if_not_empty),)
+    print("BUG IF NOT EMPTY:",len(bug_if_not_empty))
 
     ###########################################################################
     ###########################################################################
