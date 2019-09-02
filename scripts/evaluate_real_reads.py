@@ -429,7 +429,7 @@ def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cl
     alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1][0:4])) )
 
     for (acc, (ins, del_, subs, matches, chr_id, reference_start, reference_end, sam_flag, read_index)) in alignments_sorted:
-        error_rate = (ins + del_ + subs) /float( (ins + del_ + subs + matches) ) 
+        error_rate = round( 100* (ins + del_ + subs) /float( (ins + del_ + subs + matches) ), 4 )
         read_class = annotations_dict[acc] #"NA" # annotations_dict[acc]
         if acc in reads_to_cluster_size:
             cluster_size = reads_to_cluster_size[acc]
@@ -437,6 +437,7 @@ def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cl
             cluster_size = 1
         read_length = len(reads[acc])
         is_unaligned_in_other_method = 1 if acc in reads_unaligned_in_other_method else 0
+
         info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, is_unaligned_in_other_method, *read_class, chr_id, reference_start, reference_end + 1, sam_flag) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
         # print(*info_tuple)
         # outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(*info_tuple))
@@ -1030,3 +1031,4 @@ if __name__ == '__main__':
     if not os.path.exists(outfolder):
         os.makedirs(outfolder)
     main(args)
+
