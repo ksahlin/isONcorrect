@@ -657,8 +657,15 @@ def main(args):
     max_seqs_to_spoa = args.max_seqs_to_spoa
     if len(reads) <= args.exact_instance_limit:
         args.exact = True
-    if len(reads) <= args.w_equal_k_limit:
-        args.w = args.k
+    if args.set_w_dynamically:
+        args.w = args.k + min(args.k, int( len(reads)/500))
+
+    eprint("ARGUMENT SETTINGS:")
+    for key, value in args.__dict__.items():
+        eprint("{0}: {1}".format(key, value))
+        # setattr(self, key, value)
+    eprint()
+
 
     start = time()
     corrected_reads = {}
@@ -808,8 +815,8 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.0.2')
+    parser = argparse.ArgumentParser(description="De novo error correction of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.1')
 
     parser.add_argument('--fastq', type=str,  default=False, help='Path to input fastq file with reads')
     # parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
@@ -824,7 +831,8 @@ if __name__ == '__main__':
     parser.add_argument('--max_seqs_to_spoa', type=int, default=200,  help='Maximum number of seqs to spoa')
     
     parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance smaller than this limit')
-    parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
+    # parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
+    parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
 
     parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
                                                                         minmimizer combinations to span regions in homopolymenr dense regions. Solution \
@@ -847,11 +855,7 @@ if __name__ == '__main__':
         sys.exit()
 
 
-    eprint("ARGUMENT SETTINGS:")
-    for key, value in args.__dict__.items():
-        eprint("{0}: {1}".format(key, value))
-        # setattr(self, key, value)
-    eprint()
+
 
     if args.outfolder and not os.path.exists(args.outfolder):
         os.makedirs(args.outfolder)

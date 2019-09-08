@@ -94,7 +94,7 @@ rule isONclust:
         outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)
         mkdir_p(outfolder)
         # shell("source activate py36")
-        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust --t 32 --k 13 --w 20  --fastq {input.fastq}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
+        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust --t 32 --k 13 --w 20  --q 5.0 --fastq {input.fastq}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
     
 
 rule clusters_to_fastq:
@@ -106,7 +106,7 @@ rule clusters_to_fastq:
         time = config["GNUTIME"]
         # shell("source activate py36")
         outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/fastq/".format(wildcards.dataset, wildcards.nr_reads)
-        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust write_fastq --clusters {input.clusters} --fastq {input.fastq} --outfolder {outfolder} --N 5")
+        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust write_fastq --clusters {input.clusters} --fastq {input.fastq} --outfolder {outfolder} --N 1")
         shell("touch {output.flag}")
 
 
@@ -122,9 +122,9 @@ rule isoncorrect:
         isoncorrect_dir = config["ROOT_IN"]
 
         if wildcards.dataset == "SIRV":
-            shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --keep_old --t 4 --k 7 --w 14 --xmax 80")
+            shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 4  --xmax 80")
         else:
-            shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --keep_old --t 32 --k 7 --w 14 --xmax 80")
+            shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 32  --xmax 80")
         # shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --t 32 --k 7 --w 10 --xmax 80")
         shell("touch {output.flag}")
 

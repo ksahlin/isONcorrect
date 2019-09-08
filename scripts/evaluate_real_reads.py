@@ -422,7 +422,7 @@ def get_summary_stats(reads, quantile):
 
     return tot_ins, tot_del, tot_subs, tot_match, sum_aln_bases
 
-def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cluster_size, reads, outfile, reads_unaligned_in_other_method, read_type):
+def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cluster_size, reads, outfile, reads_unaligned_in_other_method, reads_missing_from_clustering_correction_output, read_type):
     # read_calss is FSM, NIC, NNC, ISM
     # donwnload human gtf file to compare against, check how sqanti does it.
     # also sent isONclust tsv file to this script to get cluster size 
@@ -437,6 +437,7 @@ def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cl
             cluster_size = 1
         read_length = len(reads[acc])
         is_unaligned_in_other_method = 1 if acc in reads_unaligned_in_other_method else 0
+        # is_missing_from_clustering_or_correction = 1 if acc in reads_missing_from_clustering_correction_output else 0
 
         info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, is_unaligned_in_other_method, *read_class, chr_id, reference_start, reference_end + 1, sam_flag) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
         # print(*info_tuple)
@@ -962,10 +963,7 @@ def main(args):
     outfile.write("Original,subs,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n".format( *[round(100*round(x,3), 2) for x in quantile_substitutions_orig ], *orig_stats, len(orig)))
     outfile.write("Corrected,subs,{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}\n".format( *[round(100*round(x,3), 2) for x in quantile_substitutions_corr ], *corr_stats, len(corr)))
 
-    outfile.close()
-
-    print("Reads successfully aligned:", len(orig),len(corr))
-    
+    outfile.close()    
 
     ############# Splice site analysis ########################################
     ###########################################################################
@@ -985,17 +983,20 @@ def main(args):
 
     reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
     bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
-    reads_unaligned_in_original = (set(corrected_splice_sites.keys()) | reads_missing_from_clustering_correction_output) - set(original_splice_sites.keys())
-    reads_unaligned_after_correction = (set(reads.keys()) -  reads_missing_from_clustering_correction_output) -  set(corrected_splice_sites.keys()) 
+    reads_unaligned_in_original = set(reads.keys()) - set(orig_primary_locations.keys())
+    reads_unaligned_in_correction = set(corr_reads.keys()) - set(corr_primary_locations.keys()) 
 
     detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
     detailed_results_outfile.write("acc,read_type,ins,del,subs,matches,error_rate,read_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag\n")
-    print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_in_original, "corrected")    
-    print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_after_correction, "original")
+    print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_in_original, reads_missing_from_clustering_correction_output, "corrected")    
+    print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_in_correction, reads_missing_from_clustering_correction_output, "original")
     detailed_results_outfile.close()
 
+    print()
+    print("Reads successfully aligned (original/corrected):", len(orig),len(corr))
+    print("Total reads (original/corrected):", len(reads),len(corr_reads))
     print("READS MISSING FROM CLUSTERING/CORRECTION INPUT:", len(reads_missing_from_clustering_correction_output))
-    print("READS UNALIGNED (ORIGINAL/CORRECTED):", len(reads_unaligned_in_original), len(reads_unaligned_after_correction) )
+    print("READS UNALIGNED (ORIGINAL/CORRECTED):", len(reads_unaligned_in_original), len(reads_unaligned_in_correction) )
     print("BUG IF NOT EMPTY:",len(bug_if_not_empty))
 
     ###########################################################################
