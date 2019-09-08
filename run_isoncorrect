@@ -43,7 +43,7 @@ def isoncorrect(data):
 
         subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                 "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
-                                "--w_equal_k_limit",  str(isoncorrect_algorithm_params["w_equal_k_limit"]),
+                                "--set_w_dynamically", 
                                 "--k",  str(isoncorrect_algorithm_params["k"]),  "--w",  str(isoncorrect_algorithm_params["w"]),
                                 "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
                                 "--T",  str(isoncorrect_algorithm_params["T"]) ], stderr=error_file, stdout=isoncorrect_out_file)
@@ -70,10 +70,10 @@ def main(args):
                 if os.path.isfile(os.path.join(outfolder, "corrected_reads.fastq")): 
                     print("already computed cluster", cl_id)
                 else:
-                    isoncorrect_algorithm_params = {  "w_equal_k_limit" : args.w_equal_k_limit, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
+                    isoncorrect_algorithm_params = {  "set_w_dynamically" : args.set_w_dynamically, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
                     instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
             else:
-                isoncorrect_algorithm_params = {  "w_equal_k_limit" : args.w_equal_k_limit, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
+                isoncorrect_algorithm_params = {  "set_w_dynamically" : args.set_w_dynamically, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
                 instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
             # print(os.path.join(directory, read_fastq_file))
             continue
@@ -123,8 +123,9 @@ if __name__ == '__main__':
     parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.2, help='Minimum fraction keeping substitution')
     parser.add_argument('--exact_instance_limit', type=int, default=200,  help='Do not recompute previous results')
-    parser.add_argument('--w_equal_k_limit', type=int, default=100,  help='Do not recompute previous results')
+    # parser.add_argument('--w_equal_k_limit', type=int, default=100,  help='Do not recompute previous results')
     parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results')
+    parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
 
     # parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
     #                                                              not to be used for clusters with over ~500 reads)')
