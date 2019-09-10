@@ -42,28 +42,114 @@ def total_error_rate(input_csv, outfolder):
     plt.savefig(os.path.join(outfolder, "total_error_rate.pdf"))
     plt.close()
 
-def splice_site_classification(input_csv, outfolder):
+
+def label_transcript(row):
+   if row['fsm'] == 1 :
+      return 'FSM'
+   if row['nic'] == 1 :
+      return 'NIC'
+   if row['ism'] == 1:
+      return 'ISM'
+   if row['nnc']  == 1:
+      return 'NNC'
+   if row['no_splices']  == 1:
+      return 'NO_SPLICE'
+
+def splice_site_classification_plot(input_csv, outfolder):
 
     indata = pd.read_csv(input_csv)
+    indata['transcript_type'] = indata.apply (lambda row: label_transcript(row), axis=1)
     # print(len(df))
     # indata = df.loc[df['q_acc'] == df['r_acc']]
     # print(len(indata))
 
-    g = sns.catplot(x="read_type", y="error_rate", #col="Depth",
-                data=indata,  #hue="read_type", hue_order= ["corrected", "original"],
-                kind="violin", aspect=1)
+    g = sns.catplot(x="transcript_type", #col="Depth",
+                data=indata,  hue="read_type", hue_order= ["corrected", "original"],
+                order= ["FSM", "ISM", "NIC", "NNC", 'NO_SPLICE'], kind="count", aspect=1)
 
-    g.set(ylim=(0,15))
-    g.set_ylabels("Error rate (%)")
-    g.set_xlabels("Method")
+    # g.set(ylim=(0,15))
+    g.set_ylabels("Count")
+    g.set_xlabels("Transcript type")
 
     # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
     # ax.set_ylim(0,15)
     # ax.set_ylabel("Error rate %")
 
-    plt.savefig(os.path.join(outfolder, "total_error_rate.eps"))
-    plt.savefig(os.path.join(outfolder, "total_error_rate.pdf"))
+    plt.savefig(os.path.join(outfolder, "splice_site_classification.eps"))
+    plt.savefig(os.path.join(outfolder, "splice_site_classification.pdf"))
     plt.close()
+
+def number_splices_fsm(input_csv, outfolder):
+
+    indata = pd.read_csv(input_csv)
+    indata['transcript_type'] = indata.apply (lambda row: label_transcript(row), axis=1)
+    indata = indata[indata['transcript_type']=='FSM']
+    g = sns.catplot(x="tot_splices", #col="Depth",
+                data=indata,  hue="read_type", hue_order= ["corrected", "original"], kind="count", aspect=1)
+    # axes = g.axes
+    g.set_ylabels("Count")
+    g.set_xlabels("Number of splice sites")
+    # axes.set_xticks(np.arange(0, 70, step=5) )
+    # axes.set_xlim(xlim=(0, 70))
+    # g.set_xlim(0,70)
+    # g.set_xticks(np.arange(0, 70, step=5))
+    # ax.set_ylabel("Error rate %")
+
+    plt.savefig(os.path.join(outfolder, "nr_splices.eps"))
+    plt.savefig(os.path.join(outfolder, "nr_splices.pdf"))
+    plt.close()
+
+
+def unique_fsm(input_csv, outfolder):
+
+    indata = pd.read_csv(input_csv)
+    orig = indata[indata['read_type']=='original']
+    corr = indata[indata['read_type']=='corrected']
+
+    print('orig:', orig['transcript_fsm_id'].nunique())
+    print('corr', corr['transcript_fsm_id'].nunique())
+    # print(set(orig['transcript_fsm_id'].unique()))
+    # print(set(corr['transcript_fsm_id'].unique()))
+
+    orig_reads = pd.Series(orig.transcript_fsm_id.values,index=orig.acc).to_dict()
+    corr_reads = pd.Series(corr.transcript_fsm_id.values,index=corr.acc).to_dict()
+
+    all_fsm_orig = set(orig['transcript_fsm_id'].unique())
+    all_fsm_corr = set(corr['transcript_fsm_id'].unique())
+    # print(orig_reads)
+    fsm_read_absent = set()
+    fsm_read_overcorrected = set()
+    for read in orig_reads:
+        if read not in corr_reads:
+            # print('here')
+            if orig_reads[read] not in all_fsm_corr:
+                # print('orig read not in corr and FSM not found in corr')
+                fsm_read_absent.add(orig_reads[read])
+        else:
+            if orig_reads[read] not in all_fsm_corr:
+                # print('orig read not in corr and FSM not found in corr')
+                fsm_read_overcorrected.add(orig_reads[read])
+
+
+    print('Original reads was a FSM but was not in the input data of the corrected reads:',len(fsm_read_absent))
+    print('Original reads was a FSM but probably overcorrected/modified in the corrected reads (BAD):', len(fsm_read_overcorrected))
+
+    fsm_read_absent = set()
+    fsm_read_overcorrected = set()
+    for read in corr_reads:
+        if read not in orig_reads:
+            # print('here')
+            if corr_reads[read] not in all_fsm_orig:
+                # print('orig read not in corr and FSM not found in corr')
+                fsm_read_absent.add(corr_reads[read])
+        else:
+            if corr_reads[read] not in all_fsm_orig:
+                # print('orig read not in corr and FSM not found in corr')
+                fsm_read_overcorrected.add(corr_reads[read])
+
+
+    print('Corrected reads was a FSM but was not in the input data of the corrected reads:', len(fsm_read_absent))
+    print('Corrected reads was a FSM after correction but not in original data (GOOD):', len(fsm_read_overcorrected))
 
 
 
@@ -83,7 +169,7 @@ def total_error_rate2(input_csv, outfolder):
     plt.xlim(0,20)
     plt.xlabel("Difference to HG38 (%)")
     plt.ylabel("Frequency")
-
+    plt.legend(prop={'size': 12})
     # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
     # ax.set_ylim(0,15)
     # ax.set_ylabel("Error rate %")
@@ -95,10 +181,15 @@ def total_error_rate2(input_csv, outfolder):
 def main(args):
     
     sns.set(style="whitegrid")
+    flatui = ["#2ecc71", "#e74c3c"] # https://chrisalbon.com/python/data_visualization/seaborn_color_palettes/
+    sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
+    # total_error_rate2(args.input_csv, args.outfolder)
     # total_error_rate(args.input_csv, args.outfolder)
-    total_error_rate2(args.input_csv, args.outfolder)
+    # splice_site_classification_plot(args.input_csv, args.outfolder)
 
+    unique_fsm(args.input_csv, args.outfolder)
+    number_splices_fsm(args.input_csv, args.outfolder)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
