@@ -146,11 +146,11 @@ rule align_corrected_reads_minimap2:
         if wildcards.dataset == "SIRV":
             ref = config["SIRV"]
         elif wildcards.dataset == "NA12878":
-            ref = config["HG38_MMI"]
+            ref = config["HG38"]
         elif wildcards.dataset == "drosophila97":
             ref = config["drosophila97"]
 
-        shell("/usr/bin/time -v  minimap2 --eqx  -t 8 -ax splice -uf -k14 {ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx  -t 8 -ax splice -uf -k13 -w4 {ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
 
 
 rule align_original_reads_minimap2:
@@ -160,11 +160,11 @@ rule align_original_reads_minimap2:
         if wildcards.dataset == "SIRV":
             ref = config["SIRV"]
         elif wildcards.dataset == "NA12878":
-            ref = config["HG38_MMI"]
+            ref = config["HG38"]
         elif wildcards.dataset == "drosophila97":
             ref = config["drosophila97"]
 
-        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k14 {ref} {input.original_reads} >  {output.original_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k13 -w4 {ref} {input.original_reads} >  {output.original_reads_aligned} ")
 
 
 rule evaluate:

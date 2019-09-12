@@ -148,8 +148,8 @@ def unique_fsm(input_csv, outfolder):
                 fsm_read_overcorrected.add(corr_reads[read])
 
 
-    print('Corrected reads was a FSM but was not in the input data of the corrected reads:', len(fsm_read_absent))
-    print('Corrected reads was a FSM after correction but not in original data (GOOD):', len(fsm_read_overcorrected))
+    print('Corrected reads was a FSM and was not aligned at all in the original data (Good):', len(fsm_read_absent))
+    print('Corrected reads was a FSM but did not align as FSM in original data (Good):', len(fsm_read_overcorrected))
 
 
 
@@ -184,9 +184,9 @@ def main(args):
     flatui = ["#2ecc71", "#e74c3c"] # https://chrisalbon.com/python/data_visualization/seaborn_color_palettes/
     sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
-    # total_error_rate2(args.input_csv, args.outfolder)
-    # total_error_rate(args.input_csv, args.outfolder)
-    # splice_site_classification_plot(args.input_csv, args.outfolder)
+    total_error_rate2(args.input_csv, args.outfolder)
+    total_error_rate(args.input_csv, args.outfolder)
+    splice_site_classification_plot(args.input_csv, args.outfolder)
 
     unique_fsm(args.input_csv, args.outfolder)
     number_splices_fsm(args.input_csv, args.outfolder)
