@@ -47,7 +47,7 @@ def readfq(fp): # this is a generator function
 
 def main(args):
 
-    reads = { acc : (seq, qual) for acc, (seq,qual) in readfq(open(args.fastq, 'r'))}
+    reads = { acc : (seq, qual) for acc, (seq,qual) in readfq(open(args.fastq, 'r')) if len(seq) >= args.min_length }
     reads_sampled = random.sample(list(reads.keys()), args.nr_reads)
 
     outfile = open(args.outfile, "w")
@@ -62,6 +62,7 @@ if __name__ == '__main__':
     parser.add_argument('--fastq', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
     parser.add_argument('--outfile', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
     parser.add_argument('--nr_reads', type=int, default = 1000000, help='Nr reads')
+    parser.add_argument('--min_length', type=int, default = 200, help='minimum read length')
     
     args = parser.parse_args()
 
