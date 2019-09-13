@@ -124,11 +124,20 @@ def get_minimizers_and_positions(reads, w, k, hash_fcn):
 
 def get_minimizer_combinations_database(reads, M, k, x_low, x_high):
     M2 = defaultdict(lambda: defaultdict(list))
+    tmp_cnt = 0
+    forbidden = 'A'*k
     for r_id in M:
         minimizers = M[r_id]
         for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizers, k, x_low, x_high):
             for (m2, p2) in m1_curr_spans:
+                if m2 == m1 == forbidden:
+                    # print("HERE!", p1,p2)
+                    continue
+
+                tmp_cnt +=1
                 M2[m1][m2].append((r_id, p1, p2))
+
+    print(tmp_cnt, "MINIMIZER COMBINATIONS GENERATED")
     return M2
 
 
