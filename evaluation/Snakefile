@@ -81,7 +81,7 @@ rule subsample:
         # shell("source activate py36")
         inbase= config["ROOT_IN"]
         mkdir_p(config["ROOT_OUT"] + "/data/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads ) )
-        shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads {wildcards.nr_reads}")
+        shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads {wildcards.nr_reads} --min_length 200")
 
 
 rule isONclust:
