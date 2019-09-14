@@ -416,7 +416,7 @@ def solve_WIS(all_intervals_sorted_by_finish):
 #     tot_before["del"] += del_
 
 
-def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database, already_computed):
+def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, read_complexity_cnt, quality_values_database, already_computed):
 
     # curr_m_pos = read_min_comb[0][0][1]
     # curr_m_pos2 = read_min_comb[0][1][1]
@@ -775,7 +775,7 @@ def main(args):
                     if not_prev_corrected_spans: # p1 + k_size not in read_previously_considered_positions:
                         # test_potential_speedup(not_prev_corrected_spans, minimizer_combinations_database, reads, r_id, m1, p1)
                         # sys.exit()
-                        tmp_cnt, read_complexity_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database, already_computed)
+                        tmp_cnt, read_complexity_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, read_complexity_cnt, quality_values_database, already_computed)
 
                 print("{0} edlib invoked due to repeated anchors for this read.".format(read_complexity_cnt))
 
