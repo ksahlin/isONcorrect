@@ -496,12 +496,13 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
                 if editdist == 0:
                     print("Here!")
-                # tmp_cnt += 1
+                tmp_cnt += 1
                 if editdist >= 0:    # passing second edit distance check
-                    if relevant_read_id in reads_visited:
+                    if relevant_read_id in reads_visited: # we have already seen the minimizer combination
                         prev_read_seq, read_read_qual, prev_pos1, prev_pos2 = seqs[relevant_read_id]
                         editdist_prev = edlib_alignment(ref_seq, prev_read_seq, len(ref_seq))
-
+                        tmp_cnt += 1
+                        read_complexity_cnt += 1
                         # print("Read already visited lool", "prev:",reads_visited[relevant_read_id], "this:", editdist)
                         # print(seqs[relevant_read_id])
                         # print(p_error_sum_thresh)
@@ -513,7 +514,6 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                             seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
                             reads_visited[relevant_read_id] = editdist
                             already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
-                            tmp_cnt += 1
                             # print("REPLACED OLD MATCH")
                         else:
                             # seqs[relevant_read_id] = []
@@ -534,11 +534,11 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
     if len(curr_best_seqs) > 2:
         all_intervals.append( (p1 + k_size, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
-        
+    
         # for q_id, (read_seq, read_qual, pos1, pos2) in curr_best_seqs.items():
         #     if q_id != "curr_read":
         #         stored_calculated_regions[q_id][pos1] = len(curr_best_seqs)
-    return tmp_cnt
+    return tmp_cnt, read_complexity_cnt
 
 def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold, max_seqs_to_spoa):
     corr_seq = []
@@ -763,6 +763,7 @@ def main(args):
 
                 # print(read_previously_considered_positions)
                 already_computed = {}
+                read_complexity_cnt = 0
                 for (m1,p1), m1_curr_spans in read_min_comb: 
                     # Implement that if any position is not in range of current corrections: then correct!!! Not just start and stop
                     not_prev_corrected_spans = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) ] 
@@ -774,10 +775,11 @@ def main(args):
                     if not_prev_corrected_spans: # p1 + k_size not in read_previously_considered_positions:
                         # test_potential_speedup(not_prev_corrected_spans, minimizer_combinations_database, reads, r_id, m1, p1)
                         # sys.exit()
-                        tmp_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database, already_computed)
+                        tmp_cnt, read_complexity_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, quality_values_database, already_computed)
 
-    
-                print(tmp_cnt, "computed editdist")
+                print("{0} edlib invoked due to repeated anchors for this read.".format(read_complexity_cnt))
+
+                print(tmp_cnt, "total computed editdist.")
                 # sys.exit()
                 eprint("Correcting read", r_id)
                 # print(previously_corrected_regions[r_id])
