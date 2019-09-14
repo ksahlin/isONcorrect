@@ -138,6 +138,29 @@ def get_minimizer_combinations_database(reads, M, k, x_low, x_high):
                 M2[m1][m2].append((r_id, p1, p2))
 
     print(tmp_cnt, "MINIMIZER COMBINATIONS GENERATED")
+
+    avg_bundance = 0
+    singleton_minimzer = 0
+    cnt = 1
+    abundants=[]
+    for m1 in list(M2.keys()):
+        for m2 in list(M2[m1].keys()):
+            if len(M2[m1][m2]) > 1:
+                avg_bundance += len(M2[m1][m2])
+                cnt +=1
+            else:
+                del M2[m1][m2]
+                singleton_minimzer += 1
+
+            if len(M2[m1][m2]) > len(reads):
+                abundants.append((m1,m2, len(M2[m1][m2])))
+                if m2 == forbidden: # poly A tail
+                    del M2[m1][m2]
+    for m1,m2,ab in sorted(abundants, key=lambda x: x[2], reverse=True):
+        print("Too abundant:", m1, m2, ab, len(reads))
+
+    print("Average abundance for non-unique minimizer-combs:", avg_bundance/float(cnt))
+    print("Number of singleton minimizer combinations filtered out:", singleton_minimzer)
     return M2
 
 
@@ -326,7 +349,7 @@ def solve_WIS(all_intervals_sorted_by_finish):
         p.append(max(0,k))
 
     # for i, interval in enumerate(all_intervals_sorted_by_finish):
-    #     print(i, p[i], interval[0], interval[1], interval[2])
+    #     print(i, p[i+1], interval[0], interval[1], interval[2])
 
     OPT = [0]
     for j in range(1, len(all_intervals_sorted_by_finish) +1):
@@ -362,7 +385,7 @@ def solve_WIS(all_intervals_sorted_by_finish):
             # find_solution( p[j], opt_indicies ) 
         else:
             j -= 1
-    # print( "hi", opt_indicies2)
+    print( "hi", opt_indicies, "optimal value:", OPT[-1])
     # assert opt_indicies2 == opt_indicies
     return opt_indicies
 
@@ -491,7 +514,9 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
                 p_error_read = (quality_values_database[relevant_read_id][pos2 + k_size] - quality_values_database[relevant_read_id][pos1])/(pos2 + k_size - pos1)
                 p_error_sum_thresh = p_error_ref + p_error_read #sum([D[char_] for char_ in read_qual])/len(read_qual) #+ 0.1
+                # p_error_sum_thresh = max(4, p_error_ref + p_error_read) #sum([D[char_] for char_ in read_qual])/len(read_qual) #+ 0.1
                 # error_cutoff = max(5, p_error_sum_thresh*(max(len(ref_seq), len(read_seq)) -2*k_size) )
+                # print(p_error_sum_thresh, p_error_sum_thresh*len(ref_seq),len(ref_seq) )
                 editdist = edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq))
 
                 if editdist == 0:
@@ -526,14 +551,15 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                         already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
 
 
-        if len(seqs) > len(curr_best_seqs):
-            curr_best_seqs = seqs
-            # curr_best_seqs_to_id = seqs_to_id
-            curr_best_stop = p2
+            all_intervals.append( (p1 + k_size, p2,  len(seqs), seqs) )
+    #     if len(seqs) > len(curr_best_seqs):
+    #         curr_best_seqs = seqs
+    #         # curr_best_seqs_to_id = seqs_to_id
+    #         curr_best_stop = p2
 
 
-    if len(curr_best_seqs) > 2:
-        all_intervals.append( (p1 + k_size, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
+    # if len(curr_best_seqs) > 2:
+    #     all_intervals.append( (p1 + k_size, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
     
         # for q_id, (read_seq, read_qual, pos1, pos2) in curr_best_seqs.items():
         #     if q_id != "curr_read":
@@ -667,7 +693,7 @@ def main(args):
     if len(reads) <= args.exact_instance_limit:
         args.exact = True
     if args.set_w_dynamically:
-        args.w = args.k + min(args.k, int( len(reads)/500))
+        args.w = args.k + min(7, int( len(reads)/500))
 
     eprint("ARGUMENT SETTINGS:")
     for key, value in args.__dict__.items():
@@ -723,24 +749,29 @@ def main(args):
 
                 # print(r_id, sorted(previously_corrected_regions[r_id], key=lambda x:x[1]))
                 read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
-                eprint("not corrected:", [ (p1_, p2_) for p1_, p2_ in zip(sorted(read_previously_considered_positions)[:-1], sorted(read_previously_considered_positions)[1:]) if p2_ > p1_ + 1 ] )
-                # if previously_corrected_regions[r_id]:
-                #     read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
-                #     group_id = 0
-                #     pos_group = {}
-                #     sorted_corr_pos = sorted(read_previously_considered_positions)
-                #     for p1, p2 in zip(sorted_corr_pos[:-1], sorted_corr_pos[1:]):
-                #         if p2 > p1 + 1:
-                #            pos_group[p1] = group_id 
-                #            group_id += 1
-                #            pos_group[p2] = group_id 
-                #         else:
-                #            pos_group[p1] = group_id 
-                #     if p2 == p1 + 1:
-                #         pos_group[p2] = group_id 
-                # else:
-                #     read_previously_considered_positions= set()
+                if read_previously_considered_positions:
+                    eprint("not corrected:", [ (p1_, p2_) for p1_, p2_ in zip(sorted(read_previously_considered_positions)[:-1], sorted(read_previously_considered_positions)[1:]) if p2_ > p1_ + 1 ] )
+                else:
+                    eprint("not corrected: entire read", )
 
+                if previously_corrected_regions[r_id]:
+                    read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
+                    group_id = 0
+                    pos_group = {}
+                    sorted_corr_pos = sorted(read_previously_considered_positions)
+                    for p1, p2 in zip(sorted_corr_pos[:-1], sorted_corr_pos[1:]):
+                        if p2 > p1 + 1:
+                           pos_group[p1] = group_id 
+                           group_id += 1
+                           pos_group[p2] = group_id 
+                        else:
+                           pos_group[p1] = group_id 
+                    if p2 == p1 + 1:
+                        pos_group[p2] = group_id 
+                else:
+                    read_previously_considered_positions= set()
+                    pos_group = {}
+                # print(pos_group)
 
                 # read_all_pos = set(range(len(seq))) 
                 # read_not_corr = read_all_pos - read_previously_considered_positions
@@ -767,6 +798,12 @@ def main(args):
                 for (m1,p1), m1_curr_spans in read_min_comb: 
                     # Implement that if any position is not in range of current corrections: then correct!!! Not just start and stop
                     not_prev_corrected_spans = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) ] 
+                    set_not_prev = set(not_prev_corrected_spans)
+                    not_prev_corrected_spans2 = [(m2,p2) for (m2,p2) in m1_curr_spans if (m2,p2) not in set_not_prev and (p1 + k_size in pos_group and p2 - 1 in pos_group and pos_group[p1 + k_size] != pos_group[p2 - 1]) ] 
+                    # if not_prev_corrected_spans2:
+                    #     print("extra spans:", not_prev_corrected_spans2)
+                    not_prev_corrected_spans += not_prev_corrected_spans2
+                    # print(not_prev_corrected_spans)
                     # not_prev_corrected_spans3 = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) or pos_group[p1 + k_size] != pos_group[p2 - 1] ] 
                     # if len(not_prev_corrected_spans) > len(not_prev_corrected_spans3):
                     #     print(len(not_prev_corrected_spans), len(not_prev_corrected_spans3))
@@ -798,6 +835,7 @@ def main(args):
                     corrected_seq = seq
                 else:
                     all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
+                    # print([(item[0],item[1]) for item in  all_intervals_sorted_by_finish])
                     # print(len(all_intervals_sorted_by_finish))
                     # sys.exit()
                     opt_indicies = solve_WIS(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
@@ -817,8 +855,9 @@ def main(args):
 
     eprint("tot_before:", tot_errors_before)
     eprint("tot_after:", sum(tot_errors_after.values()), tot_errors_after)
-    outfile = open(os.path.join(args.outfolder, "corrected_reads.fastq"), "w")
     eprint( len(corrected_reads))
+    outfile = open(os.path.join(args.outfolder, "corrected_reads.fastq"), "w")
+
     for r_id, (acc, seq, qual) in corrected_reads.items():
         outfile.write("@{0}\n{1}\n+\n{2}\n".format(acc, seq, qual))
     outfile.close()
