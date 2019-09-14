@@ -247,13 +247,13 @@ def parasail_alignment(read, reference, x_acc = "", y_acc = "", match_score = 2,
     return read_alignment, ref_alignment
 
 def get_alignments(best_edit_distances, querys, targets):
-    score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
-    aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
-    best_edit_distances_ssw = {}
+    # score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
+    # aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
+    best_edit_distances_parasail = {}
     for acc1 in best_edit_distances:
         seq1 = querys[acc1]
         best_ed = len(seq1)
-        best_edit_distances_ssw[acc1] = {}
+        best_edit_distances_parasail[acc1] = {}
 
         for acc2 in best_edit_distances[acc1]:
             seq2 = targets[acc2]            
@@ -271,16 +271,16 @@ def get_alignments(best_edit_distances, querys, targets):
 
             sw_ed = mismatches + indels
             if sw_ed < best_ed:
-                best_edit_distances_ssw[acc1] = {}
-                best_edit_distances_ssw[acc1][acc2] = (deletions, insertions, mismatches)
+                best_edit_distances_parasail[acc1] = {}
+                best_edit_distances_parasail[acc1][acc2] = (deletions, insertions, mismatches)
                 best_ed = sw_ed
 
             elif sw_ed == best_ed:
-                best_edit_distances_ssw[acc1][acc2] = (deletions, insertions, mismatches)
+                best_edit_distances_parasail[acc1][acc2] = (deletions, insertions, mismatches)
 
             # seq1_aln, match_line, seq2_aln = result.alignment
 
-    return best_edit_distances_ssw
+    return best_edit_distances_parasail
 
 
 def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
