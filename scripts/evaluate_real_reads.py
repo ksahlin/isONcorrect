@@ -845,6 +845,7 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
 
         else: 
             donor_acceptors = "NA"
+            donor_acceptors_choords = "NA"
         read_annotations[read_acc] = read_annotation( len(all_reads_splice_sites[read_acc][chr_id]), read_sm_junctions, read_nic_junctions, read_fsm, read_nic, read_ism, read_nnc, read_no_splices, donor_acceptors, donor_acceptors_choords, transcript_fsm_id )
                 # print("FSM!!")
     # print(annotated_ref_isoforms[chr_id])
@@ -991,7 +992,7 @@ def main(args):
     reads_unaligned_in_correction = set(corr_reads.keys()) - set(corr_primary_locations.keys()) 
 
     detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
-    detailed_results_outfile.write("acc,read_type,ins,del,subs,matches,error_rate,read_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag\n")
+    detailed_results_outfile.write("acc,read_type,ins,del,subs,matches,error_rate,read_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag\n")
     print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_in_original, reads_missing_from_clustering_correction_output, "corrected")    
     print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_in_correction, reads_missing_from_clustering_correction_output, "original")
     detailed_results_outfile.close()
