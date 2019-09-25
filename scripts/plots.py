@@ -116,6 +116,8 @@ def unique_fsm(input_csv, outfolder):
 
     all_fsm_orig = set(orig['transcript_fsm_id'].unique())
     all_fsm_corr = set(corr['transcript_fsm_id'].unique())
+    print(all_fsm_orig - all_fsm_corr)
+    print(all_fsm_corr - all_fsm_orig)
     # print(orig_reads)
     fsm_read_absent = set()
     fsm_read_overcorrected = set()
@@ -223,11 +225,11 @@ def main(args):
     sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
     # total_error_rate2(args.input_csv, args.outfolder)
-    error_rate_per_cluster_size(args.input_csv, args.outfolder)
+    # error_rate_per_cluster_size(args.input_csv, args.outfolder)
     # total_error_rate(args.input_csv, args.outfolder)
     # splice_site_classification_plot(args.input_csv, args.outfolder)
 
-    # unique_fsm(args.input_csv, args.outfolder)
+    unique_fsm(args.input_csv, args.outfolder)
     # number_splices_fsm(args.input_csv, args.outfolder)
 
 if __name__ == '__main__':
