@@ -160,23 +160,61 @@ def total_error_rate2(input_csv, outfolder):
     # indata = df.loc[df['q_acc'] == df['r_acc']]
     # print(len(indata))
     data =indata[indata.read_type == 'corrected']
-    sns.distplot(data['error_rate'], kde=True, label='Corrected', bins=200, hist_kws=dict(alpha=0.5))
+    sns.distplot(data['error_rate'], norm_hist=False, kde=False, label='Corrected', bins=500, hist_kws=dict(alpha=0.5))
     data = indata[indata.read_type == 'original']
-    sns.distplot(data['error_rate'], kde=True, label='Original', bins=200, hist_kws=dict(alpha=0.5))
+    sns.distplot(data['error_rate'], norm_hist=False,  kde=False, label='Original', bins=500, hist_kws=dict(alpha=0.5))
 
 
-    plt.xticks(np.arange(0, 20, step=1))
-    plt.xlim(0,20)
-    plt.xlabel("Difference to HG38 (%)")
+    plt.xticks(np.arange(0, 10, step=1))
+    plt.xlim(0,10)
+    plt.xlabel("Error rate (%)")
+    # plt.xlabel("Difference to HG38 (%)")
     plt.ylabel("Frequency")
     plt.legend(prop={'size': 12})
-    # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
-    # ax.set_ylim(0,15)
-    # ax.set_ylabel("Error rate %")
+
+    orig = indata[indata['read_type']=='original']
+    print(orig.median(axis = 0))
+    corr = indata[indata['read_type']=='corrected']
+    print(corr.median(axis = 0))
 
     plt.savefig(os.path.join(outfolder, "total_error_rate2.eps"))
     plt.savefig(os.path.join(outfolder, "total_error_rate2.pdf"))
     plt.close()
+
+
+def error_rate_per_cluster_size(input_csv, outfolder):
+    indata = pd.read_csv(input_csv)
+    # indata = indata[indata['read_type']=='corrected']
+    ax = sns.pointplot(x="cluster_size", y="error_rate", hue="read_type", data=indata);
+    
+    # ax = sns.lineplot(x="cluster_size", y="error_rate", err_style="bars",
+    #                 hue="read_type", markers=True, dashes=False, data=indata)
+
+    # g = sns.catplot(x="cluster_size", y="error_rate", #col="Depth",
+    #             data=indata,  #hue="read_type", hue_order= ["corrected", "original"],
+    #             kind="violin", aspect=1)
+
+    # g.set(ylim=(0,15))
+    # g.set_ylabels("Error rate (%)")
+    # g.set_xlabels("Cluster size")
+
+    # ax.set_ylim(0,15)
+    ax.set_ylabel("Error rate %")
+    ax.set_xlabel("Cluster size")
+    # ax.set_xscale('log')
+    # print([x for x in ax.get_xticklabels()])
+    print([x.set_text('{0}'.format(int(int(x.get_text())/1000)) + 'K') for x in ax.get_xticklabels() if int(x.get_text()) > 1000])
+    # print([x for x in ax.get_xticklabels()])
+    print([x.set_text('') for i, x in enumerate(ax.get_xticklabels()) if i > 3 and i % 2 == 0 ])
+
+    # xlabels = ['{:,.2f}'.format(x/1000) + 'K' if x > 1000 else x for x in ax.get_xticks()]
+    # print(xlabels)
+    ax.set_xticklabels(ax.get_xticklabels())
+
+    plt.savefig(os.path.join(outfolder, "error_rate_per_cluster_size.eps"))
+    plt.savefig(os.path.join(outfolder, "error_rate_per_cluster_size.pdf"))
+    plt.close()
+
 
 def main(args):
     
@@ -184,12 +222,13 @@ def main(args):
     flatui = ["#2ecc71", "#e74c3c"] # https://chrisalbon.com/python/data_visualization/seaborn_color_palettes/
     sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
-    total_error_rate2(args.input_csv, args.outfolder)
-    total_error_rate(args.input_csv, args.outfolder)
-    splice_site_classification_plot(args.input_csv, args.outfolder)
+    # total_error_rate2(args.input_csv, args.outfolder)
+    error_rate_per_cluster_size(args.input_csv, args.outfolder)
+    # total_error_rate(args.input_csv, args.outfolder)
+    # splice_site_classification_plot(args.input_csv, args.outfolder)
 
-    unique_fsm(args.input_csv, args.outfolder)
-    number_splices_fsm(args.input_csv, args.outfolder)
+    # unique_fsm(args.input_csv, args.outfolder)
+    # number_splices_fsm(args.input_csv, args.outfolder)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")

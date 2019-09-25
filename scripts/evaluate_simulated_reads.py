@@ -2,7 +2,7 @@ from __future__ import print_function
 import os,sys
 import argparse
 import re
-import ssw
+# import ssw
 import numpy as np
 from Bio import pairwise2
 from Bio.SubsMat import MatrixInfo as matlist
