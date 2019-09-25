@@ -770,6 +770,7 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
             read_sm_junctions = 0
             read_nic_junctions = 0
             read_splice_letters = []
+            read_splice_choords = []
             for read_splice_sites in all_reads_splice_sites[read_acc][chr_id]:
                 start_sp, stop_sp = read_splice_sites
                 if reads_primary_locations[read_acc].flag == 0:
@@ -784,6 +785,7 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
                 all_splice += 1
 
                 read_splice_letters.append( donor + str("-") + acceptor )
+                read_splice_choords.append( str(start_sp) + str("-") + str(stop_sp) )
                 # print(read_splice_sites)
                 total_individual_in_data += 2
                 total_pairs_in_data += 1
@@ -836,12 +838,14 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
                 total_transcript_no_splices += 1                
                 read_no_splices = 1
 
-        read_annotation = namedtuple('Annotation', ['tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices', "donor_acceptors", "transcript_fsm_id" ])
+        read_annotation = namedtuple('Annotation', ['tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices', "donor_acceptors", "donor_acceptors_choords", "transcript_fsm_id" ])
         if read_splice_letters:
             donor_acceptors = ":".join([str(item) for item in read_splice_letters])
+            donor_acceptors_choords = ":".join([str(item) for item in read_splice_choords])
+
         else: 
             donor_acceptors = "NA"
-        read_annotations[read_acc] = read_annotation( len(all_reads_splice_sites[read_acc][chr_id]), read_sm_junctions, read_nic_junctions, read_fsm, read_nic, read_ism, read_nnc, read_no_splices, donor_acceptors, transcript_fsm_id )
+        read_annotations[read_acc] = read_annotation( len(all_reads_splice_sites[read_acc][chr_id]), read_sm_junctions, read_nic_junctions, read_fsm, read_nic, read_ism, read_nnc, read_no_splices, donor_acceptors, donor_acceptors_choords, transcript_fsm_id )
                 # print("FSM!!")
     # print(annotated_ref_isoforms[chr_id])
     # print( tuple(all_reads_splice_sites[read_acc][chr_id]))
