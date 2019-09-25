@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # RUN scripts e.g. as:   ./run_full_experiment.sh 100000 /Users/kxs624/Documents/workspace/isONcorrect/  /Users/kxs624/tmp/ISONCORRECT/SIMULATED_DATA/ /Users/kxs624/Downloads/chr6_ensemble.fa chr6_test  /Users/kxs624/Documents/workspace/isONclust/ 2
-
+# or for SIRV:  ./run_full_experiment.sh 1000 /Users/kxs624/Documents/workspace/isONcorrect/  /Users/kxs624/tmp/ISONCORRECT/SIMULATED_DATA/ /Users/kxs624/Documents/workspace/isONcorrect/test_data/sirv_transcriptome.fasta sirv_test  /Users/kxs624/Documents/workspace/isONclust/ 2
 
 depth=$1 
 inbase=$2
@@ -34,9 +34,9 @@ original_reads_mappings=$outbase/"original_"$depth".sam"
 
 
 results_file=$outbase/"results_"$depth".csv"
-# echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","subs","ins","del","switch","abundance"$'\n' > $results_file
 plot_file=$outbase/"summary"
 
+echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","subs","ins","del","switch","abundance"$'\n' > $results_file
 
 # Remove redundant
 database_filtered=$outbase/transcriptsfiltered.fa
@@ -54,13 +54,13 @@ mv $outbase/$depth/reads.fq_filtered.fq $outbase/$depth/reads.fq
 
 Cluster with isONclust      
 rm -rf $outbase/$depth/isonclust/sorted.fastq
-echo python $isonclust_dir/isONclust --fastq $outbase/$depth/reads.fq --outfolder $outbase/$depth/isonclust/ --k 13 --w 25 --q 6.0 --t $cores
-python $isonclust_dir/isONclust --fastq $outbase/$depth/reads.fq --outfolder $outbase/$depth/isonclust/ --k 13 --w 25 --q 6.0 --t 2 #&> /dev/null            
-python $isonclust_dir/isONclust write_fastq --clusters $outbase/$depth/isonclust/final_clusters.tsv --fastq $outbase/$depth/reads.fq --outfolder $outbase/$depth/isonclust/fastq --N 10  #&> /dev/null            
+echo python $isonclust_dir/isONclust --fastq $outbase/$depth/reads.fq --outfolder $outbase/$depth/isonclust/ --k 13 --w 20 --q 4.0 --t $cores
+python $isonclust_dir/isONclust --fastq $outbase/$depth/reads.fq --outfolder $outbase/$depth/isonclust/ --k 13 --w 20 --q 4.0 --t 2 #&> /dev/null            
+python $isonclust_dir/isONclust write_fastq --clusters $outbase/$depth/isonclust/final_clusters.tsv --fastq $outbase/$depth/reads.fq --outfolder $outbase/$depth/isonclust/fastq --N 1  #&> /dev/null            
 ###########################
 
 # Correct reads with isONcorrect
-python $isoncorrect_dir/run_isoncorrect --keep_old --t $cores --fastq_folder $outbase/$depth/isonclust/fastq  --outfolder $outbase/$depth/isoncorrect/ --k 7 --w 10 --xmax 80 --exact_instance_limit 100  # &> /dev/null            
+python $isoncorrect_dir/run_isoncorrect --keep_old --t $cores --fastq_folder $outbase/$depth/isonclust/fastq  --outfolder $outbase/$depth/isoncorrect/ --set_w_dynamically  # &> /dev/null            
 ###############################
 
 
