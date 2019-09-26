@@ -51,7 +51,7 @@ def get_subsamples(transcript_cov):
         large_enough_cov = [tr_id for tr_id in transcript_cov.keys() if len(transcript_cov[tr_id]) >= subsample_size]
         sampled_tr_id = random.choice(large_enough_cov)
         subset = random.sample(transcript_cov[sampled_tr_id], subsample_size)
-        subsamples[subsample_size] = subset
+        subsamples[subsample_size] = (sampled_tr_id, subset)
     return subsamples
 
 
@@ -74,30 +74,44 @@ def get_abundance_aligned_reads(sam_file):
 
 def main(args):
     transcript_cov, amgiguous_primary = get_abundance_aligned_reads(args.alignments)
+
+    subsamples = get_subsamples(transcript_cov)
+    fastq = { acc : (seq,qual) for acc, (seq,qual) in readfq(open(args.fastq, 'r'))}
+    ref_fastq = { acc : seq for acc, (seq,qual) in readfq(open(args.ref_fastq, 'r'))}
+    # print(fastq)
+    transcript_file = open(os.path.join(args.outfolder,'sampled_transcripts.fasta'), "w")
+
+    for cluster_size in subsamples:
+        outfile = open(os.path.join(args.outfolder, str(cluster_size) + '.fastq'), "w")
+        tr_id, sampled_reads = subsamples[cluster_size]
+        transcript_file.write(">{0}\n{1}\n".format(tr_id, ref_fastq[tr_id]))
+        for acc in sampled_reads:
+            seq, qual = fastq[acc]
+            outfile.write("@{0}\n{1}\n+\n{2}\n".format(tr_id + '_' + acc, seq, qual))
+        outfile.close()
+    transcript_file.close()
+
+    outfile_coverage = open(os.path.join(args.outfolder, 'aligned_coverage.csv'), "w")
+    outfile_coverage.write("transcript,type,depth\n")
+
     for tr_id, set_of_reads in sorted(transcript_cov.items(), key= lambda x: len(x[1]), reverse=True ):
         print(tr_id, 'coverage:', len(set_of_reads))
-
+        outfile_coverage.write("{0},{1},{2}\n".format(tr_id, 'unambiguous', len(set_of_reads)))
+    
     print("Total aligned unamgiguously:", len(transcript_cov))
 
     for tr_id, set_of_reads in sorted(amgiguous_primary.items(), key= lambda x: len(x[1]), reverse=True ):        
         print(tr_id, "Number ambiguous:", len(set_of_reads))
+        outfile_coverage.write("{0},{1},{2}\n".format(tr_id, 'ambiguous', len(set_of_reads)))
 
-    subsamples = get_subsamples(transcript_cov)
-    fastq = { acc : (seq,qual) for acc, (seq,qual) in readfq(open(args.fastq, 'r'))}
-    # print(fastq)
-    for cluster_size in subsamples:
-        outfile = open(os.path.join(args.outfolder, str(cluster_size) + '.fastq'), "w")
-        for acc in subsamples[cluster_size]:
-            seq, qual = fastq[acc]
-            outfile.write("@{0}\n{1}\n+\n{2}\n".format(acc, seq, qual))
-        outfile.close()
-
+    outfile_coverage.close()
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser("Parses alignments and subsamples a fastq file based on alignments.")
     parser.add_argument('fastq', type=str, help='fastq file. ')
+    parser.add_argument('ref_fastq', type=str, help='fastq file. ')
     parser.add_argument('alignments', type=str, help='fastq file. ')
     parser.add_argument('outfolder', type=str, help='Fastq file. ')
     # parser.add_argument('max_size', type=int, help='Min size of reads.')
