@@ -26,7 +26,7 @@ results_file=$outbase/"results.csv"
 summary_file=$outbase/"summary.csv"
 plot_file=$outbase/"summary"
 
-echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","subs","ins","del","switch","abundance"$'\n' > $results_file
+echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","subs","ins","del"$'\n' > $results_file
 
 # # align original reads with minimap2 
 original_reads_mapped=$outbase/original_reads.sam
@@ -45,47 +45,53 @@ original_reads_mapped=$outbase/original_reads.sam
 for id in $(seq 1 1 1)    
 do 
     mkdir -p $outbase/$id/fastq
-    # python $experiment_dir/subsample_reads.py $original_reads $inbase/test_data/sirv_transcriptome.fasta $original_reads_mapped $outbase/$id/fastq
+    python $experiment_dir/subsample_reads.py $original_reads $inbase/test_data/sirv_transcriptome.fasta $original_reads_mapped $outbase/$id/fastq > /dev/null
     sampled_transcripts=$outbase/$id/fastq/sampled_transcripts.fasta
-    for depth in 3 #5 10 20 50 100 200 500
+    for depth in 3 #5 10 # 20 50 100 200 500
     do
-        fastq_in=$outbase/$id/fastq/$depth.fastq
-        # fastq2fasta -i $fastq_in -o $outbase/$id/fastq/$depth.fasta > /dev/null
-        fasta_in=$outbase/$id/fastq/$depth.fasta
+        echo
+        echo $id,$depth
+        reads=$outbase/$id/fastq/$depth
+        fastq2fasta -i $reads.fastq -o $outbase/$id/fastq/$depth.fasta &> /dev/null
+
 
         original_eval_out=$outbase/$id/$depth/original/evaluation
-        minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $fasta_in  > $fasta_in.sam
-        python $eval_dir/evaluate_simulated_reads.py $fasta_in $sampled_transcripts  $original_eval_out --deal_with_ties > /dev/null
+        mkdir -p $original_eval_out
+        minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $reads.fasta  > $reads.sam 2>/dev/null
+        python $experiment_dir/get_error_rates.py $sampled_transcripts  $reads.sam $original_eval_out/results.csv 
 
         for k_param in 7 # 8 9
         do
             for window in 0 #1 2 
             do
+
                 w_param=$(( $k_param + $window ))
                 corrected_approximate=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/approximate/
                 eval_out=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/approximate/evaluation
-                python $inbase/isONcorrect3 --fastq $fastq_in  --outfolder $corrected_approximate --k $k_param --w $w_param  &> /dev/null            
-                minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_approximate/corrected_reads.fastq  > $corrected_approximate/corrected_reads.sam
-                python $eval_dir/evaluate_simulated_reads.py  $corrected_approximate/corrected_reads.fastq  $sampled_transcripts $eval_out --deal_with_ties > /dev/null
+                mkdir -p $eval_out
+                python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_approximate --k $k_param --w $w_param  &> /dev/null            
+                minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_approximate/corrected_reads.fastq  > $corrected_approximate/corrected_reads.sam 2>/dev/null
+                python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_approximate/corrected_reads.sam $eval_out/results.csv 
                 
-                echo -n  $id,approx,$depth,$k_param,$w_param,&& head -n 1 $eval_out/summary.csv 
-                echo -n  $id,approx,$depth,$k_param,$w_param, >> $summary_file && head -n 1 $eval_out/summary.csv >> $summary_file
+                # echo -n  $id,approx,$depth,$k_param,$w_param,&& head -n 1 $eval_out/summary.csv 
+                # echo -n  $id,approx,$depth,$k_param,$w_param, >> $summary_file && head -n 1 $eval_out/summary.csv >> $summary_file
                 awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$w_param  '{if (NR!=1) {print awk_id",approx,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file
 
                 
                 corrected_exact=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/
                 eval_out=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/evaluation
-                python $inbase/isONcorrect3 --fastq $fastq_in  --outfolder $corrected_exact --k $k_param --w $w_param --exact   &> /dev/null            
-                minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_exact/corrected_reads.fastq  > $corrected_exact/corrected_reads.sam
-                python $eval_dir/evaluate_simulated_reads.py  $corrected_exact/corrected_reads.fastq  $sampled_transcripts  $eval_out --deal_with_ties > /dev/null
+                mkdir -p $eval_out
+                python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_exact --k $k_param --w $w_param --exact  &> /dev/null            
+                minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_exact/corrected_reads.fastq  > $corrected_exact/corrected_reads.sam 2>/dev/null
+                python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_exact/corrected_reads.sam  $eval_out/results.csv 
                 
-                echo -n  $id,exact,$depth,$k_param,$w_param,&& head -n 1 $eval_out/summary.csv 
-                echo -n  $id,exact,$depth,$k_param,$w_param, >> $summary_file && head -n 1 $eval_out/summary.csv >> $summary_file
+                # echo -n  $id,exact,$depth,$k_param,$w_param,&& head -n 1 $eval_out/summary.csv 
+                # echo -n  $id,exact,$depth,$k_param,$w_param, >> $summary_file && head -n 1 $eval_out/summary.csv >> $summary_file
                 awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$w_param '{if (NR!=1) {print awk_id",exact,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file
 
 
-                echo -n  $id,original,$depth,$k_param,$w_param,&& head -n 1 $original_eval_out/summary.csv
-                echo -n  $id,original,$depth,$k_param,$w_param, >> $summary_file && head -n 1 $original_eval_out/summary.csv  >> $summary_file
+                # echo -n  $id,original,$depth,$k_param,$w_param,&& head -n 1 $original_eval_out/summary.csv
+                # echo -n  $id,original,$depth,$k_param,$w_param, >> $summary_file && head -n 1 $original_eval_out/summary.csv  >> $summary_file
                 awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$w_param '{if (NR!=1) {print awk_id",original,"awk_depth","awk_k","awk_w","$0}}'  $original_eval_out/results.csv >> $results_file
 
             done
