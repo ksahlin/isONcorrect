@@ -26,7 +26,7 @@ results_file=$outbase/"results.csv"
 summary_file=$outbase/"summary.csv"
 plot_file=$outbase/"summary"
 
-echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","subs","ins","del"$'\n' > $results_file
+echo -n  "id","type","Depth","k","w","q_acc","r_acc","total_errors","error_rate","subs","ins","del"$'\n' > $results_file
 
 # # align original reads with minimap2 
 original_reads_mapped=$outbase/original_reads.sam
@@ -42,12 +42,12 @@ original_reads_mapped=$outbase/original_reads.sam
 # python $inbase/run_isoncorrect --keep_old --t $cores --fastq_folder $outbase/fastq  --outfolder $outbase/isoncorrect/ --set_w_dynamically  # &> /dev/null            
 ###############################
 
-for id in $(seq 1 1 1)    
+for id in $(seq 1 1 5)    
 do 
     mkdir -p $outbase/$id/fastq
     python $experiment_dir/subsample_reads.py $original_reads $inbase/test_data/sirv_transcriptome.fasta $original_reads_mapped $outbase/$id/fastq > /dev/null
     sampled_transcripts=$outbase/$id/fastq/sampled_transcripts.fasta
-    for depth in 3 #5 10 # 20 50 100 200 500
+    for depth in 3 5 10 20 50 # 100 200 500
     do
         echo
         echo $id,$depth
@@ -60,9 +60,9 @@ do
         minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $reads.fasta  > $reads.sam 2>/dev/null
         python $experiment_dir/get_error_rates.py $sampled_transcripts  $reads.sam $original_eval_out/results.csv 
 
-        for k_param in 7 # 8 9
+        for k_param in 7 8 9
         do
-            for window in 0 #1 2 
+            for window in 0 1 2 
             do
 
                 w_param=$(( $k_param + $window ))
@@ -99,6 +99,10 @@ do
     done
 done
 
+python $experiment_dir/plot_error_rates.py $results_file $plot_file"_tot.pdf" error_rate
+python $experiment_dir/plot_error_rates.py $results_file $plot_file"_subs.pdf" subs
+python $experiment_dir/plot_error_rates.py $results_file $plot_file"_ind.pdf" ins
+python $experiment_dir/plot_error_rates.py $results_file $plot_file"_del.pdf" del
 
 # # Evaluate indiviually corrected clusters    
 # for folder in $(find $outbase/$depth/isoncorrect/*  -type d); #c_id in $(seq 0 1 1000) $"${FILES[@]}"
@@ -132,7 +136,7 @@ done
 #     done
 # #######################################
 
-# python $experiment_dir/plot_error_rates.py $results_file $plot_file"_tot.pdf" error_rate
+
 # python $experiment_dir/plot_abundance_diff.py $results_file $plot_file"_abundance_diff.pdf" 
 
 
@@ -140,9 +144,7 @@ done
 
 
 
-# python $experiment_dir/plot_error_rates.py $summary_file $plot_file"_subs.pdf" Substitutions
-# python $experiment_dir/plot_error_rates.py $summary_file $plot_file"_ind.pdf" Insertions
-# python $experiment_dir/plot_error_rates.py $summary_file $plot_file"_del.pdf" Deletions
+
 
 
 # # # Evaluate error rates OLD
