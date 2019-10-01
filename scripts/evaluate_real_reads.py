@@ -566,14 +566,14 @@ def get_splice_sites(cigar_tuples, first_exon_start, minimum_annotated_intron, a
     
     for i, (l,t) in enumerate(cigar_tuples):
         if t == "D":
-            if l >= minimum_annotated_intron -1:
-                # print("long del", l)
-                splice_start = ref_pos
-                ref_pos += l
-                splice_stop = ref_pos
-                splice_sites.append( (splice_start, splice_stop) )
+            # if l >= minimum_annotated_intron -1:
+            #     # print("long del", l)
+            #     splice_start = ref_pos
+            #     ref_pos += l
+            #     splice_stop = ref_pos
+            #     splice_sites.append( (splice_start, splice_stop) )
                 
-            else:
+            # else:
                 if (ref_pos, ref_pos + l) in annotated_chr_coordinate_pairs:
                     splice_sites.append( (ref_pos, ref_pos + l) )
                     print("HEERE")
