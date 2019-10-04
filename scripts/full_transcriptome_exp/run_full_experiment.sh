@@ -60,7 +60,7 @@ python $isonclust_dir/isONclust write_fastq --clusters $outbase/$depth/isonclust
 ###########################
 
 # Correct reads with isONcorrect
-python $isoncorrect_dir/run_isoncorrect --keep_old --t $cores --fastq_folder $outbase/$depth/isonclust/fastq  --outfolder $outbase/$depth/isoncorrect/ --set_w_dynamically  # &> /dev/null            
+python $isoncorrect_dir/run_isoncorrect  --t $cores --fastq_folder $outbase/$depth/isonclust/fastq  --outfolder $outbase/$depth/isoncorrect/ --set_w_dynamically # &> /dev/null            
 ###############################
 
 

@@ -63,6 +63,9 @@ def main(args):
         if read_fastq_file.endswith(".fastq"): 
             cl_id = read_fastq_file.split(".")[0]
             outfolder = os.path.join(args.outfolder, cl_id)
+            if int(cl_id) % args.split_mod != args.residual:
+                print('skipping {0} because args.split_mod:{1} and args.residual:{2} set.'.format(cl_id, args.split_mod, args.residual))
+                continue
             # print(cl_id, outfolder, read_fastq_file, directory)
             fastq_file_path = os.path.join(os.fsdecode(directory), read_fastq_file)
             # print(fastq_file_path)
@@ -127,6 +130,10 @@ if __name__ == '__main__':
     parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
 
+    parser.add_argument('--split_mod', type=int, default=1, help='Splits cluster ids in n (default=1) partitions by computing residual of cluster_id divided by n.\
+                                                                    this parameter needs to be combined with  --residual to take effect.')
+    parser.add_argument('--residual', type=int, default=0, help='Run isONcorrect on cluster ids with residual (default 0) of cluster_id divided by --split_mod. ')
+
     # parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
     #                                                              not to be used for clusters with over ~500 reads)')
   
@@ -137,6 +144,9 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit()
     
+    if args.split_mod > 1:
+        assert args.residual < args.split_mod 
+
     if args.outfolder and not os.path.exists(args.outfolder):
         os.makedirs(args.outfolder)
 
