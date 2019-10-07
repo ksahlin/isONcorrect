@@ -106,8 +106,8 @@ def unique_fsm(input_csv, outfolder):
     orig = indata[indata['read_type']=='original']
     corr = indata[indata['read_type']=='corrected']
 
-    print('orig:', orig['transcript_fsm_id'].nunique())
-    print('corr', corr['transcript_fsm_id'].nunique())
+    # print('orig:', orig['transcript_fsm_id'].nunique())
+    # print('corr', corr['transcript_fsm_id'].nunique())
     # print(set(orig['transcript_fsm_id'].unique()))
     # print(set(corr['transcript_fsm_id'].unique()))
 
@@ -116,11 +116,17 @@ def unique_fsm(input_csv, outfolder):
 
     all_fsm_orig = set(orig['transcript_fsm_id'].unique())
     all_fsm_corr = set(corr['transcript_fsm_id'].unique())
-    print(all_fsm_orig - all_fsm_corr)
-    print(all_fsm_corr - all_fsm_orig)
+    print('In orig but not in corr', all_fsm_orig - all_fsm_corr)
+    print('In corr but not in orig', all_fsm_corr - all_fsm_orig)
+
+    all_fsm_orig = {x for x in all_fsm_orig if x==x}
+    all_fsm_corr = {x for x in all_fsm_corr if x==x}
+    print('Total unique in orig', len(all_fsm_orig))
+    print('Total unique in corr', len(all_fsm_corr))
     # print(orig_reads)
     fsm_read_absent = set()
-    fsm_read_overcorrected = set()
+    fsm_transcripts_overcorrected = set()
+    fsm_reads_overcorrected = 0
     for read in orig_reads:
         if read not in corr_reads:
             # print('here')
@@ -130,14 +136,17 @@ def unique_fsm(input_csv, outfolder):
         else:
             if orig_reads[read] not in all_fsm_corr:
                 # print('orig read not in corr and FSM not found in corr')
-                fsm_read_overcorrected.add(orig_reads[read])
+                fsm_transcripts_overcorrected.add(orig_reads[read])
+                fsm_reads_overcorrected += 1
 
 
     print('Original reads was a FSM but was not in the input data of the corrected reads:',len(fsm_read_absent))
-    print('Original reads was a FSM but probably overcorrected/modified in the corrected reads (BAD):', len(fsm_read_overcorrected))
+    print('Unique transcripts overcorrected/modified (bad):', len(fsm_transcripts_overcorrected))
+    print('Number of original reads that were FSM but not FSM in the corrected reads (bad):', fsm_reads_overcorrected)
 
     fsm_read_absent = set()
-    fsm_read_overcorrected = set()
+    fsm_transcripts_overcorrected = set()
+    fsm_reads_corrected = 0
     for read in corr_reads:
         if read not in orig_reads:
             # print('here')
@@ -147,11 +156,13 @@ def unique_fsm(input_csv, outfolder):
         else:
             if corr_reads[read] not in all_fsm_orig:
                 # print('orig read not in corr and FSM not found in corr')
-                fsm_read_overcorrected.add(corr_reads[read])
+                fsm_transcripts_overcorrected.add(corr_reads[read])
+                fsm_reads_corrected += 1
 
 
     print('Corrected reads was a FSM and was not aligned at all in the original data (Good):', len(fsm_read_absent))
-    print('Corrected reads was a FSM but did not align as FSM in original data (Good):', len(fsm_read_overcorrected))
+    print('Unique transcripts had FSM in corrected but not in original data (Good):', len(fsm_transcripts_overcorrected))
+    print('Corrected reads was a FSM but did not align as FSM in original data (Good):', fsm_reads_corrected)
 
 
 
