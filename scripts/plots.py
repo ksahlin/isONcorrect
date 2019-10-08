@@ -235,7 +235,7 @@ def main(args):
     flatui = ["#2ecc71", "#e74c3c"] # https://chrisalbon.com/python/data_visualization/seaborn_color_palettes/
     sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
-    # total_error_rate2(args.input_csv, args.outfolder)
+    total_error_rate2(args.input_csv, args.outfolder)
     # error_rate_per_cluster_size(args.input_csv, args.outfolder)
     # total_error_rate(args.input_csv, args.outfolder)
     # splice_site_classification_plot(args.input_csv, args.outfolder)

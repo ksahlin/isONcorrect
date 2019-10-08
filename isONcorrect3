@@ -220,7 +220,72 @@ def get_context_offset(vector, k):
             break
     return offset
 
-from modules import kmer_analysis
+# from modules import kmer_analysis
+
+def get_contexts(alignment_matrix, k_size):
+    ref_aln = alignment_matrix["ref"]
+    contexts_per_pos = {}
+    for i_tmp in range(len(ref_aln)):
+        nuc_obs = 0
+        j_tmp = i_tmp
+        p1 = get_context_offset(ref_aln[:i_tmp][::-1], k_size)
+        p2 = get_context_offset(ref_aln[i_tmp + 1:], k_size)
+        # print(p1,p2)
+        # print(ref_aln)
+        contexts_per_pos[i_tmp] = (i_tmp - p1, i_tmp + p2)
+    return contexts_per_pos
+
+def is_substring(seq, set_of_seqs):
+    for s in set_of_seqs:
+        if seq in s or s in seq:
+            return True
+    return False
+
+def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, variant_threshold):
+    nr_columns = len(alignment_matrix["ref"])
+    FCM = [defaultdict(int) for j in range(nr_columns)] # frequency context matrix
+    # reads_included_in_contexts = {}
+    for acc, aln_list in alignment_matrix.items():
+        if acc == "ref":
+            continue
+        for j in range(len(aln_list)):
+            context = tuple( aln_list[contexts_per_pos[j][0] : contexts_per_pos[j][1]] )
+            variant = aln_list[j]
+            FCM[j][ (variant, context) ] += 1
+
+    alternative_contexts = [set() for j in range(nr_columns)]
+    for j in range(len(FCM)):
+        eligible_contexts = [ (variant, tuple([c for c in cn]) , dep) for (variant,cn), dep in FCM[j].items() if dep > variant_threshold]
+        if len(eligible_contexts) == 0:
+            pass
+        if len(eligible_contexts) == 1:
+            # print(eligible_contexts)
+            # print(eligible_contexts[0])
+            alternative_contexts[j].add(eligible_contexts[0])
+        else:
+            eligible_contexts_hcomp = {}
+            for variant, aln_seq, depth in eligible_contexts:
+                seq = "".join([c for c in aln_seq if c != '-'])
+                seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
+                if seq_hpol_comp not in eligible_contexts_hcomp:
+                    if not is_substring(seq_hpol_comp,eligible_contexts_hcomp):
+                        eligible_contexts_hcomp[seq_hpol_comp] = (variant, depth, aln_seq)
+                elif depth > eligible_contexts_hcomp[seq_hpol_comp][1]:
+                    eligible_contexts_hcomp[seq_hpol_comp] = (variant, depth, aln_seq)
+
+
+            for seq_tmp_hcomp, (variant, depth, aln_seq) in eligible_contexts_hcomp.items():
+                alternative_contexts[j].add( (variant, aln_seq, depth) )
+
+            if len(alternative_contexts[j]) > 1:
+                print([ ("".join([c for c in cn if c != '-']) , dep) for (variant,cn), dep in FCM[j].items() if dep > variant_threshold], alternative_contexts[j])
+
+    # print([ ("".join([c for c in cn if c != '-']) , dep) for cn, dep in FCM[50].items() if ])
+    # sys.exit()
+    # for i_tmp in range(len(ref_aln)):
+    #     depths_per_pos[i_tmp] = defaultdict(int)
+    #     for 
+    return alternative_contexts
 
 def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200):
     weight = len(curr_best_seqs)
@@ -261,170 +326,6 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
         # sys.exit()
         spoa_ref = spoa_ref_mod
     
-    # kmer_abundance_per_pos, DBG = kmer_analysis.get_kmer_read_pos_on_ref(curr_best_seqs, spoa_ref, k_size)
-    
-    # DBG = kmer_analysis.get_kmer_read_pos_on_ref(curr_best_seqs, spoa_ref, k_size)
-    
-    # if spoa_ref[:k_size] != start_anchor or spoa_ref[-k_size:] != stop_anchor:
-    #     print("ENDS NOT EQUAL")
-    #     print(start_anchor, stop_anchor)
-    #     print(spoa_ref)
-    #     print()
-
-    # solve_w_dbg = False
-    # for i in range(len(spoa_ref)-k_size+1):
-    #     kmer = spoa_ref[i:i+k_size] 
-    #     if kmer in DBG:
-    #         pass
-    #         # print(DBG[kmer], kmer)
-    #     else:
-    #         # print(kmer, 0)
-    #         solve_w_dbg = True
-    # if solve_w_dbg:
-    #     correction = kmer_analysis.traverse(DBG, start_anchor, stop_anchor, max_depth = 100)
-    #     spoa_abundances = [ DBG[spoa_ref[i:i+k_size]]  for i in range(len(spoa_ref)-k_size+1) ]
-    #     print(spoa_abundances)
-    #     print()
-    #     print(spoa_ref, "spoa", len(curr_best_seqs))
-    #     print(correction, "kmer_path", len(curr_best_seqs))
-    #     print()
-    #     for i, (q_id, (seq, qual, pos1, pos2)) in enumerate(curr_best_seqs.items()):
-    #         print(seq)
-    #     print()
-    #     if correction:
-    #         # pass
-    #         spoa_ref = correction
-    #     # sys.exit()
-
-    # ### get low supported regions within spoa ref
-    # non_supported_regions = []
-    # support = True
-    # last_support = -1
-    # for i in kmer_abundance_per_pos:
-    #     if kmer_abundance_per_pos[i]:
-    #         kmer_max, max_ab = max(kmer_abundance_per_pos[i].items(), key= lambda x: x[1])
-    #         if spoa_ref[i:i+k_size] == kmer_max: #in kmer_abundance_per_pos[i]:
-    #             if support == False:
-    #                 if last_support == -1:
-    #                     non_supported_regions.append( (0, i, start_anchor, kmer_max) )
-    #                 else:                    
-    #                     non_supported_regions.append( (last_support, i, last_kmer, kmer_max) )
-    #             last_support = i
-    #             last_kmer = kmer_max
-    #             support = True
-    #         else:
-    #             support = False
-    #     else:
-    #         support = False
-
-    # if support == False and last_support < i -1:
-    #     non_supported_regions.append( (last_support, i, last_kmer, stop_anchor) ) # the very end
-
-    #     #     if max_ab >= kmer_abundance_per_pos[i][spoa_ref[i:i+k_size]] and spoa_ref[i:i+k_size] != kmer_max:
-    #     #         supported_regions.append(i)
-    #     #         print("Kmer present in DB but lower coverage, at position:", i, spoa_ref[i:i+k_size], kmer_abundance_per_pos[i][spoa_ref[i:i+k_size]], kmer_max, max_ab  )
-    #     # else:
-    #     #     supported_regions.append(i)
-    #     #     # print("Kmer not even present", i, spoa_ref[i:i+k_size], kmer_max, max_ab  )
-    # if non_supported_regions:
-    #     corr_spoa_ref = []
-    #     print()
-    #     # print(non_supported_regions, len(spoa_ref))
-    #     for start, stop, kmer1, kmer2 in non_supported_regions:
-    #         # print(kmer1, kmer2)
-    #         # print(spoa_ref[start:start+k_size], spoa_ref[stop:stop+k_size])
-    #         # print(spoa_ref)
-
-    #         if start > 0 and stop < len(spoa_ref)-k_size:
-    #             assert kmer1 in spoa_ref[start:start+k_size] and kmer2 in spoa_ref[stop:stop+k_size]
-    #         correction = kmer_analysis.traverse(DBG, kmer1, kmer2, max_depth = 40)
-    #         if correction:
-    #             corr_spoa_ref.append((start, stop, correction))
-
-    #     # corr_spoa_ref = "".join([])
-    #     print()
-    #     if corr_spoa_ref:
-    #         tmp = [seq[0 : corr_spoa_ref[0][0]] ]
-    #         for cnt, (start_, stop_, seq_segment) in enumerate(corr_spoa_ref):
-    #             tmp.append(seq_segment)
-    #             # print(tmp)
-    #             # if math.fabs( (stop_ - start_) - len(seq_segment)) > 20:
-    #             #     print("Structural correction", stop_ - start_, len(seq_segment))
-    #             #     print(seq_segment)
-    #             #     print(seq[start_: stop_])
-
-    #             if cnt == len(corr_spoa_ref) - 1:
-    #                 tmp.append( seq[ stop_ + k_size : ] )
-    #             else:
-    #                 # print(cnt)
-    #                 tmp.append( seq[ stop_ + k_size: corr_spoa_ref[cnt+1][0]] )
-                            
-    #         spoa_corr = "".join([s for s in tmp])
-    #     # try take a maximum supported path from anchor to anchor
-
-    #         print()
-    #         print(start_anchor, stop_anchor)
-    #         print(spoa_corr)
-    #         print(spoa_ref)
-    #         print()
-    #         spoa_ref = spoa_corr
-
-    ##############################################################################
-    #############################################################################
-    #############################################################################
-
-    # for i in kmer_abundance_per_pos:
-    #     if not kmer_abundance_per_pos[i]:
-    #         print("Empty?")
-    #         for j in kmer_abundance_per_pos:
-    #             print(j,  kmer_abundance_per_pos[j])
-    #             print(spoa_ref, len(spoa_ref))
-    #             sys.exit()
-    #     else:    
-    #         kmer_max, max_ab = max(kmer_abundance_per_pos[i].items(), key= lambda x: x[1])
-
-    #         if kmer_max == spoa_ref[i:i+k_size]:
-    #             if corrected_kmer_context_path:
-    #                 print(len(spoa_path), len(corrected_kmer_context_path), spoa_path,corrected_kmer_context_path)
-    #                 assert len(spoa_path) == len(corrected_kmer_context_path)
-    #                 is_valid_path = all([k[1:] == k_fw[:-1] for k,k_fw in zip(corrected_kmer_context_path[:-1], corrected_kmer_context_path[1:]) ])
-    #                 if is_valid_path:
-    #                     for k_tmp in corrected_kmer_context_path:
-    #                         corr_spoa.append(k_tmp)
-    #                 else:
-    #                     print("NOT VALID PATH")
-    #                     for k_tmp in spoa_path:
-    #                         corr_spoa.append(k_tmp)
-                
-    #             corr_spoa.append(kmer_max)
-    #             corrected_kmer_context_path = [] # reset local correction
-    #             spoa_path = []
-    #         else:
-    #             spoa_path.append(spoa_ref[i:i+k_size])
-    #             if spoa_ref[i:i+k_size] in kmer_abundance_per_pos[i]:
-    #                 if max_ab > kmer_abundance_per_pos[i][spoa_ref[i:i+k_size]]:
-    #                     print("Kmer present in DB but lower coverage, at position:", i, spoa_ref[i:i+k_size], kmer_abundance_per_pos[i][spoa_ref[i:i+k_size]], kmer_max, max_ab  )
-    #                     corrected_kmer_context_path.append(kmer_max)
-    #                 else:
-    #                   pass  
-    #             else:
-    #                 print("Kmer not even present", i, spoa_ref[i:i+k_size], kmer_max, max_ab  )
-    #                 corrected_kmer_context_path.append(kmer_max)
-
-    # corr_spoa = corr_spoa[0] + "".join([km[-1] for km in corr_spoa[1:] ])
-    # print(spoa_ref, len(spoa_ref),i)
-    # print(corr_spoa, len(corr_spoa), i)
-    # print()
-    # print()
-    #############################################
-
-    # print(kmer_abundance_per_pos)
-    # sys.exit()
-
-    # print()
-    # print(spoa_ref)
-    #### TMP
-    #### TMP
     
     partition = {"ref" : (0, spoa_ref, spoa_ref, 1)}
     # partition = {"ref" : (0, r_seq, r_seq, 1)}
@@ -479,84 +380,121 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
 
     # TODO: potentially add context around substitutions here
     variant_threshold = max(5, len(curr_best_seqs) * v_depth_ratio_threshold)
-    # print(variant_threshold, len(curr_best_seqs), spoa_ref)
+    print(variant_threshold, len(curr_best_seqs), spoa_ref)
 
+    contexts_per_pos = get_contexts(alignment_matrix, k_size)
+    alternative_refs = get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, variant_threshold)
     ref_aln = alignment_matrix["ref"]
-    contexts_per_pos = {}
-    for i_tmp in range(len(ref_aln)):
-        nuc_obs = 0
-        j_tmp = i_tmp
-        p1 = get_context_offset(ref_aln[:i_tmp][::-1], k_size)
-        p2 = get_context_offset(ref_aln[i_tmp + 1:], k_size)
-        # print(p1,p2)
-        # print(ref_aln)
-        contexts_per_pos[i_tmp] = (i_tmp - p1, i_tmp + p2)
-
-        # print(i_tmp, p1, p2, ref_aln[i_tmp], ref_aln[i_tmp - p1: i_tmp + p2])
-    # sys.exit()
 
     for i, d in enumerate(PFM):
         # calculate reference context here the first thing we do from ref_aln
-        ref_nucl = alignment_matrix["ref"][i]
-        if ref_nucl != "-":
-            for q_id_tuple in alignment_matrix:
+        if len(alternative_refs[i]) > 1:
+            for q_id_tuple in alignment_matrix:    
                 if q_id_tuple == "ref":
                     continue
+
                 read_aln = alignment_matrix[q_id_tuple]
                 read_nucl = read_aln[i]
-                if read_nucl != "-" and read_nucl != ref_nucl:
-                    if variant_threshold <= d[read_nucl]:
-                        if ref_aln[contexts_per_pos[i][0]: i] == read_aln[contexts_per_pos[i][0]: i] and ref_aln[i+1: contexts_per_pos[i][1]] == read_aln[i+1: contexts_per_pos[i][1]]: # potential variant position
-                            other_corrections[q_id_tuple].append(read_nucl)
-                            # print("KEEPING HERE")
-                            # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
-                            # print(read_aln[contexts_per_pos[i][0]:contexts_per_pos[i][1]])
-                            # print(variant_threshold, len(curr_best_seqs), "actual ab:", d[read_nucl] )
-                            # print()
-                            # print()
-                        else:
-                            # print("FAILED CONTEXT")
-                            # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
-                            # print(read_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
-                            # print(variant_threshold, len(curr_best_seqs), read_nucl, ref_nucl, "actual ab:", d[read_nucl] )
-                            # print()
-                            # print()
-                            other_corrections[q_id_tuple].append(ref_nucl)
+                ref_nucl = alignment_matrix["ref"][i]
 
+                if read_nucl == ref_nucl:
+                    other_corrections[q_id_tuple].append(ref_nucl)
+                    # print(read_nucl, ref_nucl, [ (v, "".join([c for c in ref_tmp if c != '-']), dep) for (v, ref_tmp,dep) in  alternative_refs[i]])
+                    continue
+
+                
+                read_context =  tuple(read_aln[contexts_per_pos[i][0] : contexts_per_pos[i][1]])
+                
+                min_ed = 1000
+                ref_to_correct_to = read_nucl
+                corr_d = 0
+                for (variant, ref_context, depth) in alternative_refs[i]:
+                    print('read context:', read_context)
+                    print('ref context:', ref_context)
+                    if read_context == ref_context:
+                        other_corrections[q_id_tuple].append(read_nucl)
+                        print('Corr (identical) to', (variant, "".join([c for c in ref_context if c != '-']), depth), [ (v, "".join([c for c in ref_tmp if c != '-']), dep) for (v, ref_tmp,dep) in  alternative_refs[i]])
+                        break
+
+                    ed = edlib_alignment( "".join([c for c in ref_context if c != '-']), "".join([c for c in read_context if c != '-']), 1000)
+                    if ed < min_ed:
+                        min_ed = ed
+                        ref_to_correct_to = variant
+                        corr_d = depth
+                other_corrections[q_id_tuple].append(ref_to_correct_to)
+                print()
+                print( [ (v, "".join([c for c in ref_tmp if c != '-']), dep) for (v, ref_tmp,dep) in  alternative_refs[i]] )
+                print('Correcting to:',ref_to_correct_to, min_ed, corr_d, "".join([c for c in read_context if c != '-']))
+                print()
+        else:
+
+            ref_nucl = alignment_matrix["ref"][i]
+            if ref_nucl != "-":
+                for q_id_tuple in alignment_matrix:
+                    if q_id_tuple == "ref":
+                        continue
+                    read_aln = alignment_matrix[q_id_tuple]
+                    read_nucl = read_aln[i]
+                    if read_nucl != "-" and read_nucl != ref_nucl:
+                        if variant_threshold <= d[read_nucl]:
+                            if ref_aln[contexts_per_pos[i][0]: i] == read_aln[contexts_per_pos[i][0]: i] and ref_aln[i+1: contexts_per_pos[i][1]] == read_aln[i+1: contexts_per_pos[i][1]]: # potential variant position
+                                other_corrections[q_id_tuple].append(read_nucl)
+                                # print("KEEPING HERE")
+                                # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
+                                # print(read_aln[contexts_per_pos[i][0]:contexts_per_pos[i][1]])
+                                # print(variant_threshold, len(curr_best_seqs), "actual ab:", d[read_nucl] )
+                                # print()
+                                # print()
+                            else:
+                                # print("FAILED CONTEXT")
+                                # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
+                                # print(read_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
+                                # print(variant_threshold, len(curr_best_seqs), read_nucl, ref_nucl, "actual ab:", d[read_nucl] )
+                                # print()
+                                # print()
+                                other_corrections[q_id_tuple].append(ref_nucl)
+
+                        else:
+                            other_corrections[q_id_tuple].append(ref_nucl)
+                    # elif read_nucl != ref_nucl
                     else:
                         other_corrections[q_id_tuple].append(ref_nucl)
-                # elif read_nucl != ref_nucl
-                else:
-                    other_corrections[q_id_tuple].append(ref_nucl)
+
+
 
     # for i, d in enumerate(PFM):
+    #     # calculate reference context here the first thing we do from ref_aln
     #     ref_nucl = alignment_matrix["ref"][i]
+    #     if ref_nucl != "-":
+    #         for q_id_tuple in alignment_matrix:
+    #             if q_id_tuple == "ref":
+    #                 continue
+    #             read_aln = alignment_matrix[q_id_tuple]
+    #             read_nucl = read_aln[i]
+    #             if read_nucl != "-" and read_nucl != ref_nucl:
+    #                 if variant_threshold <= d[read_nucl]:
+    #                     if ref_aln[contexts_per_pos[i][0]: i] == read_aln[contexts_per_pos[i][0]: i] and ref_aln[i+1: contexts_per_pos[i][1]] == read_aln[i+1: contexts_per_pos[i][1]]: # potential variant position
+    #                         other_corrections[q_id_tuple].append(read_nucl)
+    #                         # print("KEEPING HERE")
+    #                         # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
+    #                         # print(read_aln[contexts_per_pos[i][0]:contexts_per_pos[i][1]])
+    #                         # print(variant_threshold, len(curr_best_seqs), "actual ab:", d[read_nucl] )
+    #                         # print()
+    #                         # print()
+    #                     else:
+    #                         # print("FAILED CONTEXT")
+    #                         # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
+    #                         # print(read_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
+    #                         # print(variant_threshold, len(curr_best_seqs), read_nucl, ref_nucl, "actual ab:", d[read_nucl] )
+    #                         # print()
+    #                         # print()
+    #                         other_corrections[q_id_tuple].append(ref_nucl)
 
-    #     n_max, count_max = max(d.items(), key = lambda x: x[1])
-    #     if n_max == "-" and n_max != ref_nucl:
-    #         # c, n_max2 = max([(c,n) for n,c in d.items() if n != "-"])
-    #         if h_pol_counts[i][0]*d[ref_nucl] > count_max:
-    #             n_max = ref_nucl #h_pol_counts[i][1 ]#n_max2 
-    #             # count_max = c
-    #             print("Changed - to", n_max, "hpol length:", h_pol_counts[i][0], "ref count:", d[ref_nucl], "prev max:", count_max )
-
-    #     # n_max = alignment_matrix["ref"][i]
-    #     # count_max = d[ref_nucl]
-    #     variant_threshold = max(2, count_max * v_depth_ratio_threshold) # at least two reads have to have variant to avoid degenerate case
-    #     for q_id_tuple in alignment_matrix:
-    #         if q_id_tuple == "ref":
-    #             continue
-
-    #         read_nucl = alignment_matrix[q_id_tuple][i]
-    #         if read_nucl != "-" and read_nucl != n_max:
-    #             if variant_threshold <= d[read_nucl]: # potential variant position
-    #                 other_corrections[q_id_tuple].append(read_nucl)
+    #                 else:
+    #                     other_corrections[q_id_tuple].append(ref_nucl)
+    #             # elif read_nucl != ref_nucl
     #             else:
-    #                 other_corrections[q_id_tuple].append(n_max)
-    #         # elif read_nucl != ref_nucl
-    #         else:
-    #             other_corrections[q_id_tuple].append(n_max)
-
+    #                 other_corrections[q_id_tuple].append(ref_nucl)
 
 
     other_corrections_final = defaultdict(list)
