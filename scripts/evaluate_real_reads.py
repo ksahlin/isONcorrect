@@ -982,7 +982,9 @@ def main(args):
     if len(refs) == 0:
         refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
 
+    print('Corrected')
     corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, corrected_splice_sites, refs, corr_primary_locations)
+    print('Original')
     orig_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, original_splice_sites, refs, orig_primary_locations)
     reads_to_cluster_size = get_cluster_sizes(args.cluster_file, reads)
 
