@@ -440,7 +440,7 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
                         ref_to_correct_to = variant
                         corr_d = depth
                         # other_corrections[q_id_tuple].append(read_nucl)
-                        print('Corr (identical) to', (variant, "".join([c for c in ref_context if c != '-']), depth), [ (v, "".join([c for c in ref_tmp if c != '-']), dep) for (v, ref_tmp,dep) in  alternative_refs[i]])
+                        # print('Corr (identical) to', (variant, "".join([c for c in ref_context if c != '-']), depth), [ (v, "".join([c for c in ref_tmp if c != '-']), dep) for (v, ref_tmp,dep) in  alternative_refs[i]])
                         break
 
                     ed = edlib_alignment( "".join([c for c in ref_context if c != '-']), "".join([c for c in read_context if c != '-']), 1000)
@@ -450,10 +450,10 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
                         corr_d = depth
                 
                 other_corrections[q_id_tuple].append(ref_to_correct_to)
-                print()
-                print( [ (v, "".join([c for c in ref_tmp if c != '-']), dep) for (v, ref_tmp,dep) in  alternative_refs[i]] )
-                print('Correcting to:',ref_to_correct_to, min_ed, corr_d, "".join([c for c in read_context if c != '-']))
-                print()
+                # print()
+                # print( [ (v, "".join([c for c in ref_tmp if c != '-']), dep) for (v, ref_tmp,dep) in  alternative_refs[i]] )
+                # print('Correcting to:',ref_to_correct_to, min_ed, corr_d, "".join([c for c in read_context if c != '-']))
+                # print()
         else:
 
             ref_nucl = alignment_matrix["ref"][i]

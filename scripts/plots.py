@@ -100,6 +100,14 @@ def number_splices_fsm(input_csv, outfolder):
     plt.close()
 
 
+from collections import defaultdict
+
+def transpose_count(dct):
+    d = defaultdict(int)
+    for key1, value in dct.items():
+        d[value]  += 1
+    return d
+
 def unique_fsm(input_csv, outfolder):
 
     indata = pd.read_csv(input_csv)
@@ -144,6 +152,15 @@ def unique_fsm(input_csv, outfolder):
     print('both_fsm_different', len(both_fsm_different))
     print('corr_fsm_orig_nan', len (corr_fsm_orig_nan))
     print('orig_fsm_corr_nan', len(orig_fsm_corr_nan))
+    print()
+    reads_per_transcript_orig = transpose_count(orig_reads)
+    reads_per_transcript_corr = transpose_count(corr_reads)
+    print("transcript_id,FSM_orig,FSM_corr")
+    for transcript_id in set(all_fsm_orig | all_fsm_corr):
+        print(transcript_id,reads_per_transcript_orig[transcript_id], reads_per_transcript_corr[transcript_id])
+
+    print("sum",sum([reads_per_transcript_orig[tr_id] for tr_id in set(all_fsm_orig | all_fsm_corr)]), sum([reads_per_transcript_corr[tr_id] for tr_id in set(all_fsm_orig | all_fsm_corr)]) )
+
     # fsm_read_absent = set()
     # fsm_transcripts_overcorrected = set()
     # fsm_reads_overcorrected = 0
