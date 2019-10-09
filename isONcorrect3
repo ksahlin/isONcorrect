@@ -241,45 +241,70 @@ def is_substring(seq, set_of_seqs):
             return True
     return False
 
-def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, variant_threshold):
+# from numpy import np
+
+def sep_function(alignment_matrix, FCM, contexts_per_pos):
+    # A = np.array(l for l in alignment_matrix.values())
+
+    for acc, aln_list in alignment_matrix.items():
+        aln_tuple = tuple(aln_list)
+        if acc == "ref":
+            continue
+        prev_context_start, prev_context_stop = -1,-1
+        prev_context = []
+        for j in range(len(aln_tuple)):
+            context_start, context_stop = contexts_per_pos[j][0], contexts_per_pos[j][1]
+            if context_start == prev_context_start and context_stop == prev_context_stop:
+                context = prev_context
+            else:
+                context = tuple( aln_tuple[context_start :context_stop] )
+            
+            variant = aln_tuple[j]
+            FCM[j][ (variant, context) ] += 1
+            prev_context_start, prev_context_stop = context_start, context_stop
+            prev_context = context
+    # return FCM
+
+
+def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_threshold):
     nr_columns = len(alignment_matrix["ref"])
     FCM = [defaultdict(int) for j in range(nr_columns)] # frequency context matrix
     # reads_included_in_contexts = {}
-    for acc, aln_list in alignment_matrix.items():
-        if acc == "ref":
-            continue
-        for j in range(len(aln_list)):
-            context = tuple( aln_list[contexts_per_pos[j][0] : contexts_per_pos[j][1]] )
-            variant = aln_list[j]
-            FCM[j][ (variant, context) ] += 1
+    sep_function(alignment_matrix, FCM, contexts_per_pos)
+
+
 
     alternative_contexts = [set() for j in range(nr_columns)]
     for j in range(len(FCM)):
-        eligible_contexts = [ (variant, tuple([c for c in cn]) , dep) for (variant,cn), dep in FCM[j].items() if dep > variant_threshold]
-        if len(eligible_contexts) == 0:
+        eligible_contexts = [ (variant, tuple([c for c in cn]) , dep) for (variant,cn), dep in FCM[j].items() if dep > context_threshold]
+        # filter FCM to only positions with more than one variants
+        if len(eligible_contexts) == 0 or len( {v for (v, ref_tmp, dep) in eligible_contexts}) == 1:
+            # print(j)
             pass
-        if len(eligible_contexts) == 1:
-            # print(eligible_contexts)
-            # print(eligible_contexts[0])
-            alternative_contexts[j].add(eligible_contexts[0])
+        # elif len(eligible_contexts) == 1:
+        #     # print(eligible_contexts)
+        #     # print(eligible_contexts[0])
+        #     alternative_contexts[j].add(eligible_contexts[0])
         else:
             eligible_contexts_hcomp = {}
             for variant, aln_seq, depth in eligible_contexts:
                 seq = "".join([c for c in aln_seq if c != '-'])
                 seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
+                # print(variant,seq, seq_hpol_comp, depth)
                 if seq_hpol_comp not in eligible_contexts_hcomp:
-                    if not is_substring(seq_hpol_comp,eligible_contexts_hcomp):
-                        eligible_contexts_hcomp[seq_hpol_comp] = (variant, depth, aln_seq)
+                    # if not is_substring(seq_hpol_comp,eligible_contexts_hcomp):
+                    eligible_contexts_hcomp[seq_hpol_comp] = (variant, depth, aln_seq)
                 elif depth > eligible_contexts_hcomp[seq_hpol_comp][1]:
                     eligible_contexts_hcomp[seq_hpol_comp] = (variant, depth, aln_seq)
+            # print(j, eligible_contexts_hcomp)
 
-
-            for seq_tmp_hcomp, (variant, depth, aln_seq) in eligible_contexts_hcomp.items():
-                alternative_contexts[j].add( (variant, aln_seq, depth) )
+            if len(eligible_contexts_hcomp) > 1:
+                for seq_tmp_hcomp, (variant, depth, aln_seq) in eligible_contexts_hcomp.items():
+                    alternative_contexts[j].add( (variant, aln_seq, depth) )
 
             if len(alternative_contexts[j]) > 1:
-                print([ ("".join([c for c in cn if c != '-']) , dep) for (variant,cn), dep in FCM[j].items() if dep > variant_threshold], alternative_contexts[j])
-
+                print("MAAAAAAAAAADE IT", [ (j,variant,"".join([c for c in cn if c != '-']) , dep) for (variant,cn), dep in FCM[j].items() if dep > context_threshold], alternative_contexts[j])
+        # BUUUG no alternative refs
     # print([ ("".join([c for c in cn if c != '-']) , dep) for cn, dep in FCM[50].items() if ])
     # sys.exit()
     # for i_tmp in range(len(ref_aln)):
@@ -287,7 +312,7 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, variant_thr
     #     for 
     return alternative_contexts
 
-def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200):
+def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.1, context_depth_ratio_threshold = 0.05, max_seqs_to_spoa = 200):
     weight = len(curr_best_seqs)
     # r_seq = curr_best_seqs["curr_read"][0]
     # print(r_seq)
@@ -380,15 +405,16 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
 
     # TODO: potentially add context around substitutions here
     variant_threshold = max(5, len(curr_best_seqs) * v_depth_ratio_threshold)
-    print(variant_threshold, len(curr_best_seqs), spoa_ref)
+    context_threshold = max(5, len(curr_best_seqs) * context_depth_ratio_threshold)
+    print(variant_threshold, context_threshold, len(curr_best_seqs), spoa_ref)
 
     contexts_per_pos = get_contexts(alignment_matrix, k_size)
-    alternative_refs = get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, variant_threshold)
+    alternative_refs = get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_threshold)
     ref_aln = alignment_matrix["ref"]
 
     for i, d in enumerate(PFM):
         # calculate reference context here the first thing we do from ref_aln
-        if len(alternative_refs[i]) > 1:
+        if len(alternative_refs[i]) > 1 and len( {v for (v, ref_tmp, dep) in alternative_refs[i]}) > 1:
             for q_id_tuple in alignment_matrix:    
                 if q_id_tuple == "ref":
                     continue
@@ -409,10 +435,11 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
                 ref_to_correct_to = read_nucl
                 corr_d = 0
                 for (variant, ref_context, depth) in alternative_refs[i]:
-                    print('read context:', read_context)
-                    print('ref context:', ref_context)
                     if read_context == ref_context:
-                        other_corrections[q_id_tuple].append(read_nucl)
+                        min_ed = 0
+                        ref_to_correct_to = variant
+                        corr_d = depth
+                        # other_corrections[q_id_tuple].append(read_nucl)
                         print('Corr (identical) to', (variant, "".join([c for c in ref_context if c != '-']), depth), [ (v, "".join([c for c in ref_tmp if c != '-']), dep) for (v, ref_tmp,dep) in  alternative_refs[i]])
                         break
 
@@ -421,6 +448,7 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
                         min_ed = ed
                         ref_to_correct_to = variant
                         corr_d = depth
+                
                 other_corrections[q_id_tuple].append(ref_to_correct_to)
                 print()
                 print( [ (v, "".join([c for c in ref_tmp if c != '-']), dep) for (v, ref_tmp,dep) in  alternative_refs[i]] )
@@ -746,7 +774,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         #         stored_calculated_regions[q_id][pos1] = len(curr_best_seqs)
     return tmp_cnt, read_complexity_cnt
 
-def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold, max_seqs_to_spoa):
+def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold, context_depth_ratio_threshold,  max_seqs_to_spoa):
     corr_seq = []
     # print(opt_indicies)
     other_reads_corrected_regions = defaultdict(list)
@@ -767,7 +795,7 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
         if isinstance(instance, str): # already corrected
             best_corr = instance
         else:
-            best_corr, other_corrections = get_best_corrections(instance, k_size, outfolder, v_depth_ratio_threshold, max_seqs_to_spoa) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
+            best_corr, other_corrections = get_best_corrections(instance, k_size, outfolder, v_depth_ratio_threshold, context_depth_ratio_threshold, max_seqs_to_spoa) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
             for other_r_id, other_corr_regions in other_corrections.items():
                 for region in other_corr_regions:
                     other_reads_corrected_regions[other_r_id].append(region)
@@ -885,6 +913,8 @@ def main(args):
     start = time()
     corrected_reads = {}
     v_depth_ratio_threshold = args.T
+    context_depth_ratio_threshold = args.C
+
     for k_size in range(args.k, args.k +1):
         # DBG, position_DBG = create_augmented_reference.kmer_counter(reads, k_size)
         # print("done createng DB")
@@ -1020,7 +1050,7 @@ def main(args):
                     # sys.exit()
                     opt_indicies = solve_WIS(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
                     # print(opt_indicies)
-                    corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold, max_seqs_to_spoa)
+                    corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold, context_depth_ratio_threshold, max_seqs_to_spoa)
                     
                     for other_r_id, corrected_regions in other_reads_corrected_regions.items():
                         for corr_region in corrected_regions:
@@ -1032,6 +1062,8 @@ def main(args):
                 eprint("{0},{1}".format(r_id,corrected_seq))
 
                 # eval_sim2(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
+                # if r_id == 10:
+                #     sys.exit()
 
     eprint("tot_before:", tot_errors_before)
     eprint("tot_after:", sum(tot_errors_after.values()), tot_errors_after)
@@ -1055,7 +1087,8 @@ if __name__ == '__main__':
     parser.add_argument('--w', type=int, default=10, help='Window size')
     parser.add_argument('--xmin', type=int, default=14, help='Upper interval length')
     parser.add_argument('--xmax', type=int, default=80, help='Lower interval length')
-    parser.add_argument('--T', type=float, default=0.2, help='Minimum fraction keeping substitution')
+    parser.add_argument('--T', type=float, default=0.1, help='Minimum fraction keeping substitution')
+    parser.add_argument('--C', type=float, default=0.05, help='Minimum fraction of keeping alternative refernece contexts')
     parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
                                                                  not to be used for clusters with over ~500 reads)')
     parser.add_argument('--max_seqs_to_spoa', type=int, default=200,  help='Maximum number of seqs to spoa')
