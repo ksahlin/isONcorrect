@@ -225,9 +225,12 @@ def total_error_rate2(input_csv, outfolder):
     plt.legend(prop={'size': 12})
 
     orig = indata[indata['read_type']=='original']
-    # print(orig.median(axis = 0))
+    print(orig.median(axis = 0))
+    print(orig.sum(axis = 0))
+
     corr = indata[indata['read_type']=='corrected']
-    # print(corr.median(axis = 0))
+    print(corr.median(axis = 0))
+    print(corr.sum(axis = 0))
 
     plt.savefig(os.path.join(outfolder, "total_error_rate2.eps"))
     plt.savefig(os.path.join(outfolder, "total_error_rate2.pdf"))
