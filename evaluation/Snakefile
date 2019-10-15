@@ -182,7 +182,7 @@ rule evaluate:
             original_reads_aligned =  rules.align_original_reads_minimap2.output.original_reads_aligned,
             corrected_reads_aligned =  rules.align_corrected_reads_minimap2.output.corrected_reads_aligned,
             clusters_tsv = rules.isONclust.output.clusters,
-            gtf_annotation = config["ANNOTATION"] + "/{dataset}.gtf"
+            gtf_annotation = config["ANNOTATION"] + "/{dataset}.gtf"  # drosophila v97 gtf annotation
     output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}/results.csv"
     run:
         if wildcards.dataset == "SIRV":

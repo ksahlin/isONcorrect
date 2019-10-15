@@ -7,7 +7,7 @@
         "mem" : "128G",
         "Nodes" : 1,
         "runtime" : "3-00:00:00",
-        "jobname" : "pipline",
+        "jobname" : "pipeline",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
         "exclude" : "c[4,6-7,8-16]"
