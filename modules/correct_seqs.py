@@ -684,7 +684,7 @@ def PFM_from_msa(partition):
 #     return S_prime_partition
 
 
-from scipy.stats import poisson
+# from scipy.stats import poisson
 def correct_from_msa(partition, BFM, pos_cutoffs = [], block_matrix = {}, block_majority_vector = [], homopol_correction_vector = []):
     nr_columns = len(BFM)
     S_prime_partition = {}

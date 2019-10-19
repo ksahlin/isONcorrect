@@ -21,7 +21,7 @@ def readfq(fp): # this is a generator function
                     last = l[:-1] # save this line
                     break
         if not last: break
-        name, seqs, last = last[1:].split()[0], [], None
+        name, seqs, last = last[1:].replace("_", " ").split()[0], [], None
         for l in fp: # read the sequence
             if l[0] in '@+>':
                 last = l[:-1]
@@ -47,22 +47,16 @@ def readfq(fp): # this is a generator function
 
 def main(args):
 
-    reads = { acc : (seq, qual) for acc, (seq,qual) in readfq(open(args.fastq, 'r')) if len(seq) >= args.min_length }
-    reads_sampled = random.sample(list(reads.keys()), args.nr_reads)
-
     outfile = open(args.outfile, "w")
-    for acc in reads_sampled:
-        seq, qual = reads[acc]
+    for acc, (seq,qual) in readfq(open(args.fastq, 'r')):
         outfile.write("@{0}\n{1}\n+\n{2}\n".format(acc, seq, qual))
 
     outfile.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Plot p-minimizers shared.")
-    parser.add_argument('--fastq', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
-    parser.add_argument('--outfile', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
-    parser.add_argument('--nr_reads', type=int, default = 1000000, help='Nr reads')
-    parser.add_argument('--min_length', type=int, default = 200, help='minimum read length')
+    parser.add_argument('fastq', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
+    parser.add_argument('outfile', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
     
     args = parser.parse_args()
 
