@@ -747,7 +747,7 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
     #     print(tr)
     canonical_splice = 0
     all_splice = 0
-    print(ref_seqs.keys())
+    # print(ref_seqs.keys())
     for read_acc in all_reads_splice_sites:
         read_annotations[read_acc] = {}
         total_reads += 1
@@ -910,6 +910,8 @@ def print_exact_alignments(reads, corr_reads):
     print("TOT structural diffs:", tot)
 
 def main(args):
+    refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
+    print(refs.keys())
     if args.load_database:
         print()
         print("LOADING FROM PRECOMPUTED DATABASE")
@@ -929,10 +931,9 @@ def main(args):
     corr_reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
     orig_primary_locations = decide_primary_locations(args.orig_sam, args)
     corr_primary_locations = decide_primary_locations(args.corr_sam, args)
-    # sys.exit()
-    refs = {}
+
+
     if args.align:
-        refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
         corr, corr_detailed = get_error_rate_stats_per_read(corr_primary_locations, corr_reads, annotated_splice_coordinates_pairs, args, reference = refs)
         orig, orig_detailed = get_error_rate_stats_per_read(orig_primary_locations, reads, annotated_splice_coordinates_pairs, args, reference = refs)
     else: 
@@ -980,8 +981,7 @@ def main(args):
     minimum_annotated_intron = max(minimum_annotated_intron,  args.min_intron)
     corrected_splice_sites = get_read_candidate_splice_sites(corr_primary_locations, minimum_annotated_intron, annotated_splice_coordinates_pairs)
     original_splice_sites = get_read_candidate_splice_sites(orig_primary_locations, minimum_annotated_intron, annotated_splice_coordinates_pairs)
-    if len(refs) == 0:
-        refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
+        
 
     print('Corrected')
     corr_splice_results = get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordinates, annotated_splice_coordinates_pairs, corrected_splice_sites, refs, corr_primary_locations)
