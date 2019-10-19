@@ -146,8 +146,16 @@ rule combine_isoncorrect:
             shell('cat {f} >> {output.corrected_reads_fastq}')
 
 
+rule split_accessions_corr:
+    input: original_reads = rules.combine_isoncorrect.output.corrected_reads_fastq
+    output: original_reads_split_accessions = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/isONcorrect_split_accs.fq" 
+
+    run:
+        eval_dir = config["ROOT_IN"] + "/scripts/"
+        shell("python {eval_dir}/split_accessions.py {input.original_reads} {output.original_reads_split_accessions}")
+
 rule align_corrected_reads_minimap2:
-    input: corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq
+    input: corrected_reads = rules.split_accessions_corr.output.original_reads_split_accessions
     output: corrected_reads_aligned = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/isONcorrect.sam"
     run:
         if wildcards.dataset == "SIRV":
@@ -161,8 +169,17 @@ rule align_corrected_reads_minimap2:
             shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k13 -w4 {ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
 
 
-rule align_original_reads_minimap2:
+rule split_accessions_orig:
     input: original_reads = rules.subsample.output.subsampled_fastq
+    output: original_reads_split_accessions =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}_split_accs.fq" 
+
+    run:
+        eval_dir = config["ROOT_IN"] + "/scripts/"
+        shell("python {eval_dir}/split_accessions.py {input.original_reads} {output.original_reads_split_accessions}")
+
+
+rule align_original_reads_minimap2:
+    input: original_reads = rules.split_accessions_orig.output.original_reads_split_accessions
     output: original_reads_aligned =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}.sam"
     run:
         if wildcards.dataset == "SIRV":
