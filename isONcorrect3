@@ -15,7 +15,7 @@ from collections import defaultdict
 
 import edlib
 
-from modules import correct_seqs, create_augmented_reference, align, help_functions
+from modules import create_augmented_reference, help_functions, correct_seqs #,align
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -241,7 +241,7 @@ def is_substring(seq, set_of_seqs):
             return True
     return False
 
-import numpy as np
+# import numpy as np
 # import numba
 # from numba import jit
 # @jit(nopython=True)
@@ -265,7 +265,12 @@ def test_numba(A, contexts_per_pos, FCM, n):
         # print(unq_cnt)
         for j in range(len(unq_a)):
             context = tuple(unq_a[j])
-            FCM[i][ (context[variant_pos], context ) ] = unq_cnt[j]
+            # print(j,len(unq_a), len(unq_cnt), variant_pos, context )
+            try:
+                FCM[i][ (context[variant_pos], context ) ] = unq_cnt[j]
+            except:
+                pass
+
 
 def sep_function(alignment_matrix, FCM, contexts_per_pos):
     for acc, aln_list in alignment_matrix.items():
@@ -292,7 +297,6 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
     # A = np.array([l for l in alignment_matrix.values()])
     # n = len(A[0])
     # FCM2 = [defaultdict(int) for j in range(n)] # frequency context matrix
-
     # test_numba(A, contexts_per_pos, FCM2, n)
 
 
@@ -425,31 +429,31 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     other_corrections = defaultdict(list)
     # read_aln = alignment_matrix["curr_read"]
 
-    # get homopolymer adjustment
-    h_tmp = [(len(list(_)), ch ) for ch, _ in itertools.groupby(spoa_ref) ]
-    # print(h_tmp)
-    # print(spoa_ref)
-    h_tmp2 = []
-    h_tmp2 = [(c, ch, i) for (c, ch) in h_tmp for i in range(c)]
-    # print(h_tmp2)
-    assert len(h_tmp2) == len(spoa_ref)
-    curr_pos = 0
-    h_pol_counts = []
-    n_cols = len(h_tmp2)
-    for nucl in alignment_matrix["ref"]:
-        # print(curr_pos, len(h_tmp2))
-        h_pol_counts.append(h_tmp2[min(n_cols - 1,curr_pos)])
-        if nucl != "-":
-            curr_pos += 1
-    # print(alignment_matrix["ref"])
-    # print(h_pol_counts)    
-    assert len(alignment_matrix["ref"]) == len(h_pol_counts)
+    # # get homopolymer adjustment
+    # h_tmp = [(len(list(_)), ch ) for ch, _ in itertools.groupby(spoa_ref) ]
+    # # print(h_tmp)
+    # # print(spoa_ref)
+    # h_tmp2 = []
+    # h_tmp2 = [(c, ch, i) for (c, ch) in h_tmp for i in range(c)]
+    # # print(h_tmp2)
+    # assert len(h_tmp2) == len(spoa_ref)
+    # curr_pos = 0
+    # h_pol_counts = []
+    # n_cols = len(h_tmp2)
+    # for nucl in alignment_matrix["ref"]:
+    #     # print(curr_pos, len(h_tmp2))
+    #     h_pol_counts.append(h_tmp2[min(n_cols - 1,curr_pos)])
+    #     if nucl != "-":
+    #         curr_pos += 1
+    # # print(alignment_matrix["ref"])
+    # # print(h_pol_counts)    
+    # assert len(alignment_matrix["ref"]) == len(h_pol_counts)
 
 
     # TODO: potentially add context around substitutions here
     variant_threshold = max(5, len(curr_best_seqs) * v_depth_ratio_threshold)
     context_threshold = max(5, len(curr_best_seqs) * v_depth_ratio_threshold) # max(5, len(curr_best_seqs) * context_depth_ratio_threshold)
-    print(variant_threshold, context_threshold, len(curr_best_seqs), spoa_ref)
+    # print(variant_threshold, context_threshold, len(curr_best_seqs), spoa_ref)
 
     contexts_per_pos = get_contexts(alignment_matrix, k_size)
     # alternative_refs = [set() for j in range(nr_columns)]
@@ -1169,12 +1173,12 @@ if __name__ == '__main__':
 
 
     # edlib_module = 'edlib'
-    parasail_module = 'parasail'
+    # parasail_module = 'parasail'
     # if edlib_module not in sys.modules:
     #     print('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment.'.format(edlib_module))
-    if parasail_module not in sys.modules:
-        eprint('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment!'.format(parasail_module))
-        sys.exit(1)
+    # if parasail_module not in sys.modules:
+    #     eprint('You have not imported the {0} module. Only performing clustering with mapping, i.e., no alignment!'.format(parasail_module))
+    #     sys.exit(1)
     if 100 < args.w or args.w < args.k:
         eprint('Please specify a window of size larger or equal to k, and smaller than 100.')
         sys.exit(1)

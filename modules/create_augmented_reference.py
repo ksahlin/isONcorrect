@@ -8,10 +8,10 @@ import tempfile
 from datetime import datetime 
 from sys import stdout
 
-import networkx as nx
+# import networkx as nx
 
 from collections import defaultdict
-import numpy as np
+# import numpy as np
 
 # Botonds DP
 def cutoff(x):
@@ -60,46 +60,46 @@ def longest_path_botond(dot_graph_path):
     return cons
 
 
-def longest_path(dot_graph_path):
-    G = nx.DiGraph()
-    for line in open(dot_graph_path, "r"):
-        if len(line.split("->")) == 2: # edge
-            n1, info = line.split("->")
-            n1 = n1.strip()
-            n2, info = info.strip().split("[")
-            n2 = n2.strip()
-            if "dotted" in info: # edge should not be created for substitutions 
-                continue  
-            elif "," not in info: # not in consensus path
-                weight = info.split("=")[1].strip().strip("]").strip('"')
-                # print("ok", weight)
-            else:
-                weight = info.split(",")[0].split("=")[1].strip().strip('"')
-                # print("bla", weight)
-            if int(weight) > 4:
-                # print(weight)
-                G.add_edge(n1, n2, weight=int(weight))
+# def longest_path(dot_graph_path):
+#     G = nx.DiGraph()
+#     for line in open(dot_graph_path, "r"):
+#         if len(line.split("->")) == 2: # edge
+#             n1, info = line.split("->")
+#             n1 = n1.strip()
+#             n2, info = info.strip().split("[")
+#             n2 = n2.strip()
+#             if "dotted" in info: # edge should not be created for substitutions 
+#                 continue  
+#             elif "," not in info: # not in consensus path
+#                 weight = info.split("=")[1].strip().strip("]").strip('"')
+#                 # print("ok", weight)
+#             else:
+#                 weight = info.split(",")[0].split("=")[1].strip().strip('"')
+#                 # print("bla", weight)
+#             if int(weight) > 4:
+#                 # print(weight)
+#                 G.add_edge(n1, n2, weight=int(weight))
 
-        elif "label" in line: # at node
-            node_id, info = line.split("[")
-            node_id = node_id.strip()
-            nucl = info.split(" - ")[1][0]
-            # print(node_id, nucl)
-            G.add_node(node_id, nucleotide=nucl)
+#         elif "label" in line: # at node
+#             node_id, info = line.split("[")
+#             node_id = node_id.strip()
+#             nucl = info.split(" - ")[1][0]
+#             # print(node_id, nucl)
+#             G.add_node(node_id, nucleotide=nucl)
 
-    # G = nx.drawing.nx_pydot.read_dot(dot_graph_path)
-    # print(G.edges(data=True))
-    # print(G.nodes(data=True))
-    order = list(nx.algorithms.dag.topological_sort(G))
-    # print([ [G[n][nbr]["weight"] for nbr in G.neighbors(n)] for n in order ])
-    # print(order)
-    longest_path = nx.algorithms.dag.dag_longest_path(G)
-    # print("longest path", [(i,n) for i,n in enumerate(longest_path)])
-    augmented_ref = "".join([ G.node[n]["nucleotide"] for n in longest_path])
-    # augmented_ref = "".join([ info["label"][-2] for n, info in G.nodes(data=True)])
-    print(augmented_ref)
-    print(len(augmented_ref))
-    return augmented_ref
+#     # G = nx.drawing.nx_pydot.read_dot(dot_graph_path)
+#     # print(G.edges(data=True))
+#     # print(G.nodes(data=True))
+#     order = list(nx.algorithms.dag.topological_sort(G))
+#     # print([ [G[n][nbr]["weight"] for nbr in G.neighbors(n)] for n in order ])
+#     # print(order)
+#     longest_path = nx.algorithms.dag.dag_longest_path(G)
+#     # print("longest path", [(i,n) for i,n in enumerate(longest_path)])
+#     augmented_ref = "".join([ G.node[n]["nucleotide"] for n in longest_path])
+#     # augmented_ref = "".join([ info["label"][-2] for n, info in G.nodes(data=True)])
+#     print(augmented_ref)
+#     print(len(augmented_ref))
+#     return augmented_ref
 
 
 def run_spoa_affine(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
