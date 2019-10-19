@@ -747,6 +747,7 @@ def get_splice_classifications(annotated_ref_isoforms, annotated_splice_coordina
     #     print(tr)
     canonical_splice = 0
     all_splice = 0
+    print(ref_seqs.keys())
     for read_acc in all_reads_splice_sites:
         read_annotations[read_acc] = {}
         total_reads += 1
