@@ -241,19 +241,28 @@ def is_substring(seq, set_of_seqs):
             return True
     return False
 
-# import numpy as np
+import numpy as np
 # import numba
 # from numba import jit
 # @jit(nopython=True)
-def test_numba(A, contexts_per_pos, FCM, n):
+def test_numba(A, contexts_per_pos, n, context_threshold):
+    FCM = [] # frequency context matrix
+
     prev_context_start, prev_context_stop = -1,-1
     prev_context = []
 
     for i in range(n):
+        eligible_contexts = []
         context_start, context_stop = contexts_per_pos[i][0], contexts_per_pos[i][1]
         variant_pos = i - context_start
         if context_start == prev_context_start and context_stop == prev_context_stop:
-            FCM[i] = FCM[i-1]
+            # use previous context and depths but shift variant position one forward
+            for v, cn, dep in FCM[i-1]:
+                # print(v, cn, dep, variant_pos, i, context_start)
+                eligible_contexts.append((cn[min(variant_pos, len(cn)-1)] ,cn, dep))
+            
+            FCM.append( eligible_contexts )
+            continue
         else:
             prev_context_start, prev_context_stop = context_start, context_stop
 
@@ -261,16 +270,54 @@ def test_numba(A, contexts_per_pos, FCM, n):
         b = np.ascontiguousarray(context).view(np.dtype((np.void, context.dtype.itemsize * context.shape[1])))
         unq_a, unq_cnt = np.unique(b, return_counts=True)
         unq_a = unq_a.view(context.dtype).reshape(-1, context.shape[1])
-        # print(unq_a)
-        # print(unq_cnt)
-        for j in range(len(unq_a)):
-            context = tuple(unq_a[j])
-            # print(j,len(unq_a), len(unq_cnt), variant_pos, context )
-            try:
-                FCM[i][ (context[variant_pos], context ) ] = unq_cnt[j]
-            except:
-                pass
+        # print( unq_a)
+        # print('OK', unq_cnt)         
+        # print('Unique Values along with occurrence Count')
+        # Iterate over the zip object
+        for (j, count) in sorted(enumerate(unq_cnt), key = lambda x: x[1], reverse=True):
+            # print(count)
+            if count > max(context_threshold/10, 5):
+                # print("im here")
+                context = tuple(unq_a[j].tolist())
+                # try:
+                # print('lol', context, variant_pos, count)
+                variant = context[min(variant_pos, len(context)-1)] #context[variant_pos]
+                eligible_contexts.append( (variant, context, count ) )
+                # FCM.[i][ (variant, context ) ] = count
+                # except:
+                #     pass
+            else: 
+                # print('Breaking', count)
+                break
+        FCM.append(eligible_contexts)
+    return FCM
 
+
+def sep_function_test(alignment_matrix, FCM, contexts_per_pos):
+    for acc, aln_tuple in alignment_matrix.items():
+        # aln_tuple = tuple(aln_list)
+        if acc == "ref":
+            continue
+        subtuples = [ (j, aln_tuple[contexts_per_pos[j][0] :contexts_per_pos[j][1]]) for j in range(1, len(aln_tuple)) if contexts_per_pos[j][0] != contexts_per_pos[j-1][0] or contexts_per_pos[j][1] != contexts_per_pos[j-1][1] ]
+        for j in range(len(aln_tuple)):
+            FCM[j][ (aln_tuple[j], subtuples[j]) ] += 1
+
+    #     prev_context_start, prev_context_stop = -1,-1
+    #     prev_context = tuple()
+    #     for j in range(len(aln_tuple)):
+    #         context_start, context_stop = contexts_per_pos[j][0], contexts_per_pos[j][1]
+    #         if context_start == prev_context_start and context_stop == prev_context_stop:
+    #             context = prev_context
+    #         else:
+    #             context =  aln_tuple[context_start :context_stop] #prev_context
+    #             # context =  aln_tuple[context_start :context_stop] #prev_context
+    #             # context = "".join([s for s in aln_tuple[context_start :context_stop]]) #tuple( aln_tuple[context_start :context_stop] )
+            
+    #         variant = aln_tuple[j]
+    #         FCM[j][ (variant, context) ] += 1
+    #         prev_context_start, prev_context_stop = context_start, context_stop
+    #         prev_context = context
+    # # return FCM
 
 def sep_function(alignment_matrix, FCM, contexts_per_pos):
     for acc, aln_list in alignment_matrix.items():
@@ -292,13 +339,14 @@ def sep_function(alignment_matrix, FCM, contexts_per_pos):
             prev_context = context
     # return FCM
 
+# def sep_function_only_str(partition):
+#     FCM = [defaultdict(int) for j in range(nr_columns)] # frequency context matrix
+
+#     for (q_id, pos1, pos2) in partition = 
+#     (res["editDistance"], ref_alignment, read_alignment, 1)
+#     return FCM
 
 def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_threshold):
-    # A = np.array([l for l in alignment_matrix.values()])
-    # n = len(A[0])
-    # FCM2 = [defaultdict(int) for j in range(n)] # frequency context matrix
-    # test_numba(A, contexts_per_pos, FCM2, n)
-
 
     ref_aln = alignment_matrix["ref"]
     nr_columns = len(ref_aln)
@@ -307,10 +355,37 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
     # reads_included_in_contexts = {}
     sep_function(alignment_matrix, FCM, contexts_per_pos)
 
+    # FCM2 = [defaultdict(int) for j in range(nr_columns)] # frequency context matrix    
+    # sep_function_test(alignment_matrix, FCM2, contexts_per_pos)
+
+    A = np.array([l for l in alignment_matrix.values()])
+    n = len(A[0])
+    FCM3 = test_numba(A, contexts_per_pos, n, context_threshold)
+    # print(len(FCM), len(FCM3))
+    assert len(FCM) == len(FCM3)
 
     alternative_contexts = [set() for j in range(nr_columns)]
     for j in range(len(FCM)):
         eligible_contexts = [ (variant, tuple([c for c in cn]) , dep) for (variant,cn), dep in FCM[j].items() if dep > max(context_threshold/10, 5)] # remove very low abundant noise before calculation
+        eligible_contexts2 = FCM3[j]
+        if len(eligible_contexts2) != len(eligible_contexts):
+            print(eligible_contexts)
+            print(eligible_contexts2)
+            print(max(context_threshold/10, 5))
+            print( ref_aln[j-9:j+9])
+        assert len(eligible_contexts2) == len(eligible_contexts)
+        if set( [(v,cn) for v,cn,d in eligible_contexts]) !=  set( [(v,cn) for v,cn,d in eligible_contexts2]):
+            print("Different" )
+            print(j,eligible_contexts)
+            print(j,eligible_contexts2)
+            print(len(FCM), ref_aln[j], ref_aln)
+            print()
+        else:
+            print('Same')
+
+        # print(eligible_contexts)
+        # print(FCM3[j])
+        # print()
         # filter FCM to only positions with more than one variants
         if len(eligible_contexts) == 0 or len( {v for (v, ref_tmp, dep) in eligible_contexts}) == 1:
             # print(j)
@@ -413,6 +488,7 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
         read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, seq, spoa_ref)
         partition[(q_id, pos1, pos2)] = (res["editDistance"], ref_alignment, read_alignment, 1)
         # print(read_alignment, ref_alignment)
+    # sep_function_only_str(partition)
     alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
     # print(alignment_matrix)
     # for r_tmp, aln_list in alignment_matrix.items():
