@@ -227,9 +227,9 @@ def get_contexts(alignment_matrix, k_size):
     contexts_per_pos = []
     for i_tmp in range(len(ref_aln)):
         nuc_obs = 0
-        j_tmp = i_tmp
+        # j_tmp = i_tmp
         p1 = get_context_offset(ref_aln[:i_tmp][::-1], k_size)
-        p2 = get_context_offset(ref_aln[i_tmp + 1:], k_size)
+        p2 = get_context_offset(ref_aln[i_tmp + 1:], k_size) + 1
         # print(p1,p2)
         # print(ref_aln)
         contexts_per_pos.append((i_tmp - p1, i_tmp + p2))
@@ -259,8 +259,10 @@ def test_numba(A, contexts_per_pos, n, context_threshold):
             # use previous context and depths but shift variant position one forward
             for v, cn, dep in FCM[i-1]:
                 # print(v, cn, dep, variant_pos, i, context_start)
-                eligible_contexts.append((cn[min(variant_pos, len(cn)-1)] ,cn, dep))
-            
+                # print(len(cn), variant_pos, i, "window",context_start, context_stop, n)
+                # eligible_contexts.append((cn[min(variant_pos, len(cn)-1)] ,cn, dep))
+                eligible_contexts.append((cn[variant_pos] ,cn, dep))
+
             FCM.append( eligible_contexts )
             continue
         else:
@@ -281,7 +283,8 @@ def test_numba(A, contexts_per_pos, n, context_threshold):
                 context = tuple(unq_a[j].tolist())
                 # try:
                 # print('lol', context, variant_pos, count)
-                variant = context[min(variant_pos, len(context)-1)] #context[variant_pos]
+                # variant = context[min(variant_pos, len(context)-1)] #context[variant_pos]
+                variant = context[variant_pos] #context[variant_pos]
                 eligible_contexts.append( (variant, context, count ) )
                 # FCM.[i][ (variant, context ) ] = count
                 # except:
@@ -322,8 +325,8 @@ def sep_function_test(alignment_matrix, FCM, contexts_per_pos):
 def sep_function(alignment_matrix, FCM, contexts_per_pos):
     for acc, aln_list in alignment_matrix.items():
         aln_tuple = tuple(aln_list)
-        if acc == "ref":
-            continue
+        # if acc == "ref":
+        #     continue
         prev_context_start, prev_context_stop = -1,-1
         prev_context = []
         for j in range(len(aln_tuple)):
@@ -346,42 +349,39 @@ def sep_function(alignment_matrix, FCM, contexts_per_pos):
 #     (res["editDistance"], ref_alignment, read_alignment, 1)
 #     return FCM
 
-def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_threshold):
+def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_threshold, disable_numpy):
 
     ref_aln = alignment_matrix["ref"]
     nr_columns = len(ref_aln)
-
-    FCM = [defaultdict(int) for j in range(nr_columns)] # frequency context matrix
-    # reads_included_in_contexts = {}
-    sep_function(alignment_matrix, FCM, contexts_per_pos)
-
-    # FCM2 = [defaultdict(int) for j in range(nr_columns)] # frequency context matrix    
-    # sep_function_test(alignment_matrix, FCM2, contexts_per_pos)
-
-    A = np.array([l for l in alignment_matrix.values()])
-    n = len(A[0])
-    FCM3 = test_numba(A, contexts_per_pos, n, context_threshold)
+    if disable_numpy:
+        FCM = [defaultdict(int) for j in range(nr_columns)] # frequency context matrix
+        sep_function(alignment_matrix, FCM, contexts_per_pos)
+    else:
+        A = np.array([l for l in alignment_matrix.values()])
+        n = len(A[0])
+        FCM = test_numba(A, contexts_per_pos, n, context_threshold)
     # print(len(FCM), len(FCM3))
-    assert len(FCM) == len(FCM3)
+    # assert len(FCM) == len(FCM3)
 
     alternative_contexts = [set() for j in range(nr_columns)]
     for j in range(len(FCM)):
-        eligible_contexts = [ (variant, tuple([c for c in cn]) , dep) for (variant,cn), dep in FCM[j].items() if dep > max(context_threshold/10, 5)] # remove very low abundant noise before calculation
-        eligible_contexts2 = FCM3[j]
-        if len(eligible_contexts2) != len(eligible_contexts):
-            print(eligible_contexts)
-            print(eligible_contexts2)
-            print(max(context_threshold/10, 5))
-            print( ref_aln[j-9:j+9])
-        assert len(eligible_contexts2) == len(eligible_contexts)
-        if set( [(v,cn) for v,cn,d in eligible_contexts]) !=  set( [(v,cn) for v,cn,d in eligible_contexts2]):
-            print("Different" )
-            print(j,eligible_contexts)
-            print(j,eligible_contexts2)
-            print(len(FCM), ref_aln[j], ref_aln)
-            print()
-        else:
-            print('Same')
+        # eligible_contexts2 = [ (variant, tuple([c for c in cn]) , dep) for (variant,cn), dep in FCM[j].items() if dep > max(context_threshold/10, 5)] # remove very low abundant noise before calculation
+        eligible_contexts = FCM[j]
+        # if len(eligible_contexts2) != len(eligible_contexts):
+        #     print(eligible_contexts)
+        #     print(eligible_contexts2)
+        #     print(max(context_threshold/10, 5))
+        #     print( ref_aln[j-9:j+9])
+        # assert len(eligible_contexts2) == len(eligible_contexts)
+        # if set( [(v,cn) for v,cn,d in eligible_contexts]) !=  set( [(v,cn) for v,cn,d in eligible_contexts2]):
+        #     print("Different" )
+        #     print(j,eligible_contexts)
+        #     print(j,eligible_contexts2)
+        #     print(len(FCM), ref_aln[j], ref_aln)
+        #     print()
+        # else:
+        #     pass
+        #     # print('Same')
 
         # print(eligible_contexts)
         # print(FCM3[j])
@@ -434,7 +434,7 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
     #     for 
     return alternative_contexts
 
-def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200):
+def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200, disable_numpy=False):
     weight = len(curr_best_seqs)
     # r_seq = curr_best_seqs["curr_read"][0]
     # print(r_seq)
@@ -533,7 +533,7 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
 
     contexts_per_pos = get_contexts(alignment_matrix, k_size)
     # alternative_refs = [set() for j in range(nr_columns)]
-    alternative_refs = get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_threshold)
+    alternative_refs = get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_threshold, disable_numpy)
     ref_aln = alignment_matrix["ref"]
 
     for i, d in enumerate(PFM):
@@ -898,7 +898,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         #         stored_calculated_regions[q_id][pos1] = len(curr_best_seqs)
     return tmp_cnt, read_complexity_cnt
 
-def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold,  max_seqs_to_spoa):
+def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold,  max_seqs_to_spoa, disable_numpy):
     corr_seq = []
     # print(opt_indicies)
     other_reads_corrected_regions = defaultdict(list)
@@ -919,7 +919,7 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
         if isinstance(instance, str): # already corrected
             best_corr = instance
         else:
-            best_corr, other_corrections = get_best_corrections(instance, k_size, outfolder, v_depth_ratio_threshold, max_seqs_to_spoa) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
+            best_corr, other_corrections = get_best_corrections(instance, k_size, outfolder, v_depth_ratio_threshold, max_seqs_to_spoa, disable_numpy) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
             for other_r_id, other_corr_regions in other_corrections.items():
                 for region in other_corr_regions:
                     other_reads_corrected_regions[other_r_id].append(region)
@@ -962,60 +962,60 @@ def get_qvs(reads):
     return quality_values_database
 
 
-def check_max_common_interval(list_of_intervals):
-    min_read_pos, max_read_pos = 10000, -1
-    corresp_ref_pos1, corresp_ref_pos2 = -1,-1
-    for read_pos1, read_pos2, ref_pos1, ref_pos2 in list_of_intervals:
-        if read_pos1 < min_read_pos:
-            min_read_pos = read_pos1
-            corresp_ref_pos1 = ref_pos1
-        if read_pos2 > max_read_pos:
-            max_read_pos = read_pos2
-            corresp_ref_pos2 = ref_pos2
+# def check_max_common_interval(list_of_intervals):
+#     min_read_pos, max_read_pos = 10000, -1
+#     corresp_ref_pos1, corresp_ref_pos2 = -1,-1
+#     for read_pos1, read_pos2, ref_pos1, ref_pos2 in list_of_intervals:
+#         if read_pos1 < min_read_pos:
+#             min_read_pos = read_pos1
+#             corresp_ref_pos1 = ref_pos1
+#         if read_pos2 > max_read_pos:
+#             max_read_pos = read_pos2
+#             corresp_ref_pos2 = ref_pos2
 
-    return min_read_pos, max_read_pos, corresp_ref_pos1, corresp_ref_pos2 
+#     return min_read_pos, max_read_pos, corresp_ref_pos1, corresp_ref_pos2 
 
-def test_potential_speedup(not_prev_corrected_spans, minimizer_combinations_database, reads, ref_id, m1, p1):
-    l_tmp = [ (relevant_read_id, pos1, pos2, p1, p2 ) for (m2,p2) in not_prev_corrected_spans for (relevant_read_id, pos1, pos2) in minimizer_combinations_database[m1][m2] ] 
-    d_tmp = defaultdict(list)
-    for (relevant_read_id, pos1, pos2, ref_pos1, ref_pos2) in l_tmp:
-        d_tmp[relevant_read_id].append( (pos1, pos2, ref_pos1, ref_pos2))
-    d_tmp2 = {}
-    # calc_max_common_interval(d_tmp[relevant_read_id])
-    for relevant_read_id in d_tmp:
-        min_read_pos, max_read_pos, corresp_ref_pos1, corresp_ref_pos2  = check_max_common_interval(d_tmp[relevant_read_id])
-        # min_ref_coord, max_ref_coord = d_tmp[relevant_read_id][0][-2], d_tmp[relevant_read_id][-1][-1]
-        # min_read_coord, max_read_coord = d_tmp[relevant_read_id][0][-4], d_tmp[relevant_read_id][-1][-3]
-        if max_read_pos - min_read_pos <= 80 and corresp_ref_pos2 - corresp_ref_pos1 <= 80:
-            # print(max_read_pos - min_read_pos, corresp_ref_pos2 - corresp_ref_pos1 )
-            d_tmp2[relevant_read_id] = (corresp_ref_pos1, corresp_ref_pos2, min_read_pos, max_read_pos, len(d_tmp[relevant_read_id]))
+# def test_potential_speedup(not_prev_corrected_spans, minimizer_combinations_database, reads, ref_id, m1, p1):
+#     l_tmp = [ (relevant_read_id, pos1, pos2, p1, p2 ) for (m2,p2) in not_prev_corrected_spans for (relevant_read_id, pos1, pos2) in minimizer_combinations_database[m1][m2] ] 
+#     d_tmp = defaultdict(list)
+#     for (relevant_read_id, pos1, pos2, ref_pos1, ref_pos2) in l_tmp:
+#         d_tmp[relevant_read_id].append( (pos1, pos2, ref_pos1, ref_pos2))
+#     d_tmp2 = {}
+#     # calc_max_common_interval(d_tmp[relevant_read_id])
+#     for relevant_read_id in d_tmp:
+#         min_read_pos, max_read_pos, corresp_ref_pos1, corresp_ref_pos2  = check_max_common_interval(d_tmp[relevant_read_id])
+#         # min_ref_coord, max_ref_coord = d_tmp[relevant_read_id][0][-2], d_tmp[relevant_read_id][-1][-1]
+#         # min_read_coord, max_read_coord = d_tmp[relevant_read_id][0][-4], d_tmp[relevant_read_id][-1][-3]
+#         if max_read_pos - min_read_pos <= 80 and corresp_ref_pos2 - corresp_ref_pos1 <= 80:
+#             # print(max_read_pos - min_read_pos, corresp_ref_pos2 - corresp_ref_pos1 )
+#             d_tmp2[relevant_read_id] = (corresp_ref_pos1, corresp_ref_pos2, min_read_pos, max_read_pos, len(d_tmp[relevant_read_id]))
 
-        else:
-            pass
-            # print("Not good instance!")
-            # print(d_tmp[relevant_read_id])
+#         else:
+#             pass
+#             # print("Not good instance!")
+#             # print(d_tmp[relevant_read_id])
 
-        # print(d_tmp[relevant_read_id])
+#         # print(d_tmp[relevant_read_id])
 
-    # print(len(d_tmp2))
-    for i, relevant_read_id in enumerate(d_tmp2):
-        # print("Starting", i)
-        if relevant_read_id == ref_id:
-            continue
-        ref_start, ref_stop, read_start, read_stop, nr_segments = d_tmp2[relevant_read_id]
-        ref_seq = reads[ref_id][1][ref_start: ref_stop]
-        read_seq =  reads[relevant_read_id][1][read_start: read_stop]
-        # print(ref_start, ref_stop, read_start, read_stop, nr_segments)
-        # print(read_seq, ref_seq)
-        # res = edlib.align(read_seq, ref_seq, task="path", mode="NW")
-        # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
-        # print(result_read_to_ref)
-        # cigar_string = res["cigar"]
-        # print(res)
-        # read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, read_seq, ref_seq)
-        # print(read_alignment)
-        # print(ref_alignment)
-    # print("completed")
+#     # print(len(d_tmp2))
+#     for i, relevant_read_id in enumerate(d_tmp2):
+#         # print("Starting", i)
+#         if relevant_read_id == ref_id:
+#             continue
+#         ref_start, ref_stop, read_start, read_stop, nr_segments = d_tmp2[relevant_read_id]
+#         ref_seq = reads[ref_id][1][ref_start: ref_stop]
+#         read_seq =  reads[relevant_read_id][1][read_start: read_stop]
+#         # print(ref_start, ref_stop, read_start, read_stop, nr_segments)
+#         # print(read_seq, ref_seq)
+#         # res = edlib.align(read_seq, ref_seq, task="path", mode="NW")
+#         # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
+#         # print(result_read_to_ref)
+#         # cigar_string = res["cigar"]
+#         # print(res)
+#         # read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, read_seq, ref_seq)
+#         # print(read_alignment)
+#         # print(ref_alignment)
+#     # print("completed")
 
 def main(args):
     start = time()
@@ -1174,7 +1174,7 @@ def main(args):
                     # sys.exit()
                     opt_indicies = solve_WIS(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
                     # print(opt_indicies)
-                    corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold, max_seqs_to_spoa)
+                    corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy)
                     
                     for other_r_id, corrected_regions in other_reads_corrected_regions.items():
                         for corr_region in corrected_regions:
@@ -1215,6 +1215,8 @@ if __name__ == '__main__':
     # parser.add_argument('--C', type=float, default=0.05, help='Minimum fraction of keeping alternative refernece contexts')
     parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
                                                                  not to be used for clusters with over ~500 reads)')
+    parser.add_argument('--disable_numpy', action="store_true", help='Do not require numpy to be installed, but this version is about 1.5x slower than with numpy.')
+
     parser.add_argument('--max_seqs_to_spoa', type=int, default=200,  help='Maximum number of seqs to spoa')
     
     parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance smaller than this limit')
