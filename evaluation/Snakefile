@@ -82,8 +82,8 @@ rule subsample:
         inbase= config["ROOT_IN"]
         mkdir_p(config["ROOT_OUT"] + "/data/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads ) )
 
-        if wildcards.nr_reads == "full":
-            shell("ln -s  {input.fastq} {output.subsampled_fastq} )
+        if wildcards.nr_reads == "999":
+            shell("ln -s  {input.fastq} {output.subsampled_fastq} ")
         else:
             shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads {wildcards.nr_reads} --min_length 200")
 
@@ -131,7 +131,7 @@ rule isoncorrect:
             else:
                 shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 4  --xmax 80")
         else:
-            # if wildcards.nr_reads == "full":
+            # if wildcards.nr_reads == "999":
             #     shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 50  --xmax 80 --split_mod 2 --residual 1 ")
             # else:
             shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 50  --xmax 80")
