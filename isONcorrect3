@@ -900,7 +900,23 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                 #     not_added_strings.add(read_seq)
                 #     # print(read_seq, "not considered, store?")
 
+
+            # zz_cnt = 0
+
+            # make sure all identical strings are added to he same instance
+            for relevant_read_id, pos1, pos2 in relevant_reads:
+                if r_id  == relevant_read_id:
+                    continue
+                read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
+                read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
+                if read_seq in added_strings and relevant_read_id not in seqs:
+                    seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                    # zz_cnt += 1
+                    # print("Not added but others are!!!", zz_cnt, read_seq, ref_seq, read_seq == ref_seq)
+
+
             all_intervals.append( (p1 + k_size, p2,  len(seqs), seqs) )
+
     #     if len(seqs) > len(curr_best_seqs):
     #         curr_best_seqs = seqs
     #         # curr_best_seqs_to_id = seqs_to_id
