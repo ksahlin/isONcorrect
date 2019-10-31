@@ -783,6 +783,8 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         # print(p1,p2)
         relevant_reads = minimizer_combinations_database[m1][m2]
         seqs = {} #defaultdict(list)
+        added_strings = {} 
+        # not_added_strings = set() 
         if len(relevant_reads) >= max(3,len(curr_best_seqs)): #max(3, previously_calculated_regions_read[p2]): # 
             # cnt += 1
             ref_seq = seq[p1  : p2 + k_size]
@@ -790,6 +792,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
             p_error_ref = (quality_values_database[r_id][p2 + k_size] - quality_values_database[r_id][p1])/(p2 + k_size - p1)
 
             seqs["curr_read"] = (ref_seq, ref_qual, p1, p2)
+            added_strings[ref_seq] = 0
             reads_visited = {}
             for relevant_read_id, pos1, pos2 in relevant_reads:
                 if r_id  == relevant_read_id:
@@ -797,20 +800,28 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                 
                 read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
                 read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
+
                 if read_seq == ref_seq:
-                    # seqs[relevant_read_id] = []
                     seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
                     reads_visited[relevant_read_id] = 0
                     already_computed[relevant_read_id] = (p1,p2,pos1,pos2, 0)
                     continue
-
-                
-                if relevant_read_id in reads_visited:
+                elif relevant_read_id in reads_visited:
                     # print("Prev:", reads_visited[relevant_read_id])
                     # print("Act:", edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq)) )
                     pass
         # Implement if we see this to recompute all the aligments exact ed here instead!! Thats the only way to guarantee exactly the same
         # or maybe use this traceback to get exact: https://github.com/Martinsos/edlib/pull/132#issuecomment-522258271
+                elif read_seq in added_strings:  #== ref_seq:
+                    # seqs[relevant_read_id] = []
+                    seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                    reads_visited[relevant_read_id] = added_strings[read_seq]
+                    already_computed[relevant_read_id] = (p1,p2,pos1,pos2, added_strings[read_seq])
+                    # print("Saved!!")
+                    continue
+                # elif read_seq in not_added_strings:
+                #     # print("save")
+                #     continue
                 elif relevant_read_id in already_computed:
                     curr_ref_start, curr_ref_end, curr_read_start, curr_read_end, curr_ed = already_computed[relevant_read_id]
                     if (curr_read_start <= pos1 and pos2 <= curr_read_end) and (curr_ref_start <= p1 and p2 <=  curr_ref_end):
@@ -821,15 +832,16 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                         ref_beg_diff = p1 - curr_ref_start
                         ref_end_diff = p2 - curr_ref_end
 
-
-                        if 0 <= curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff)  <= p_error_sum_thresh*len(ref_seq): # < curr_p_error_sum_thresh*len(ref_seq):
+                        ed_est = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff) 
+                        if 0 <= ed_est <= p_error_sum_thresh*len(ref_seq): # < curr_p_error_sum_thresh*len(ref_seq):
                             # print("saved:",pos1, pos2, p1,p2, curr_ref_start, curr_ref_end, curr_read_start, curr_read_end, curr_ed, curr_p_error_sum_thresh)
                             # print("saved", (curr_ref_end - curr_ref_start) - (p2-p1), (curr_read_end - curr_read_start) - (pos2 - pos1))
 
                             # read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
                             # read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
                             seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
-                            reads_visited[relevant_read_id] = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff)
+                            added_strings[read_seq] = ed_est
+                            reads_visited[relevant_read_id] = ed_est
 
                             # est = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff)
                             # act = edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq))
@@ -851,8 +863,8 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                 # print(p_error_sum_thresh, p_error_sum_thresh*len(ref_seq),len(ref_seq) )
                 editdist = edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq))
 
-                if editdist == 0:
-                    print("Here!")
+                # if editdist == 0:
+                #     print("Here!")
                 tmp_cnt += 1
                 if editdist >= 0:    # passing second edit distance check
                     if relevant_read_id in reads_visited: # we have already seen the minimizer combination
@@ -869,19 +881,24 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                         if editdist < editdist_prev:
                             # seqs[relevant_read_id] = []
                             seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                            added_strings[read_seq] = editdist
                             reads_visited[relevant_read_id] = editdist
                             already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
                             # print("REPLACED OLD MATCH")
                         else:
                             # seqs[relevant_read_id] = []
                             seqs[relevant_read_id] = (prev_read_seq, read_read_qual, prev_pos1, prev_pos2)
+                            added_strings[prev_read_seq] = editdist_prev
                             reads_visited[relevant_read_id] = editdist_prev
                             already_computed[relevant_read_id] = (p1,p2,prev_pos1, prev_pos2, editdist_prev)
                     else:
                         seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                        added_strings[read_seq] = editdist
                         reads_visited[relevant_read_id] = editdist
                         already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
-
+                # else:
+                #     not_added_strings.add(read_seq)
+                #     # print(read_seq, "not considered, store?")
 
             all_intervals.append( (p1 + k_size, p2,  len(seqs), seqs) )
     #     if len(seqs) > len(curr_best_seqs):
