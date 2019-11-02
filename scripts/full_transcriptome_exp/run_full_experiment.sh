@@ -22,7 +22,7 @@ isoncorrect_dir=$inbase
 isonclust_dir=$isonclustbase
 
 mkdir -p $outbase
-
+touch $corrected_reads_fastq
 
 IFS=$'\n'       # make newlines the only separator
 # set -f          # disable globbing
@@ -38,7 +38,7 @@ plot_file=$outbase/"summary"
 
 echo -n  "id","type","Depth","mut","q_acc","r_acc","total_errors","error_rate","subs","ins","del","switch","abundance"$'\n' > $results_file
 
-# Remove redundant
+# Remove redundant (non unique)
 database_filtered=$outbase/transcriptsfiltered.fa
 python $experiment_dir/remove_redundant.py $database $database_filtered
 
@@ -47,10 +47,10 @@ echo  python $experiment_dir/simulate_reads.py $database_filtered $outbase/$dept
 python $experiment_dir/simulate_reads.py $database_filtered $outbase/$depth/reads.fq $depth #&> /dev/null
 ###############
 
-#  Remove longest transcripts
-python $experiment_dir/filter_fastq.py $outbase/$depth/reads.fq 20000
-mv $outbase/$depth/reads.fq_filtered.fq $outbase/$depth/reads.fq
-############################
+# #  Remove longest transcripts
+# python $experiment_dir/filter_fastq.py $outbase/$depth/reads.fq 20000
+# mv $outbase/$depth/reads.fq_filtered.fq $outbase/$depth/reads.fq
+# ############################
 
 Cluster with isONclust      
 rm -rf $outbase/$depth/isonclust/sorted.fastq
@@ -63,66 +63,81 @@ python $isonclust_dir/isONclust write_fastq --clusters $outbase/$depth/isonclust
 python $isoncorrect_dir/run_isoncorrect  --t $cores --fastq_folder $outbase/$depth/isonclust/fastq  --outfolder $outbase/$depth/isoncorrect/ --set_w_dynamically # &> /dev/null            
 ###############################
 
+# merge results to single file 
 
-Evaluate indiviually corrected clusters    
 for folder in $(find $outbase/$depth/isoncorrect/*  -type d); #c_id in $(seq 0 1 1000) $"${FILES[@]}"
     do 
-        # echo $folder
         cl_id=$(basename $folder)
         echo $cl_id
-        # if (( $cl_id > 50 ));
-        #     then
-        #         break
-        # fi
-
-        # if [ *$cl_id*  == "evaluation_original isoncorrect"  ]; then
-        #   echo "Strings are equal" $cl_id
-        #   continue
-        # fi
 
         if [ -f $folder/corrected_reads.fastq ]; then
-            echo $folder/corrected_reads.fastq
-            python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $folder/corrected_reads.fastq $database_filtered $folder/evaluation  #> /dev/null
-            awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",isoncorrect,"awk_depth",0,"$0}}'  $folder/evaluation/results.csv >> $results_file
-            
-            python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $outbase/$depth/isonclust/fastq/$cl_id.fastq $database_filtered $folder/evaluation_reads  #> /dev/null
-            awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",original,"awk_depth",0,"$0}}'  $folder/evaluation_reads/results.csv >> $results_file
-
-            # echo "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq
-            # cat "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq >> $corrected_reads_fastq
+            cat "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq >> $corrected_reads_fastq
         else
-           echo $folder  "File  does not exist."
+           echo $folder/corrected_reads.fastq  "File  does not exist."
         fi
     done
-#######################################
 
-python $experiment_dir/plot_error_rates.py $results_file $plot_file"_tot.pdf" error_rate
-python $experiment_dir/plot_abundance_diff.py $results_file $plot_file"_abundance_diff.pdf" 
+# # Evaluate error rates based on true read accessions
+error_plot=$outbase/$id/$depth/"error_rates_"$depth".pdf" 
+python $experiment_dir/get_error_rates.py  $database_filtered $outbase/$id/$depth/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
+python $experiment_dir/plot_error_rates.py $error_rates_file  $error_plot
+# ######################
+
+# ## Map reads
+minimap2 -ax splice --eqx $database_filtered -uf -k14 $corrected_reads_fastq > $corrected_reads_mappings
+minimap2 -ax splice --eqx $database_filtered  -uf -k14 $outbase/$id/$depth/reads.fq > $original_reads_mappings
+# ###################
+
+# # Evaluate chnage in expression levels compared to true expression
+abundance_file=$outbase/$id/$depth/"abundance.tsv"
+> $abundance_file
+echo -n  "id","cov_aln","cov_true","seq","type"$'\n' > $abundance_file
+python $experiment_dir/get_abundance.py  $corrected_reads_mappings "corrected" >> $abundance_file
+python $experiment_dir/get_abundance.py $original_reads_mappings  "original" >>  $abundance_file
+abundance_plot=$outbase/$id/$depth/"abundance.pdf" 
+python $experiment_dir/plot_abundance.py $abundance_file "transcript" $abundance_plot
+
+
+
+# # Evaluate indiviually corrected clusters    
+# for folder in $(find $outbase/$depth/isoncorrect/*  -type d); #c_id in $(seq 0 1 1000) $"${FILES[@]}"
+#     do 
+#         # echo $folder
+#         cl_id=$(basename $folder)
+#         echo $cl_id
+#         # if (( $cl_id > 50 ));
+#         #     then
+#         #         break
+#         # fi
+
+#         # if [ *$cl_id*  == "evaluation_original isoncorrect"  ]; then
+#         #   echo "Strings are equal" $cl_id
+#         #   continue
+#         # fi
+
+#         if [ -f $folder/corrected_reads.fastq ]; then
+#             echo $folder/corrected_reads.fastq
+#             python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $folder/corrected_reads.fastq $database_filtered $folder/evaluation  #> /dev/null
+#             awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",isoncorrect,"awk_depth",0,"$0}}'  $folder/evaluation/results.csv >> $results_file
+            
+#             python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $outbase/$depth/isonclust/fastq/$cl_id.fastq $database_filtered $folder/evaluation_reads  #> /dev/null
+#             awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",original,"awk_depth",0,"$0}}'  $folder/evaluation_reads/results.csv >> $results_file
+
+#             # echo "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq
+#             # cat "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq >> $corrected_reads_fastq
+#         else
+#            echo $folder  "File  does not exist."
+#         fi
+#     done
+# #######################################
+
+# python $experiment_dir/plot_error_rates.py $results_file $plot_file"_tot.pdf" error_rate
+# python $experiment_dir/plot_abundance_diff.py $results_file $plot_file"_abundance_diff.pdf" 
 
 # python $experiment_dir/plot_error_rates.py $summary_file $plot_file"_subs.pdf" Substitutions
 # python $experiment_dir/plot_error_rates.py $summary_file $plot_file"_ind.pdf" Insertions
 # python $experiment_dir/plot_error_rates.py $summary_file $plot_file"_del.pdf" Deletions
 
-
-# # # Evaluate error rates OLD
-# error_plot=$outbase/$id/$depth/"error_rates_"$depth".pdf" 
-# python $experiment_dir/get_error_rates.py  $database_filtered $outbase/$id/$depth/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
-# python $experiment_dir/plot_error_rates.py $error_rates_file  $error_plot
-# # ######################
-
-# # ## Map reads
-# minimap2 -ax splice --eqx $database_filtered -uf -k14 $corrected_reads_fastq > $corrected_reads_mappings
-# minimap2 -ax splice --eqx $database_filtered  -uf -k14 $outbase/$id/$depth/reads.fq > $original_reads_mappings
-# # ###################
-
-# # # Evaluate chnage in expression levels compared to true expression
-# abundance_file=$outbase/$id/$depth/"abundance.tsv"
-# > $abundance_file
-# echo -n  "id","cov_aln","cov_true","seq","type"$'\n' > $abundance_file
-# python $experiment_dir/get_abundance.py  $corrected_reads_mappings "corrected" >> $abundance_file
-# python $experiment_dir/get_abundance.py $original_reads_mappings  "original" >>  $abundance_file
-# abundance_plot=$outbase/$id/$depth/"abundance.pdf" 
-# python $experiment_dir/plot_abundance.py $abundance_file "transcript" $abundance_plot
 
 
 
