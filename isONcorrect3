@@ -917,18 +917,6 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
             all_intervals.append( (p1 + k_size, p2,  len(seqs), seqs) )
 
-    #     if len(seqs) > len(curr_best_seqs):
-    #         curr_best_seqs = seqs
-    #         # curr_best_seqs_to_id = seqs_to_id
-    #         curr_best_stop = p2
-
-
-    # if len(curr_best_seqs) > 2:
-    #     all_intervals.append( (p1 + k_size, curr_best_stop,  len(curr_best_seqs), curr_best_seqs) )
-    
-        # for q_id, (read_seq, read_qual, pos1, pos2) in curr_best_seqs.items():
-        #     if q_id != "curr_read":
-        #         stored_calculated_regions[q_id][pos1] = len(curr_best_seqs)
     return tmp_cnt, read_complexity_cnt
 
 def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold,  max_seqs_to_spoa, disable_numpy):
@@ -1050,15 +1038,41 @@ def get_qvs(reads):
 #         # print(ref_alignment)
 #     # print("completed")
 
+def store_intervals(all_intervals, interval_database, instance_hash_table):
+    record_id = len(instance_hash_table) 
+    for start_pos, stop_pos, instance_size, instance in all_intervals:
+        instance_hash_table[record_id] = instance
+        if not isinstance(instance, str):
+            for read_acc, (read_seq, read_qual, pos1, pos2) in instance.items():
+                interval_database[read_acc][pos1][pos2] = record_id #.append((pos1, pos2, record_id))
+        record_id += 1
+
+def batch(dictionary, size):
+    batches = []
+    sub_dict = {}
+    for i, (acc, seq) in enumerate(dictionary.items()):
+        if i > 0 and i % size == 0:
+            batches.append(sub_dict)
+            sub_dict = {}
+            sub_dict[acc] = seq
+        else:
+            sub_dict[acc] = seq
+
+    if i/size != 0:
+        sub_dict[acc] = seq
+        batches.append(sub_dict)
+    
+    return batches
+
 def main(args):
-    start = time()
-    reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
-    eprint("Correcting {0} reads.".format(len(reads)))
+    # start = time()
+    all_reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
+    eprint("Total cluster of {0} reads.".format(len(all_reads)))
     max_seqs_to_spoa = args.max_seqs_to_spoa
-    if len(reads) <= args.exact_instance_limit:
+    if len(all_reads) <= args.exact_instance_limit:
         args.exact = True
     if args.set_w_dynamically:
-        args.w = args.k + min(7, int( len(reads)/500))
+        args.w = args.k + min(7, int( len(all_reads)/500))
 
     eprint("ARGUMENT SETTINGS:")
     for key, value in args.__dict__.items():
@@ -1067,157 +1081,150 @@ def main(args):
     eprint()
 
 
-    start = time()
+    # start = time()
     corrected_reads = {}
     v_depth_ratio_threshold = args.T
     # context_depth_ratio_threshold = args.C
-
-    for k_size in range(args.k, args.k +1):
+    k_size = args.k
+    for batch_id, reads in enumerate(batch(all_reads, args.max_seqs)):
+        print("correcting {0} reads in a batch".format(len(reads)))
+        batch_start_time = time()
+        interval_database = defaultdict(lambda: defaultdict(dict))
+        instance_hash_table = {}
+    # for k_size in range(args.k, args.k +1):
         # DBG, position_DBG = create_augmented_reference.kmer_counter(reads, k_size)
         # print("done createng DB")
         w = args.w
         x_high = args.xmax
         x_low = args.xmin
-        for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
-            if args.compression:
-                minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
-            else:
-                minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
+        hash_fcn = "lex"
+        # for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
+        if args.compression:
+            minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
+        else:
+            minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
 
-            # reads_to_M2, M2 = get_minimizers_comb(reads, minimizer_database, k_size, args.X)
-            minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
-            quality_values_database = get_qvs(reads)
-            # print(minimizer_database)
-            eprint("done creating minimizer combinations")
+        minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
+        quality_values_database = get_qvs(reads)
+        # print(minimizer_database)
+        eprint("done creating minimizer combinations")
 
-            # print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
+        # print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
+        # sys.exit()
+        corrected_reads = {}
+        tot_errors_before = {"subs" : 0, "del": 0, "ins": 0}
+        tot_errors_after = {"subs" : 0, "del": 0, "ins": 0}
+        tot_corr = 0
+        previously_corrected_regions = defaultdict(list)
+        # stored_calculated_regions = defaultdict(lambda: defaultdict(int))
+        tmp_cnt = 0
+
+        for r_id in sorted(reads): #, reverse=True):
+            read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
+            # print(read_min_comb)
             # sys.exit()
-            corrected_reads = {}
-            tot_errors_before = {"subs" : 0, "del": 0, "ins": 0}
-            tot_errors_after = {"subs" : 0, "del": 0, "ins": 0}
-            tot_corr = 0
-            previously_corrected_regions = defaultdict(list)
-            # stored_calculated_regions = defaultdict(lambda: defaultdict(int))
-            tmp_cnt = 0
+            if args.exact:
+                previously_corrected_regions = defaultdict(list)
+            # stored_calculated_regions = defaultdict(list)
+    
+            #  = stored_calculated_regions[r_id]
+            corr_pos = []
+            (acc, seq, qual) = reads[r_id]
+            # print("starting correcting:", seq)
+            all_intervals = []
 
-            for r_id in sorted(reads): #, reverse=True):
-                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
-                # print(read_min_comb)
-                # sys.exit()
-                if args.exact:
-                    previously_corrected_regions = defaultdict(list)
-                # stored_calculated_regions = defaultdict(list)
-        
-                #  = stored_calculated_regions[r_id]
-                corr_pos = []
-                (acc, seq, qual) = reads[r_id]
-                # print("starting correcting:", seq)
-                all_intervals = []
+            # print(r_id, sorted(previously_corrected_regions[r_id], key=lambda x:x[1]))
+            read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
+            if read_previously_considered_positions:
+                eprint("not corrected:", [ (p1_, p2_) for p1_, p2_ in zip(sorted(read_previously_considered_positions)[:-1], sorted(read_previously_considered_positions)[1:]) if p2_ > p1_ + 1 ] )
+            else:
+                eprint("not corrected: entire read", )
 
-                # print(r_id, sorted(previously_corrected_regions[r_id], key=lambda x:x[1]))
+            if previously_corrected_regions[r_id]:
                 read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
-                if read_previously_considered_positions:
-                    eprint("not corrected:", [ (p1_, p2_) for p1_, p2_ in zip(sorted(read_previously_considered_positions)[:-1], sorted(read_previously_considered_positions)[1:]) if p2_ > p1_ + 1 ] )
-                else:
-                    eprint("not corrected: entire read", )
+                group_id = 0
+                pos_group = {}
+                sorted_corr_pos = sorted(read_previously_considered_positions)
+                for p1, p2 in zip(sorted_corr_pos[:-1], sorted_corr_pos[1:]):
+                    if p2 > p1 + 1:
+                       pos_group[p1] = group_id 
+                       group_id += 1
+                       pos_group[p2] = group_id 
+                    else:
+                       pos_group[p1] = group_id 
+                if p2 == p1 + 1:
+                    pos_group[p2] = group_id 
+            else:
+                read_previously_considered_positions= set()
+                pos_group = {}
 
-                if previously_corrected_regions[r_id]:
-                    read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
-                    group_id = 0
-                    pos_group = {}
-                    sorted_corr_pos = sorted(read_previously_considered_positions)
-                    for p1, p2 in zip(sorted_corr_pos[:-1], sorted_corr_pos[1:]):
-                        if p2 > p1 + 1:
-                           pos_group[p1] = group_id 
-                           group_id += 1
-                           pos_group[p2] = group_id 
-                        else:
-                           pos_group[p1] = group_id 
-                    if p2 == p1 + 1:
-                        pos_group[p2] = group_id 
-                else:
-                    read_previously_considered_positions= set()
-                    pos_group = {}
-                # print(pos_group)
+            # if r_id in interval_database:
+            #     print(len(interval_database[r_id]))
+            already_computed = {}
+            read_complexity_cnt = 0
+            test_cnt = 0
+            old_cnt = 0
+            for (m1,p1), m1_curr_spans in read_min_comb: 
+                # If any position is not in range of current corrections: then correct, not just start and stop
+                not_prev_corrected_spans = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) ] 
+                set_not_prev = set(not_prev_corrected_spans)
+                not_prev_corrected_spans2 = [(m2,p2) for (m2,p2) in m1_curr_spans if (m2,p2) not in set_not_prev and (p1 + k_size in pos_group and p2 - 1 in pos_group and pos_group[p1 + k_size] != pos_group[p2 - 1]) ] 
+                not_prev_corrected_spans += not_prev_corrected_spans2
 
-                # read_all_pos = set(range(len(seq))) 
-                # read_not_corr = read_all_pos - read_previously_considered_positions
-                # print(previously_corrected_regions[r_id])
-                # print(read_previously_considered_positions)
-                
-                # print()
-                # print(len(read_not_corr), sorted(read_not_corr))
-                # print()
-                
-                # read_prev_corrected_positions2 = defaultdict(set)
-                # if len(previously_corrected_regions[r_id]) > 1:
-                #     prev_regions = sorted(previously_corrected_regions[r_id], key = lambda x: x[1])
-                #     for (tmp_p1, tmp_p2, w_tmp, _ ) in (tmp_p1_2, tmp_p2_2, w_tmp_2, _2 ) zip(prev_regions[r_id][:-1], prev_regions[r_id][1:]):
-                #         if tmp_p2 + k_size >= tmp_p1_2:
-                #             read_prev_corrected_positions2[tmp_p1] = set(range(tmp_p1, tmp_p2))
-                #         else:
-                #             read_prev_corrected_positions2[tmp_p1] = set(range(tmp_p1, tmp_p2))
-                # print(read_prev_corrected_positions2)
+                not_prev_corrected_spans_test = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) and p2 not in interval_database[r_id][p1] ] 
+                not_prev_corrected_spans2_test = [(m2,p2) for (m2,p2) in m1_curr_spans if (m2,p2) not in set_not_prev and p2 not in interval_database[r_id][p1] and (p1 + k_size in pos_group and p2 - 1 in pos_group and pos_group[p1 + k_size] != pos_group[p2 - 1]) ] 
+                not_prev_corrected_spans_test += not_prev_corrected_spans2_test
+                # test_cnt += len(not_prev_corrected_spans_test)
+                # old_cnt += len(not_prev_corrected_spans)
 
-                # print(read_previously_considered_positions)
-                already_computed = {}
-                read_complexity_cnt = 0
-                for (m1,p1), m1_curr_spans in read_min_comb: 
-                    # Implement that if any position is not in range of current corrections: then correct!!! Not just start and stop
-                    not_prev_corrected_spans = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) ] 
-                    set_not_prev = set(not_prev_corrected_spans)
-                    not_prev_corrected_spans2 = [(m2,p2) for (m2,p2) in m1_curr_spans if (m2,p2) not in set_not_prev and (p1 + k_size in pos_group and p2 - 1 in pos_group and pos_group[p1 + k_size] != pos_group[p2 - 1]) ] 
-                    # if not_prev_corrected_spans2:
-                    #     print("extra spans:", not_prev_corrected_spans2)
-                    not_prev_corrected_spans += not_prev_corrected_spans2
-                    # print(not_prev_corrected_spans)
-                    # not_prev_corrected_spans3 = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) or pos_group[p1 + k_size] != pos_group[p2 - 1] ] 
-                    # if len(not_prev_corrected_spans) > len(not_prev_corrected_spans3):
-                    #     print(len(not_prev_corrected_spans), len(not_prev_corrected_spans3))
-                    # not_prev_corrected_spans2 = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_prev_corrected_positions2 and p2 - 1 in read_prev_corrected_positions2[p1 + k_size]) ]
-                    # print(len(not_prev_corrected_spans))
-                    if not_prev_corrected_spans: # p1 + k_size not in read_previously_considered_positions:
-                        # test_potential_speedup(not_prev_corrected_spans, minimizer_combinations_database, reads, r_id, m1, p1)
-                        # sys.exit()
-                        tmp_cnt, read_complexity_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, read_complexity_cnt, quality_values_database, already_computed)
+                old_cnt += sum([len(minimizer_combinations_database[m1][m2]) for m2, p2 in not_prev_corrected_spans])
+                test_cnt += sum([len(minimizer_combinations_database[m1][m2]) for m2, p2 in not_prev_corrected_spans_test])
+                # if len(not_prev_corrected_spans) > len(not_prev_corrected_spans_test):
+                #     print(len(not_prev_corrected_spans), len(not_prev_corrected_spans_test))
+                # else:
+                #     print(len(not_prev_corrected_spans), "same")
 
-                print("{0} edlib invoked due to repeated anchors for this read.".format(read_complexity_cnt))
+                if not_prev_corrected_spans: # p1 + k_size not in read_previously_considered_positions:
+                    tmp_cnt, read_complexity_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, read_complexity_cnt, quality_values_database, already_computed)
+            
+            print("Ratio computations saved:", old_cnt, test_cnt)
+            store_intervals(all_intervals, interval_database, instance_hash_table)
+            print("keeping ",len(instance_hash_table), "intervals.")
+            print("For a total of ", len(interval_database), "reads")
 
-                print(tmp_cnt, "total computed editdist.")
+            print("{0} edlib invoked due to repeated anchors for this read.".format(read_complexity_cnt))
+
+            print(tmp_cnt, "total computed editdist.")
+            # sys.exit()
+            eprint("Correcting read", r_id)
+            # print(previously_corrected_regions[r_id])
+            if previously_corrected_regions[r_id]: # add previously corrected regions in to the solver
+                all_intervals.extend(previously_corrected_regions[r_id])
+                del previously_corrected_regions[r_id]
+
+            if not all_intervals:
+                eprint("Found nothing to correct")
+                corrected_seq = seq
+            else:
+                all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
+                # print([(item[0],item[1]) for item in  all_intervals_sorted_by_finish])
+                # print(len(all_intervals_sorted_by_finish))
                 # sys.exit()
-                eprint("Correcting read", r_id)
-                # print(previously_corrected_regions[r_id])
-                if previously_corrected_regions[r_id]: # add previously corrected regions in to the solver
-                    all_intervals.extend(previously_corrected_regions[r_id])
-                    del previously_corrected_regions[r_id]
-                    # del stored_calculated_regions[r_id]
-                # if r_id == 11:
-                #     print(all_intervals)
+                opt_indicies = solve_WIS(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
+                # print(opt_indicies)
+                corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy)
+                del interval_database[r_id]
+                for other_r_id, corrected_regions in other_reads_corrected_regions.items():
+                    for corr_region in corrected_regions:
+                        previously_corrected_regions[other_r_id].append(corr_region)
 
-                # for tmp_, inT_ in enumerate(all_intervals):
-                #     print(tmp_, inT_)
-                # SYS.EXIT()
-                if not all_intervals:
-                    eprint("Found nothing to correct")
-                    corrected_seq = seq
-                else:
-                    all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
-                    # print([(item[0],item[1]) for item in  all_intervals_sorted_by_finish])
-                    # print(len(all_intervals_sorted_by_finish))
-                    # sys.exit()
-                    opt_indicies = solve_WIS(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
-                    # print(opt_indicies)
-                    corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy)
-                    
-                    for other_r_id, corrected_regions in other_reads_corrected_regions.items():
-                        for corr_region in corrected_regions:
-                            previously_corrected_regions[other_r_id].append(corr_region)
+            corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
 
-                corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
-
-                print("@{0}\n{1}\n+\n{2}".format(acc, corrected_seq, "+"*len(corrected_seq) ))
-                eprint("{0},{1}".format(r_id,corrected_seq))
-
+            print("@{0}\n{1}\n+\n{2}".format(acc, corrected_seq, "+"*len(corrected_seq) ))
+            eprint("{0},{1}".format(r_id,corrected_seq))
+        print()
+        print("Done with batch_id:", batch_id)
+        print("Took {0} seconds.".format(time()- batch_start_time))
                 # eval_sim2(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
                 # if r_id == 10:
                 #     sys.exit()
@@ -1251,6 +1258,7 @@ if __name__ == '__main__':
     parser.add_argument('--disable_numpy', action="store_true", help='Do not require numpy to be installed, but this version is about 1.5x slower than with numpy.')
 
     parser.add_argument('--max_seqs_to_spoa', type=int, default=200,  help='Maximum number of seqs to spoa')
+    parser.add_argument('--max_seqs', type=int, default=2000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
     
     parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance smaller than this limit')
     # parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
