@@ -663,6 +663,71 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     return curr_read_corr[k_size:-k_size], other_corrections_final
 
 
+# def fill_p(p, all_intervals_sorted_by_finish):
+#     for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
+#         if j == 0:
+#             p.append(0)
+#             continue
+#         dep = 0
+#         k = j - 1
+#         while k >= 0:
+#             dep+=1
+#             if all_intervals_sorted_by_finish[k][1] <= start:
+#                 break
+#             k -= 1
+#         p.append(max(0,k))
+#         # print("dep", dep)
+#     return p
+
+def fill_p2(p, all_intervals_sorted_by_finish):
+
+    stop_to_max_j = {stop : j for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish)}
+    all_choord_to_max_j = []
+    j_max = 0
+    for i in range(0, all_intervals_sorted_by_finish[-1][1]):
+        if i in stop_to_max_j:
+            j_max = stop_to_max_j[i]
+        
+        all_choord_to_max_j.append(j_max)
+
+    for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
+        j_max = all_choord_to_max_j[start]
+        p.append(j_max)
+    return p
+
+def solve_WIS2(all_intervals_sorted_by_finish):
+    # print("instance size", len(all_intervals_sorted_by_finish))
+    # p = [None]
+    # fill_p(p, all_intervals_sorted_by_finish)
+    p = [None]    
+    fill_p2(p, all_intervals_sorted_by_finish)
+    # if p != p2:
+    #     print(p)
+    #     print(p2)
+    # assert p == p2
+
+    v = [None] + [w*(stop-start) for (start, stop, w, _) in all_intervals_sorted_by_finish]
+    OPT = [0]
+    for j in range(1, len(all_intervals_sorted_by_finish) +1):
+        OPT.append( max(v[j] + OPT[ p[j] ], OPT[j-1] ) )
+
+    # assert len(p) == len(all_intervals_sorted_by_finish) + 1 == len(v) == len(OPT)
+
+    # Find solution
+    opt_indicies = []
+    j = len(all_intervals_sorted_by_finish)
+    while j >= 0:
+        if j == 0:
+            break
+        if v[j] + OPT[p[j]] > OPT[j-1]:
+            opt_indicies.append(j - 1) # we have shifted all indices forward by one so we neew to reduce to j -1 because of indexing in python works
+            j = p[j]
+        else:
+            j -= 1
+    return opt_indicies
+
+
+
 
 def solve_WIS(all_intervals_sorted_by_finish):
     p = [None]
@@ -1052,7 +1117,8 @@ def main(args):
         minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
         quality_values_database = get_qvs(reads)
         # print(minimizer_database)
-        eprint("done creating minimizer combinations")
+        if args.verbose:
+            eprint("done creating minimizer combinations")
 
         # print( [ (xx, len(reads_to_M2[xx])) for xx in reads_to_M2 ])
         # sys.exit()
@@ -1079,10 +1145,12 @@ def main(args):
 
             # print(r_id, sorted(previously_corrected_regions[r_id], key=lambda x:x[1]))
             read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
-            if read_previously_considered_positions:
-                eprint("not corrected:", [ (p1_, p2_) for p1_, p2_ in zip(sorted(read_previously_considered_positions)[:-1], sorted(read_previously_considered_positions)[1:]) if p2_ > p1_ + 1 ] )
-            else:
-                eprint("not corrected: entire read", )
+            
+            if args.verbose:
+                if read_previously_considered_positions:
+                    eprint("not corrected:", [ (p1_, p2_) for p1_, p2_ in zip(sorted(read_previously_considered_positions)[:-1], sorted(read_previously_considered_positions)[1:]) if p2_ > p1_ + 1 ] )
+                else:
+                    eprint("not corrected: entire read", )
 
             if previously_corrected_regions[r_id]:
                 read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
@@ -1169,11 +1237,11 @@ def main(args):
             # print("keeping ",len(instance_hash_table), "intervals.")
             # print("For a total of ", len(interval_database), "reads")
 
-            print("{0} edlib invoked due to repeated anchors for this read.".format(read_complexity_cnt))
-
-            print(tmp_cnt, "total computed editdist.")
             # sys.exit()
-            eprint("Correcting read", r_id)
+            if args.verbose:
+                print("{0} edlib invoked due to repeated anchors for this read.".format(read_complexity_cnt))
+                print(tmp_cnt, "total computed editdist.")
+                eprint("Correcting read", r_id)
 
             # add prev_visited_intervals to intervals to consider
             # all_intervals.extend(prev_visited_intervals)
@@ -1183,14 +1251,16 @@ def main(args):
                 del previously_corrected_regions[r_id]
 
             if not all_intervals:
-                eprint("Found nothing to correct")
+                # eprint("Found nothing to correct")
                 corrected_seq = seq
             else:
                 all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
                 # print([(item[0],item[1]) for item in  all_intervals_sorted_by_finish])
                 # print(len(all_intervals_sorted_by_finish))
                 # sys.exit()
-                opt_indicies = solve_WIS(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
+                # opt_indicies = solve_WIS(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
+                opt_indicies = solve_WIS2(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
+                # assert opt_indicies == opt_indicies2
                 # print(opt_indicies)
                 corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy)
                 for other_r_id, corrected_regions in other_reads_corrected_regions.items():
@@ -1210,9 +1280,9 @@ def main(args):
 
             
             corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
-
-            print("@{0}\n{1}\n+\n{2}".format(acc, corrected_seq, "+"*len(corrected_seq) ))
-            eprint("{0},{1}".format(r_id,corrected_seq))
+            if args.verbose:
+                print("@{0}\n{1}\n+\n{2}".format(acc, corrected_seq, "+"*len(corrected_seq) ))
+                eprint("{0},{1}".format(r_id,corrected_seq))
         print()
         print("Done with batch_id:", batch_id)
         print("Took {0} seconds.".format(time()- batch_start_time))
@@ -1249,11 +1319,12 @@ if __name__ == '__main__':
     parser.add_argument('--disable_numpy', action="store_true", help='Do not require numpy to be installed, but this version is about 1.5x slower than with numpy.')
 
     parser.add_argument('--max_seqs_to_spoa', type=int, default=200,  help='Maximum number of seqs to spoa')
-    parser.add_argument('--max_seqs', type=int, default=2000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
+    parser.add_argument('--max_seqs', type=int, default=1000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
     
     parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance smaller than this limit')
     # parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
+    parser.add_argument('--verbose', action="store_true", help='Print various developer stats.')
 
     parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
                                                                         minmimizer combinations to span regions in homopolymenr dense regions. Solution \
