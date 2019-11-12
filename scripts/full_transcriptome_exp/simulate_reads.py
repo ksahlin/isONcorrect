@@ -77,13 +77,24 @@ def main(args):
     reads_generated_log = defaultdict(int)
     errors = []
     all_transctript_accessions = list(sequence_transcripts.keys())
-    for i in range(args.read_count):
-        acc = random.choice( all_transctript_accessions)
-        transcript = sequence_transcripts[acc]
-        read_acc, read, qual = simulate_read(i, acc, transcript)
-        ont_reads[read_acc] = (read, qual)
-        if i % 5000 == 0:
-            print(i, "reads simulated.")
+    if args.exponential:
+        abundance = [1,2,4,8,16,32]
+        transcript_weights = [ random.choice(abundance) for i in range(len(all_transctript_accessions))]
+        for i in range(args.read_count):
+            acc = random.choices(all_transctript_accessions, weights=transcript_weights)
+            transcript = sequence_transcripts[acc]
+            read_acc, read, qual = simulate_read(i, acc, transcript)
+            ont_reads[read_acc] = (read, qual)
+            if i % 5000 == 0:
+                print(i, "reads simulated.")
+    else:
+        for i in range(args.read_count):
+            acc = random.choice( all_transctript_accessions)
+            transcript = sequence_transcripts[acc]
+            read_acc, read, qual = simulate_read(i, acc, transcript)
+            ont_reads[read_acc] = (read, qual)
+            if i % 5000 == 0:
+                print(i, "reads simulated.")
 
 
     # for acc, abundance in misc_functions.iteritems(reads_generated_log):
@@ -113,6 +124,7 @@ if __name__ == '__main__':
     parser.add_argument('sequence_material', type=str, help='The fasta file with sequences to be sequenced.')
     parser.add_argument('outfile', type=str, help='Output path to fasta file')
     parser.add_argument('read_count', type=int, help='Number of reads to simulate.')
+    parser.add_argument('--exponential', action="store_true", help='Give transcripts weights from 1,2,4,8,16,32.')
     # parser.add_argument('config', type=str, help='config file')
 
 

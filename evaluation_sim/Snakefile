@@ -56,9 +56,10 @@ def mkdir_p(path):
             raise
 
 rule all:
-   input: config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/abundance.csv",
-          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/results.csv"
-
+   input: config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/abundance.csv",
+          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/results.csv"
+          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/exponential/abundance.csv",
+          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/exponential/results.csv"
           #config["ROOT_OUT"], "eval_sim_table.csv"),
           #config["ROOT_OUT"], "controlled.csv")
 
@@ -76,21 +77,23 @@ rule remove_redundant:
 
 rule simulate:
     input:  database_filtered = rules.remove_redundant.output.non_redundant_database
-    output: reads =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}.fq"
+    output: reads =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}/{abundance}/reads.fq"
     run:
         experiment_dir = config["ROOT_IN"] + "/scripts/full_transcriptome_exp"
-        mkdir_p(config["ROOT_OUT"] + "/data/{0}/".format(wildcards.dataset) )
-        shell("python {experiment_dir}/simulate_reads.py {input.database_filtered} {output.reads} {wildcards.nr_reads}")
-
+        mkdir_p(config["ROOT_OUT"] + "/data/{0}/{1}/{2}".format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance) )
+        if wildcards.abundance == "exponential":
+            shell("python {experiment_dir}/simulate_reads.py {input.database_filtered} {output.reads} {wildcards.nr_reads} --exponential")
+        else:
+            shell("python {experiment_dir}/simulate_reads.py {input.database_filtered} {output.reads} {wildcards.nr_reads}")
 
 rule isONclust:
     input:  fastq = rules.simulate.output.reads,
-    output: time_and_mem =  config["ROOT_OUT"] + "/time_and_mem/{dataset}/{nr_reads}/time_and_mem.txt",
-            clusters = config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/final_clusters.tsv" 
+    output: time_and_mem =  config["ROOT_OUT"] + "/time_and_mem/{dataset}/{nr_reads}/{abundance}/time_and_mem.txt",
+            clusters = config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/{abundance}/final_clusters.tsv" 
     run:
         time = config["GNUTIME"]
-        mkdir_p(config["ROOT_OUT"] + "/time_and_mem/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads ) )
-        outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)
+        mkdir_p(config["ROOT_OUT"] + "/time_and_mem/{0}/{1}/{2}/".format(wildcards.dataset, wildcards.nr_reads,  wildcards.abundance) )
+        outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/{2}/".format(wildcards.dataset, wildcards.nr_reads,  wildcards.abundance)
         mkdir_p(outfolder)
         shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust --t 50 --k 13 --w 20  --q 4.0 --fastq {input.fastq}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
     
@@ -98,20 +101,20 @@ rule isONclust:
 rule clusters_to_fastq:
     input: fastq = rules.isONclust.input.fastq,
             clusters = rules.isONclust.output.clusters
-    output: flag = config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/rule_complete.txt"  
+    output: flag = config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/{abundance}/rule_complete.txt"  
     run:
         time = config["GNUTIME"]
-        outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/fastq/".format(wildcards.dataset, wildcards.nr_reads)
+        outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/{2}/fastq/".format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance)
         shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust write_fastq --clusters {input.clusters} --fastq {input.fastq} --outfolder {outfolder} --N 1")
         shell("touch {output.flag}")
 
 
 rule isoncorrect:
     input:  rules.clusters_to_fastq.output.flag
-    output:  flag = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/rule_complete.txt" 
+    output:  flag = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/{abundance}/rule_complete.txt" 
     run: 
-        infolder =  config["ROOT_OUT"] + "/clustering/{0}/{1}/fastq/".format(wildcards.dataset, wildcards.nr_reads) 
-        outfolder = config["ROOT_OUT"] + "/correction/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)   
+        infolder =  config["ROOT_OUT"] + "/clustering/{0}/{1}/{2}/fastq/".format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance) 
+        outfolder = config["ROOT_OUT"] + "/correction/{0}/{1}/{2}/".format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance)   
         isoncorrect_dir = config["ROOT_IN"]
         shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 62  --xmax 80")
         shell("touch {output.flag}")
@@ -119,11 +122,11 @@ rule isoncorrect:
 
 rule combine_isoncorrect:
     input: rules.isoncorrect.output.flag
-    output: corrected_reads_fastq =  config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/isONcorrect.fq"
+    output: corrected_reads_fastq =  config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/{abundance}/isONcorrect.fq"
     run:
         # all_clusters_fastq = expand('/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect/mouse_ont_min_phred_q6/fastq_clusters/{clusterid}/corrected_reads.fastq', clusterid=[str(i) for i in range(0,62747)])
         shell("> {output.corrected_reads_fastq}")
-        for f in glob.glob(  config["ROOT_OUT"] + '/correction/{0}/{1}/*/corrected_reads.fastq'.format(wildcards.dataset, wildcards.nr_reads)):
+        for f in glob.glob(  config["ROOT_OUT"] + '/correction/{0}/{1}/{2}/*/corrected_reads.fastq'.format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance)):
             shell('cat {f} >> {output.corrected_reads_fastq}')
 
 
@@ -131,7 +134,7 @@ rule error_rate_analysis:
     input: original_reads = rules.simulate.output.reads,
             corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
             database_filtered = rules.remove_redundant.output.non_redundant_database
-    output: error_rates_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/{nr_reads}/results.csv"
+    output: error_rates_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/{nr_reads}/{abundance}/results.csv"
     run:
         experiment_dir = config["ROOT_IN"] + "/scripts/full_transcriptome_exp"
         shell("python {experiment_dir}/get_error_rates.py  {input.database_filtered} {input.original_reads}  {input.corrected_reads}  > {output.error_rates_file}")
@@ -142,7 +145,7 @@ rule error_rate_analysis:
 rule align_corrected_reads_minimap2:
     input: corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
             ref = rules.remove_redundant.output.non_redundant_database
-    output: corrected_reads_aligned = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/isONcorrect.sam"
+    output: corrected_reads_aligned = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/{abundance}/isONcorrect.sam"
     run:
         shell("/usr/bin/time -v  minimap2 --eqx -t 8 -k13 -w4 {input.ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
 
@@ -150,7 +153,7 @@ rule align_corrected_reads_minimap2:
 rule align_original_reads_minimap2:
     input:  original_reads = rules.simulate.output.reads,
             ref = rules.remove_redundant.output.non_redundant_database
-    output: original_reads_aligned =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}.sam"
+    output: original_reads_aligned =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}/{abundance}/reads.sam"
     run:
         shell("/usr/bin/time -v  minimap2 --eqx -t 8 -k13 -w4 {input.ref} {input.original_reads} >  {output.original_reads_aligned} ")
 
@@ -158,7 +161,7 @@ rule align_original_reads_minimap2:
 rule overcorrection_analysis:
     input: original_reads_alignments = rules.align_original_reads_minimap2.output.original_reads_aligned,
             corrected_reads_alignments = rules.align_corrected_reads_minimap2.output.corrected_reads_aligned,
-    output: abundance_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/{nr_reads}/abundance.csv"
+    output: abundance_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/{nr_reads}/{abundance}/abundance.csv"
     run:
         experiment_dir = config["ROOT_IN"] + "/scripts/full_transcriptome_exp"
         shell('echo -n  "id","cov_aln","cov_true","seq","type"$"\n" > {output.abundance_file}')
