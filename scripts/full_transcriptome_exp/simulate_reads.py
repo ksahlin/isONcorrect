@@ -80,16 +80,16 @@ def main(args):
     if args.exponential:
         abundance = [1,2,4,8,16,32]
         transcript_weights = [ random.choice(abundance) for i in range(len(all_transctript_accessions))]
-        for i in range(args.read_count):
-            acc = random.choices(all_transctript_accessions, weights=transcript_weights)
+        accessions = random.choices(all_transctript_accessions, weights=transcript_weights, k = args.read_count)
+        for i, acc in enumerate(accessions):
             transcript = sequence_transcripts[acc]
             read_acc, read, qual = simulate_read(i, acc, transcript)
             ont_reads[read_acc] = (read, qual)
             if i % 5000 == 0:
                 print(i, "reads simulated.")
     else:
-        for i in range(args.read_count):
-            acc = random.choice( all_transctript_accessions)
+        accessions = random.choices(all_transctript_accessions, k = args.read_count)
+        for i, acc in enumerate(accessions):
             transcript = sequence_transcripts[acc]
             read_acc, read, qual = simulate_read(i, acc, transcript)
             ont_reads[read_acc] = (read, qual)

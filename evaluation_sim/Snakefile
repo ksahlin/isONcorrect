@@ -57,7 +57,7 @@ def mkdir_p(path):
 
 rule all:
    input: config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/abundance.csv",
-          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/results.csv"
+          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/results.csv",
           config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/exponential/abundance.csv",
           config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/exponential/results.csv"
           #config["ROOT_OUT"], "eval_sim_table.csv"),
