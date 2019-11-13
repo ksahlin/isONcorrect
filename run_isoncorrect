@@ -125,7 +125,7 @@ if __name__ == '__main__':
     parser.add_argument('--xmin', type=int, default=14, help='Lower interval length')
     parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.1, help='Minimum fraction keeping substitution')
-    parser.add_argument('--exact_instance_limit', type=int, default=50,  help='Do not recompute previous results')
+    parser.add_argument('--exact_instance_limit', type=int, default=50,  help='Do exact correction for clusters under this threshold')
     # parser.add_argument('--w_equal_k_limit', type=int, default=100,  help='Do not recompute previous results')
     parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
