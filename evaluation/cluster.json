@@ -13,6 +13,18 @@
         "exclude" : "c[4,6-7,8-16]"
     },
 
+    "evaluate" : 
+    {
+        "jobname" : "evaluate",
+        "cpus-per-task" : "64",
+        "Nodes" : 1,
+        "mem" : "500G",
+        "runtime" : "14-00:00:00",
+        "mail" : "ksahlin@kth.se",
+        "mail_type" : "FAIL",
+        "exclude" : "c[4,6-7,8-16]"
+    },
+
     "isoncorrect" : 
     {
         "jobname" : "isoncorrect",
