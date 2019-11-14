@@ -192,7 +192,7 @@ def run_spoa_with_msa(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_p
 
     return consensus, msa
 
-def run_spoa(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
+def run_spoa(reads, spoa_out_file, spoa_path):
     with open(spoa_out_file, "w") as output_file:
         # print('Running spoa...', end=' ')
         stdout.flush()
@@ -203,13 +203,6 @@ def run_spoa(reads, ref_out_file, spoa_out_file, spoa_path, dot_graph_path):
     output_file.close()
     l = open(spoa_out_file, "r").readlines()
     consensus = l[1].strip()
-    # msa = [s.strip() for s in l[3:]]
-    # print("regular spoa:", consensus)
-    # print(len(consensus))
-    # print(msa)
-    # r = open(ref_out_file, "w")
-    # r.write(">{0}\n{1}".format("reference", consensus))
-    # r.close()
     return consensus
 
 

@@ -7,6 +7,8 @@ import argparse
 import errno
 from time import time
 import itertools
+import tempfile
+import shutil
 
 import math
 import re
@@ -433,7 +435,7 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
     #     for 
     return alternative_contexts
 
-def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200, disable_numpy=False):
+def get_best_corrections(curr_best_seqs, k_size, work_dir,  v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200, disable_numpy=False):
     weight = len(curr_best_seqs)
     # r_seq = curr_best_seqs["curr_read"][0]
     # print(r_seq)
@@ -441,7 +443,8 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     # sys.exit()
     #### TMP
     #### TMP
-    reads_path = open(os.path.join(outfolder, "reads_tmp.fa"), "w")
+
+    reads_path = open(os.path.join(work_dir, "reads_tmp.fa"), "w")
 
     # for q_id, (s_tmp, s_qual, pos1, pos2) in curr_best_seqs.items():
     for i, (q_id, (seq, qual, pos1, pos2)) in enumerate(curr_best_seqs.items()):
@@ -452,7 +455,7 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
             # print(q_id, str(pos1), str(pos2))
         reads_path.write(">{0}\n{1}\n".format(str(q_id)+str(pos1)+str(pos2), seq))
     reads_path.close()
-    spoa_ref = create_augmented_reference.run_spoa(reads_path.name, "/dev/null", os.path.join(outfolder,"spoa_tmp.fa"), "spoa", "/dev/null")
+    spoa_ref = create_augmented_reference.run_spoa(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
     
 
     ######### Adjust spoa sequence ###############
@@ -466,9 +469,9 @@ def get_best_corrections(curr_best_seqs, k_size, outfolder, v_depth_ratio_thresh
     # print(start_index, stop_index)
     if start_index >=0 and stop_index <= len(spoa_ref):
         spoa_ref_mod = spoa_ref[start_index: stop_index]
-        if spoa_ref != spoa_ref_mod:
-            print(spoa_ref)
-            print(spoa_ref_mod)
+        # if spoa_ref != spoa_ref_mod:
+        #     print(spoa_ref)
+        #     print(spoa_ref_mod)
         # sys.exit()
         spoa_ref = spoa_ref_mod
     
@@ -983,7 +986,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
     return tmp_cnt, read_complexity_cnt
 
-def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outfolder, v_depth_ratio_threshold,  max_seqs_to_spoa, disable_numpy):
+def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, work_dir, v_depth_ratio_threshold,  max_seqs_to_spoa, disable_numpy, verbose):
     corr_seq = []
     # print(opt_indicies)
     other_reads_corrected_regions = defaultdict(list)
@@ -996,7 +999,8 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
         # print(start-7, stop+7, weights)
         if start - k_size > prev_stop and prev_stop > 0:
             # print()
-            eprint("Gap in correction:", start-k_size - prev_stop, "between positions:", prev_stop, start, )
+            if verbose:
+                eprint("Gap in correction:", start-k_size - prev_stop, "between positions:", prev_stop, start, )
             # print()
             # sys.exit()
         prev_stop = stop + k_size
@@ -1004,7 +1008,7 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
         if isinstance(instance, str): # already corrected
             best_corr = instance
         else:
-            best_corr, other_corrections = get_best_corrections(instance, k_size, outfolder, v_depth_ratio_threshold, max_seqs_to_spoa, disable_numpy) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
+            best_corr, other_corrections = get_best_corrections(instance, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, disable_numpy) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
             for other_r_id, other_corr_regions in other_corrections.items():
                 for region in other_corr_regions:
                     other_reads_corrected_regions[other_r_id].append(region)
@@ -1012,7 +1016,7 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, outf
         corr_seq.append((start,stop, best_corr))
     # corr_seq = corr_seq
     # print(corr_seq, len(seq))
-    eprint(first_start, final_stop)
+    # eprint(first_start, final_stop)
     tmp = [seq[0 : corr_seq[0][0]] ]
     for cnt, (start_, stop_, seq_segment) in enumerate(corr_seq):
         tmp.append(seq_segment)
@@ -1090,6 +1094,8 @@ def main(args):
         # setattr(self, key, value)
     eprint()
 
+    work_dir = tempfile.mkdtemp()
+    print("Temporary workdirektory:", work_dir)
 
     # start = time()
     corrected_reads = {}
@@ -1262,7 +1268,7 @@ def main(args):
                 opt_indicies = solve_WIS2(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
                 # assert opt_indicies == opt_indicies2
                 # print(opt_indicies)
-                corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, args.outfolder, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy)
+                corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy, args.verbose)
                 for other_r_id, corrected_regions in other_reads_corrected_regions.items():
                     for corr_region in corrected_regions:
                         previously_corrected_regions[other_r_id].append(corr_region)
@@ -1298,6 +1304,9 @@ def main(args):
     for r_id, (acc, seq, qual) in corrected_reads.items():
         outfile.write("@{0}\n{1}\n+\n{2}\n".format(acc, seq, qual))
     outfile.close()
+
+    print("removing temporary workdir")
+    shutil.rmtree(work_dir)
 
 
 
