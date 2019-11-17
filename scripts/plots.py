@@ -17,30 +17,30 @@ except (ImportError, RuntimeError):
 import numpy as np
 import seaborn as sns
 import pandas as pd
+from matplotlib import pyplot
 
+# def total_error_rate(input_csv, outfolder):
 
-def total_error_rate(input_csv, outfolder):
+#     indata = pd.read_csv(input_csv)
+#     # print(len(df))
+#     # indata = df.loc[df['q_acc'] == df['r_acc']]
+#     # print(len(indata))
 
-    indata = pd.read_csv(input_csv)
-    # print(len(df))
-    # indata = df.loc[df['q_acc'] == df['r_acc']]
-    # print(len(indata))
+#     g = sns.catplot(x="read_type", y="error_rate", #col="Depth",
+#                 data=indata,  #hue="read_type", hue_order= ["corrected", "original"],
+#                 kind="violin", aspect=1)
 
-    g = sns.catplot(x="read_type", y="error_rate", #col="Depth",
-                data=indata,  #hue="read_type", hue_order= ["corrected", "original"],
-                kind="violin", aspect=1)
+#     g.set(ylim=(0,15))
+#     g.set_ylabels("Error rate (%)")
+#     g.set_xlabels("Method")
 
-    g.set(ylim=(0,15))
-    g.set_ylabels("Error rate (%)")
-    g.set_xlabels("Method")
+#     # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
+#     # ax.set_ylim(0,15)
+#     # ax.set_ylabel("Error rate %")
 
-    # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
-    # ax.set_ylim(0,15)
-    # ax.set_ylabel("Error rate %")
-
-    plt.savefig(os.path.join(outfolder, "total_error_rate.eps"))
-    plt.savefig(os.path.join(outfolder, "total_error_rate.pdf"))
-    plt.close()
+#     plt.savefig(os.path.join(outfolder, "total_error_rate.eps"))
+#     plt.savefig(os.path.join(outfolder, "total_error_rate.pdf"))
+#     plt.close()
 
 
 def label_transcript(row):
@@ -212,9 +212,9 @@ def total_error_rate2(input_csv, outfolder):
     # indata = df.loc[df['q_acc'] == df['r_acc']]
     # print(len(indata))
     data =indata[indata.read_type == 'corrected']
-    sns.distplot(data['error_rate'], norm_hist=False, kde=False, label='Corrected', bins=500, hist_kws=dict(alpha=0.5))
+    sns.distplot(data['error_rate'], norm_hist=False, kde=False, label='Corrected', bins=100, hist_kws=dict(alpha=0.5))
     data = indata[indata.read_type == 'original']
-    sns.distplot(data['error_rate'], norm_hist=False,  kde=False, label='Original', bins=500, hist_kws=dict(alpha=0.5))
+    sns.distplot(data['error_rate'], norm_hist=False,  kde=False, label='Original', bins=100, hist_kws=dict(alpha=0.5))
 
 
     plt.xticks(np.arange(0, 10, step=1))
@@ -236,6 +236,21 @@ def total_error_rate2(input_csv, outfolder):
     plt.savefig(os.path.join(outfolder, "total_error_rate2.pdf"))
     plt.close()
 
+def total_error_rate(input_csv, outfolder):
+    df = pd.read_csv(input_csv)
+    df_corr = df.loc[df['read_type'] == 'corrected']
+    error_rate_corr = df_corr['error_rate'].tolist()
+    # print(error_rate_corr)
+    # sys.exit()
+    df_orig = df.loc[df['read_type'] == 'original']
+    error_rate_orig = df_orig['error_rate'].tolist()
+    # bins = [0.1*i for i in range(300)]
+    pyplot.hist(error_rate_orig, 100, range=[0, 20], alpha=0.5, label='Original')
+    pyplot.hist(error_rate_corr, 100, range=[0, 20], alpha=0.5, label='Corrected')
+    pyplot.legend(loc='upper right')
+    plt.savefig(os.path.join(outfolder, "error_rate.eps"))
+    plt.savefig(os.path.join(outfolder, "error_rate.pdf"))
+    
 
 def error_rate_per_cluster_size(input_csv, outfolder):
     indata = pd.read_csv(input_csv)
@@ -277,12 +292,12 @@ def main(args):
     flatui = ["#2ecc71", "#e74c3c"] # https://chrisalbon.com/python/data_visualization/seaborn_color_palettes/
     sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
-    total_error_rate2(args.input_csv, args.outfolder)
-    # error_rate_per_cluster_size(args.input_csv, args.outfolder)
-    # total_error_rate(args.input_csv, args.outfolder)
     # splice_site_classification_plot(args.input_csv, args.outfolder)
+    # unique_fsm(args.input_csv, args.outfolder)
 
-    unique_fsm(args.input_csv, args.outfolder)
+    # total_error_rate2(args.input_csv, args.outfolder)
+    # error_rate_per_cluster_size(args.input_csv, args.outfolder)
+    total_error_rate(args.input_csv, args.outfolder)
     # number_splices_fsm(args.input_csv, args.outfolder)
 
 if __name__ == '__main__':
