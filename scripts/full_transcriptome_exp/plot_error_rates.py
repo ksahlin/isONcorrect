@@ -27,15 +27,21 @@ indata = pd.read_csv(data)
 #             data=indata, kind="point", aspect=1)
 # ax = sns.scatterplot(x="abundance_original", y="abundance_corrected", #col="Depth", # col_wrap=3, #hue="time",
 #                       data=indata)
-g = sns.lmplot(x="abundance", y="error_rate",  hue="type", #scatter= False, x_estimator = np.mean,  #x_jitter = 0.1, #col="Depth", 
-                data=indata) #, col_wrap=2, height=3)
+# g = sns.lmplot(x="transcript_cov", y="err_rate",  hue="type", scatter= False, x_estimator = np.mean,  #x_jitter = 0.1, #col="Depth", 
+#                 x_ci= 'sd', data=indata) #, col_wrap=2, height=3)
+
+ax = sns.lineplot(x="transcript_cov", y="err_rate",  hue="type", 
+                  ci = 'sd', data=indata)
+ax.set_xscale('log')
+ax.set_ylabel("Error rate (%)")
+ax.set_xlabel("Reads per transcript")
 
 # g.set(ylim=(0,100))
 # ax.set_ylabel("Abundance after correction")
 # ax.set_xlabel("Abundance before correction")
 
-g.set_ylabels("Error rate")
-g.set_xlabels("Reads per transcript")
+# g.set_ylabels("Error rate (%)")
+# g.set_xlabels("Reads per transcript")
 
 # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
 # ax.set_ylim(0,15)
