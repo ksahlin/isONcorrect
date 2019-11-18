@@ -254,7 +254,7 @@ def decide_primary_locations(sam_file, args): # maybe this function is not neede
     for read in SAM_file.fetch(until_eof=True):
         if read.flag == 0 or read.flag == 16:
             ins = sum([length for type_, length in read.cigartuples if type_ == 1])
-            del_ = sum([length for type_, length in read.cigartuples if type_ == 2 and length < args.min_intron ])
+            del_ = sum([length for type_, length in read.cigartuples if type_ == 2 ])
             subs = sum([length for type_, length in read.cigartuples if type_ == 8])
             matches = sum([length for type_, length in read.cigartuples if type_ == 7])
             tot_align = ins + del_ + subs + matches
@@ -338,9 +338,7 @@ def get_deletion_sites(read):
 def get_error_rate_stats_per_read(reads_primary_locations, reads, args, reference = {}):
     # SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     alignments = {}
-    alignments_detailed = {}
     read_index = 0
-    all_called_intron_lengths = []
     for acc in reads_primary_locations:
         read = reads_primary_locations[acc]
         if read.flag == 0 or read.flag == 16:
@@ -357,7 +355,7 @@ def get_error_rate_stats_per_read(reads_primary_locations, reads, args, referenc
 
         else:
             pass
-    return alignments, alignments_detailed
+    return alignments
 
 def get_summary_stats(reads, quantile):
     tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
@@ -388,42 +386,37 @@ def print_detailed_values_to_file(alignments_dict, reads, outfile, reads_unalign
         outfile.write( ",".join( [str(item) for item in info_tuple] ) + "\n")
 
 
-def print_quantile_values(alignments_dict):
+# def print_quantile_values(alignments_dict):
 
-    alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1][0:4])) )
-    print(alignments_sorted[-5:])
+#     alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1][0:4])) )
+#     print(alignments_sorted[-5:])
 
-    sorted_error_rates = [ sum(tup[0:3])/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+#     sorted_error_rates = [ sum(tup[0:3])/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
 
-    insertions = [ tup[0]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
-    deletions = [ tup[1]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
-    substitutions = [ tup[2]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+#     insertions = [ tup[0]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+#     deletions = [ tup[1]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+#     substitutions = [ tup[2]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
 
-    n = len(sorted_error_rates)
-    quantiles = [0, 1.0/20, 1.0/10, 1.0/4, 1.0/2, 3.0/4, 9.0/10, 19.0/20, 1 ]
-    quantile_errors = []
-    quantile_insertions = []
-    quantile_deletions = []
-    quantile_substitutions = []
+#     n = len(sorted_error_rates)
+#     quantiles = [0, 1.0/20, 1.0/10, 1.0/4, 1.0/2, 3.0/4, 9.0/10, 19.0/20, 1 ]
+#     quantile_errors = []
+#     quantile_insertions = []
+#     quantile_deletions = []
+#     quantile_substitutions = []
 
-    for q in quantiles:
-        if q == 1:
-            quantile_errors.append(sorted_error_rates[int(q*n)-1])
-            quantile_insertions.append(insertions[int(q*n)-1])
-            quantile_deletions.append(deletions[int(q*n)-1])
-            quantile_substitutions.append(substitutions[int(q*n)-1])
-        else:
-            quantile_errors.append(sorted_error_rates[int(q*n)])
-            quantile_insertions.append(insertions[int(q*n)])
-            quantile_deletions.append(deletions[int(q*n)])
-            quantile_substitutions.append(substitutions[int(q*n)])
+#     for q in quantiles:
+#         if q == 1:
+#             quantile_errors.append(sorted_error_rates[int(q*n)-1])
+#             quantile_insertions.append(insertions[int(q*n)-1])
+#             quantile_deletions.append(deletions[int(q*n)-1])
+#             quantile_substitutions.append(substitutions[int(q*n)-1])
+#         else:
+#             quantile_errors.append(sorted_error_rates[int(q*n)])
+#             quantile_insertions.append(insertions[int(q*n)])
+#             quantile_deletions.append(deletions[int(q*n)])
+#             quantile_substitutions.append(substitutions[int(q*n)])
 
-    # quantile_errors = [sorted_error_rates[0], sorted_error_rates[int(n/20)], sorted_error_rates[int(n/10)], 
-    #             sorted_error_rates[int(n/4)], sorted_error_rates[int(n/2)], 
-    #             sorted_error_rates[int(3*n/4)], sorted_error_rates[int(9*n/10)], sorted_error_rates[int(19*n/20)], 
-    #             sorted_error_rates[-1]]
-
-    return quantile_errors, quantile_insertions, quantile_deletions, quantile_substitutions
+#     return quantile_errors, quantile_insertions, quantile_deletions, quantile_substitutions
 
 
 def cigar_to_seq(cigar, query, ref):
@@ -819,38 +812,7 @@ def pickle_load(filename):
         data = pickle.load(f)
     return data
 
-def print_exact_alignments(reads, corr_reads):
-    tot = 0
-    for acc in reads:
-        if acc not in corr_reads:
-            print(acc, "Not in corrected reads")
-        else:
-            orig_seq = reads[acc]
-            corr_seq = corr_reads[acc]
-            read_alignment, ref_alignment = parasail_alignment(orig_seq, corr_seq)
-            orig_dlen = [d_len for ch, d_len in  [(ch, len(list(_))) for ch, _ in itertools.groupby(read_alignment)] if ch == "-" ]
-            corr_dlen = [d_len for ch, d_len in  [(ch, len(list(_))) for ch, _ in itertools.groupby(ref_alignment)] if ch == "-" ] 
-            if corr_dlen:
-                max_orig_dlen = max( orig_dlen )
-            else:
-                max_orig_dlen = 0
-            if corr_dlen:
-                max_corr_dlen = max( corr_dlen )
-            else:
-                max_corr_dlen = 0
 
-            if max_corr_dlen > 10 or max_orig_dlen > 10:
-                print("orig", acc, read_alignment)
-                print(orig[acc])
-                print("corr", acc, ref_alignment)
-                print(corr[acc])
-                print(corr_detailed[acc][0])
-                print(corr_detailed[acc][1])
-                print(corr_detailed[acc][2])
-
-                tot += 1
-                print()
-    print("TOT structural diffs:", tot)
 
 def main(args):
     refs = { acc.split()[0] : seq for i, (acc, (seq, _)) in enumerate(readfq(open(args.refs, 'r')))}
@@ -862,8 +824,8 @@ def main(args):
     orig_primary_locations = decide_primary_locations(args.orig_sam, args)
     corr_primary_locations = decide_primary_locations(args.corr_sam, args)
 
-    corr, corr_detailed = get_error_rate_stats_per_read(corr_primary_locations, corr_reads, args)
-    orig, orig_detailed = get_error_rate_stats_per_read(orig_primary_locations, reads, args)
+    corr = get_error_rate_stats_per_read(corr_primary_locations, corr_reads, args)
+    orig = get_error_rate_stats_per_read(orig_primary_locations, reads, args)
 
     print( "Reads successfully aligned:", len(orig),len(corr))
 
