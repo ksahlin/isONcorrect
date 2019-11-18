@@ -61,6 +61,9 @@ rule all:
           #config["ROOT_OUT"], "eval_sim_table.csv"),
           #config["ROOT_OUT"], "controlled.csv")
 
+rule sirv:
+    input: config["ROOT_OUT"] + "/evaluation_biological/SIRV/200000/results_per_read_to_transcriptome.csv"
+
 
 rule biological:
     input: config["ROOT_OUT"] + "/eval_table.csv"
@@ -217,14 +220,33 @@ rule evaluate:
         outfolder = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)  
         mkdir_p(outfolder) 
         if wildcards.dataset == "NA12878":
-            shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
+            shell("python {eval_dir}/evaluate_real_reads_to_genome.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {input.clusters_tsv} {input.gtf_annotation} {outfolder} --load_database")
         elif wildcards.dataset == "drosophila":
-            shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
+            shell("python {eval_dir}/evaluate_real_reads_to_genome.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {input.clusters_tsv} {input.gtf_annotation} {outfolder}")
         else:
-            shell("python {eval_dir}/evaluate_real_reads.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
+            shell("python {eval_dir}/evaluate_real_reads_to_genome.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {input.clusters_tsv} {input.gtf_annotation} {outfolder} --infer_genes")
+
+
+rule evaluate_sirv:
+    input: original_reads = rules.subsample.output.subsampled_fastq,
+            corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
+    output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/SIRV/{nr_reads}/results_per_read_to_transcriptome.csv"
+    run:
+        ref = config["SIRV_TRANSCRIPTOME"]
+        eval_dir = config["ROOT_IN"] + "/scripts/"
+        outfolder = config["ROOT_OUT"] + "/evaluation_biological/SIRV/{0}/".format(wildcards.nr_reads)  
+        mkdir_p(outfolder) 
+        
+        orig_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/SIRV/{0}/original_to_transcripts.sam".format(wildcards.nr_reads) 
+        corr_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/SIRV/{0}/corrected_to_transcripts.sam".format(wildcards.nr_reads) 
+
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k13 -w4 {ref} {input.original_reads} >  {orig_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k13 -w4 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
+        shell("python {eval_dir}/evaluate_sirv_to_transcriptome.py  {orig_reads_aligned}  {corr_reads_aligned} {input.original_reads}  \
+                                                        {input.corrected_reads} {ref} {outfolder} --infer_genes")
 
 
 rule summary:

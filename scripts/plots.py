@@ -124,8 +124,8 @@ def unique_fsm(input_csv, outfolder):
 
     all_fsm_orig = set(orig['transcript_fsm_id'].unique())
     all_fsm_corr = set(corr['transcript_fsm_id'].unique())
-    print('In orig but not in corr', all_fsm_orig - all_fsm_corr)
-    print('In corr but not in orig', all_fsm_corr - all_fsm_orig)
+    print('In orig but not in corr', len(all_fsm_orig - all_fsm_corr))
+    print('In corr but not in orig', len(all_fsm_corr - all_fsm_orig))
 
     all_fsm_orig = {x for x in all_fsm_orig if x==x}
     all_fsm_corr = {x for x in all_fsm_corr if x==x}
@@ -156,52 +156,33 @@ def unique_fsm(input_csv, outfolder):
     reads_per_transcript_orig = transpose_count(orig_reads)
     reads_per_transcript_corr = transpose_count(corr_reads)
     print("transcript_id,FSM_orig,FSM_corr")
+    fsm_depth_orig = []
+    fsm_depth_corr = []
+    occurr_in_orig_read_depth = defaultdict(int)
     for transcript_id in set(all_fsm_orig | all_fsm_corr):
-        print(transcript_id,reads_per_transcript_orig[transcript_id], reads_per_transcript_corr[transcript_id])
+        if transcript_id not in reads_per_transcript_corr:
+            print(transcript_id, "not in corrected, depth:{0}.".format(reads_per_transcript_orig[transcript_id]))
+            occurr_in_orig_read_depth[reads_per_transcript_orig[transcript_id]] += 1
+        elif transcript_id not in reads_per_transcript_orig:
+            print(transcript_id, "not in ORIGINAL, depth in corr:{0}.".format(reads_per_transcript_corr[transcript_id]))
+        fsm_depth_orig.append( reads_per_transcript_orig[transcript_id] + 1 )
+        fsm_depth_corr.append( reads_per_transcript_corr[transcript_id] + 1 )
+            # print(transcript_id,reads_per_transcript_orig[transcript_id], reads_per_transcript_corr[transcript_id])
+    print(occurr_in_orig_read_depth)
+    d = {"fsm_orig" : fsm_depth_orig, "fsm_corr" : fsm_depth_corr}
+    df = pd.DataFrame(d)
+    # ax.set(xscale="log", yscale="log")
+    plt.xscale('log')
+    plt.yscale('log')
+    ax = sns.scatterplot(x='fsm_orig', y='fsm_corr', alpha= 0.5, data = df)
+    ax.set_title("FSM before and after correction")
+    ax.set_ylabel("Read depth corrected (log(1+x) scale)")
+    ax.set_xlabel("Read depth original (log(1+x) scale)")
+    plt.savefig(os.path.join(outfolder, "fsm_breakdown.eps"))
+    plt.savefig(os.path.join(outfolder, "fsm_breakdown.pdf"))
+    plt.close()
 
     print("sum",sum([reads_per_transcript_orig[tr_id] for tr_id in set(all_fsm_orig | all_fsm_corr)]), sum([reads_per_transcript_corr[tr_id] for tr_id in set(all_fsm_orig | all_fsm_corr)]) )
-
-    # fsm_read_absent = set()
-    # fsm_transcripts_overcorrected = set()
-    # fsm_reads_overcorrected = 0
-    # for read in orig_reads:
-    #     if read not in corr_reads:
-    #         # print('here')
-    #         if orig_reads[read] not in all_fsm_corr:
-    #             # print('orig read not in corr and FSM not found in corr')
-    #             fsm_read_absent.add(orig_reads[read])
-    #     else:
-    #         if orig_reads[read] != corr_reads[read] and orig_reads[read] in all_fsm_orig:
-    #             print(read, orig_reads[read], corr_reads[read])
-    #             # print('orig read not in corr and FSM not found in corr')
-    #             fsm_transcripts_overcorrected.add(orig_reads[read])
-    #             fsm_reads_overcorrected += 1
-
-
-    # print('Original reads was a FSM but was not in the input data of the corrected reads:',len(fsm_read_absent))
-    # print('Unique transcripts overcorrected/modified (bad):', len(fsm_transcripts_overcorrected))
-    # print('Number of original reads that were FSM but not FSM in the corrected reads (bad):', fsm_reads_overcorrected)
-
-    # fsm_read_absent = set()
-    # fsm_transcripts_overcorrected = set()
-    # fsm_reads_corrected = 0
-    # for read in corr_reads:
-    #     if read not in orig_reads:
-    #         # print('here')
-    #         if corr_reads[read] not in all_fsm_orig:
-    #             # print('orig read not in corr and FSM not found in corr')
-    #             fsm_read_absent.add(corr_reads[read])
-    #     else:
-    #         if corr_reads[read] != orig_reads[read] and orig_reads[read] not in all_fsm_orig:
-    #             # print('orig read not in corr and FSM not found in corr')
-    #             fsm_transcripts_overcorrected.add(corr_reads[read])
-    #             fsm_reads_corrected += 1
-    #         elif corr_reads[read] != orig_reads[read] and corr_reads[read] in all_fsm_orig:
-    #             print(read, orig_reads[read], corr_reads[read])
-
-    # print('Corrected reads was a FSM and was not aligned at all in the original data (Good):', len(fsm_read_absent))
-    # print('Unique transcripts had FSM in corrected but not in original data (Good):', len(fsm_transcripts_overcorrected))
-    # print('Corrected reads was a FSM but did not align as FSM in original data (Good):', fsm_reads_corrected)
 
 
 
@@ -248,6 +229,8 @@ def total_error_rate(input_csv, outfolder):
     pyplot.hist(error_rate_orig, 100, range=[0, 20], alpha=0.5, label='Original')
     pyplot.hist(error_rate_corr, 100, range=[0, 20], alpha=0.5, label='Corrected')
     pyplot.legend(loc='upper right')
+    pyplot.xlabel("Error rate (%)")
+    pyplot.ylabel("Read count")
     plt.savefig(os.path.join(outfolder, "error_rate.eps"))
     plt.savefig(os.path.join(outfolder, "error_rate.pdf"))
     
@@ -287,17 +270,18 @@ def error_rate_per_cluster_size(input_csv, outfolder):
 
 
 def main(args):
-    
-    sns.set(style="whitegrid")
+    sns.set()
+    # sns.set(style="whitegrid")
     flatui = ["#2ecc71", "#e74c3c"] # https://chrisalbon.com/python/data_visualization/seaborn_color_palettes/
     sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
     # splice_site_classification_plot(args.input_csv, args.outfolder)
-    # unique_fsm(args.input_csv, args.outfolder)
+    unique_fsm(args.input_csv, args.outfolder)
+    # total_error_rate(args.input_csv, args.outfolder)
+
 
     # total_error_rate2(args.input_csv, args.outfolder)
     # error_rate_per_cluster_size(args.input_csv, args.outfolder)
-    total_error_rate(args.input_csv, args.outfolder)
     # number_splices_fsm(args.input_csv, args.outfolder)
 
 if __name__ == '__main__':
