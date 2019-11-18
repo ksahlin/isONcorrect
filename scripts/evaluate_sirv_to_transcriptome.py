@@ -345,13 +345,13 @@ def get_error_rate_stats_per_read(reads_primary_locations, reads, args, referenc
             # print(read.is_reverse)
             read_index += 1
             ins = sum([length for type_, length in read.cigartuples if type_ == 1])
-            del_old = sum([length for type_, length in read.cigartuples if type_ == 2 ])
+            del_ = sum([length for type_, length in read.cigartuples if type_ == 2 ])
             subs = sum([length for type_, length in read.cigartuples if type_ == 8])
             matches = sum([length for type_, length in read.cigartuples if type_ == 7])
             called_intron_lengths = [length for type_, length in read.cigartuples if type_ == 3]
 
             assert read.query_name not in alignments
-            alignments[read.query_name] = (ins, del_new, subs, matches, read.reference_name, read.reference_start, read.reference_end + 1, read.flag, read_index)
+            alignments[read.query_name] = (ins, del_, subs, matches, read.reference_name, read.reference_start, read.reference_end + 1, read.flag, read_index)
 
         else:
             pass
