@@ -231,8 +231,8 @@ rule evaluate:
 
 
 rule evaluate_sirv:
-    input: original_reads = rules.subsample.output.subsampled_fastq,
-            corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
+    input: original_reads = rules.split_accessions_orig.output.original_reads_split_accessions, #rules.subsample.output.subsampled_fastq,
+            corrected_reads = rules.split_accessions_corr.output.original_reads_split_accessions #rules.combine_isoncorrect.output.corrected_reads_fastq,
     output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}/results_per_read_to_transcriptome.csv"
     run:
         ref = config["SIRV_TRANSCRIPTOME"]
