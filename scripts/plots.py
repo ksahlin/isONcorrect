@@ -229,7 +229,7 @@ def total_error_rate(input_csv, outfolder):
     pyplot.hist(error_rate_orig, 100, range=[0, 20], alpha=0.5, label='Original')
     pyplot.hist(error_rate_corr, 100, range=[0, 20], alpha=0.5, label='Corrected')
     pyplot.legend(loc='upper right')
-    pyplot.xlabel("Error rate (%)")
+    pyplot.xlabel("Difference to genome (%)")
     pyplot.ylabel("Read count")
     plt.savefig(os.path.join(outfolder, "error_rate.eps"))
     plt.savefig(os.path.join(outfolder, "error_rate.pdf"))
@@ -268,6 +268,22 @@ def error_rate_per_cluster_size(input_csv, outfolder):
     plt.savefig(os.path.join(outfolder, "error_rate_per_cluster_size.pdf"))
     plt.close()
 
+def sirv_error_rate_per_transcript(input_csv, outfolder):
+
+    indata = pd.read_csv(input_csv)
+    indata['transcript_cov'] = indata.groupby('chr_id')['chr_id'].transform('count')
+    print(indata['transcript_cov'])
+    ax = sns.lineplot(x="transcript_cov", y="error_rate",  hue="read_type",
+                      ci = 'sd', data=indata)
+    ax.set_xscale('log')
+    ax.set_ylabel("Error rate (%)")
+    ax.set_xlabel("Reads per transcript")
+
+    plt.savefig(os.path.join(outfolder, "error_rates.eps"))
+    plt.savefig(os.path.join(outfolder, "error_rates.pdf"))
+    plt.close()
+
+
 
 def main(args):
     sns.set()
@@ -276,8 +292,9 @@ def main(args):
     sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
     # splice_site_classification_plot(args.input_csv, args.outfolder)
-    unique_fsm(args.input_csv, args.outfolder)
+    # unique_fsm(args.input_csv, args.outfolder)
     # total_error_rate(args.input_csv, args.outfolder)
+    sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
 
 
     # total_error_rate2(args.input_csv, args.outfolder)
