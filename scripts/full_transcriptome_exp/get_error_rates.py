@@ -104,6 +104,7 @@ def get_error_profile(corr_seq, true_seq):
     # indels =  insertions + deletions
     subs = len([1 for n1, n2 in zip(read_alignment, ref_alignment) if n1 != n2 and n1 != "-" and n2 != "-"] )
     err_rate = round(100 * float(subs + insertions + deletions) / len(true_seq), 2)
+    read_length = true_seq
     return tot, insertions, deletions, subs, err_rate
 
 
@@ -115,33 +116,33 @@ def main(args):
     isoform_coverage = Counter([acc.split("|")[2].split("_")[0] for acc in original])
     gene_coverage = Counter([acc.split("|")[1] for acc in original])
     gene_fam_coverage = Counter([acc.split("|")[0] for acc in original])
-    print("read,err,subs,ins,del,err_rate,type,transcript_cov,gene_cov,gene_fam_cov")
+    print("read,read_length,err,subs,ins,del,err_rate,type,transcript_cov,gene_cov,gene_fam_cov")
     for acc in corrected:
         transcript_id = acc.split("|")[2].split("_")[0]
         gene_id = acc.split("|")[1] 
         gene_fam_id = acc.split("|")[0] 
         true_seq = true[transcript_id]
-
+        read_length = len(true_seq)
         # res = edlib.align(seq, spoa_ref, task="path", mode="NW")
         # cigar_string = res["cigar"]
         # read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, seq, spoa_ref)
 
         corr_seq = corrected[acc]
         tot, ins, del_, subs, err_rate = get_error_profile(corr_seq, true_seq)
-        print("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}".format(acc, tot, ins, del_, subs, err_rate, "corrected", isoform_coverage[transcript_id], gene_coverage[gene_id], gene_fam_coverage[gene_fam_id] ))
+        print("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}".format(acc, read_length, tot, ins, del_, subs, err_rate, "corrected", isoform_coverage[transcript_id], gene_coverage[gene_id], gene_fam_coverage[gene_fam_id] ))
         # print("corrected:", ed_corr, "cov:", isoform_coverage[transcript_id])
         err_rate_corr = err_rate
         orig_seq = original[acc]
         
-        if err_rate_corr > 15:
-            print("Over corrected!", file=sys.stderr)
-            print(acc, file=sys.stderr)
-            print(gene_coverage[gene_id], gene_fam_coverage[gene_fam_id], file=sys.stderr )
-            print(corr_seq, tot, ins, del_, subs, err_rate, file=sys.stderr)
-            print(true_seq, file=sys.stderr)
-            tot, ins, del_, subs, err_rate =  get_error_profile(orig_seq, true_seq)
-            print(orig_seq,tot, ins, del_, subs, err_rate, file=sys.stderr)
-            print("", file=sys.stderr)
+        # if err_rate_corr > 15:
+        #     print("Over corrected!", file=sys.stderr)
+        #     print(acc, file=sys.stderr)
+        #     print(gene_coverage[gene_id], gene_fam_coverage[gene_fam_id], file=sys.stderr )
+        #     print(corr_seq, tot, ins, del_, subs, err_rate, file=sys.stderr)
+        #     print(true_seq, file=sys.stderr)
+        #     tot, ins, del_, subs, err_rate =  get_error_profile(orig_seq, true_seq)
+        #     print(orig_seq,tot, ins, del_, subs, err_rate, file=sys.stderr)
+        #     print("", file=sys.stderr)
             
 
         tot, ins, del_, subs, err_rate = get_error_profile(orig_seq, true_seq)

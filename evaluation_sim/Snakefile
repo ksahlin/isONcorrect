@@ -164,7 +164,8 @@ rule overcorrection_analysis:
     output: abundance_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/{nr_reads}/{abundance}/abundance.csv"
     run:
         experiment_dir = config["ROOT_IN"] + "/scripts/full_transcriptome_exp"
-        shell('echo -n  "id","cov_aln","cov_true","seq","type"$"\n" > {output.abundance_file}')
+        shell('echo -n  "read_acc","aligned_to","transcript_abundance","is_tp","read_type"$"\n" > {output.abundance_file}')
+        # shell('echo -n  "id","cov_aln","cov_true","seq","type"$"\n" > {output.abundance_file}')
         shell("python  {experiment_dir}/get_abundance.py  {input.corrected_reads_alignments} 'corrected' >> {output.abundance_file}")
         shell("python  {experiment_dir}/get_abundance.py {input.original_reads_alignments} 'original' >>  {output.abundance_file}")
         # abundance_plot=$outbase/$id/$depth/"abundance.pdf" 

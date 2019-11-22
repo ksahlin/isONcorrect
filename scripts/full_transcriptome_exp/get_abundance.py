@@ -207,7 +207,7 @@ def get_abundance_aligned_reads(sam_file):
     gene_cov_aligned = defaultdict(int)
     transcript_cov_aligned = defaultdict(int)
     gene_fam_cov_aligned = defaultdict(int)
-
+    read_specific = {}
     for read in SAM_file.fetch(until_eof=True):
         if read.flag == 0 or read.flag == 16:
             # print(read.is_reverse)
@@ -223,8 +223,6 @@ def get_abundance_aligned_reads(sam_file):
             gene_cov_true[gene_id] += 1
             gene_fam_cov_true[gene_fam_id] += 1
 
-
-
             ref_acc = read.reference_name
             
             transcript_id = ref_acc.split("|")[2]
@@ -235,10 +233,14 @@ def get_abundance_aligned_reads(sam_file):
             gene_cov_aligned[gene_id] += 1
             gene_fam_cov_aligned[gene_fam_id] += 1
 
-        else:
-            pass
+            assert read_acc not in read_specific
+            read_specific[read_acc] = transcript_id
+
+        elif read_acc not in read_specific:
+            read_specific[read_acc] = "unaligned"
+
             # print("secondary", read.flag, read.reference_name) 
-    return transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned
+    return transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific
 
 # def get_summary_stats(reads, quantile):
 #     tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
@@ -258,40 +260,47 @@ def get_abundance_aligned_reads(sam_file):
 
 def main(args):
     # reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
-    transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned = get_abundance_aligned_reads(args.samfile)
+    transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific = get_abundance_aligned_reads(args.samfile)
+    # "read_acc","aligned_to","transcript_abundance","is_tp","read_type"
+    for read_acc, aligned_to in read_specific.items():
+        true_transcript = read_acc.split("|")[2].split("_")[0]
+        if true_transcript in transcript_cov_true:
+            true_transcript_abundance = transcript_cov_true[true_transcript]
+        is_correct = 1 if true_transcript == aligned_to else 0
+        print("{0},{1},{2},{3},{4}".format(read_acc, aligned_to, true_transcript_abundance, is_correct, args.type))
 
-    # print("id,cov_aln,cov_true,seq,type")
-    for seq_id in set(transcript_cov_true) | set(transcript_cov_aligned) :
-        cov_aln = transcript_cov_aligned[seq_id] if seq_id in transcript_cov_aligned else 0
-        cov_true = transcript_cov_true[seq_id] if seq_id in transcript_cov_true else 0
-        if "," in seq_id:
-            print("BUG", seq_id)
-            sys.exit()
-        if type(cov_aln) != int or type(cov_true) != int:
-            print("BUG", type(cov_aln))
-            sys.exit()
-        print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "transcript", args.type))
+    # # print("id,cov_aln,cov_true,seq,type")
+    # for seq_id in set(transcript_cov_true) | set(transcript_cov_aligned) :
+    #     cov_aln = transcript_cov_aligned[seq_id] if seq_id in transcript_cov_aligned else 0
+    #     cov_true = transcript_cov_true[seq_id] if seq_id in transcript_cov_true else 0
+    #     if "," in seq_id:
+    #         print("BUG", seq_id)
+    #         sys.exit()
+    #     if type(cov_aln) != int or type(cov_true) != int:
+    #         print("BUG", type(cov_aln))
+    #         sys.exit()
+    #     print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "transcript", args.type))
 
-    for seq_id in set(gene_cov_true) | set(gene_cov_aligned) :
-        cov_aln = gene_cov_aligned[seq_id] if seq_id in gene_cov_aligned else 0
-        cov_true = gene_cov_true[seq_id] if seq_id in gene_cov_true else 0
-        if "," in seq_id:
-            print("BUG", seq_id)
-            sys.exit()
-        if type(cov_aln) != int:
-            print("BUG", type(cov_aln))
-            sys.exit()
+    # for seq_id in set(gene_cov_true) | set(gene_cov_aligned) :
+    #     cov_aln = gene_cov_aligned[seq_id] if seq_id in gene_cov_aligned else 0
+    #     cov_true = gene_cov_true[seq_id] if seq_id in gene_cov_true else 0
+    #     if "," in seq_id:
+    #         print("BUG", seq_id)
+    #         sys.exit()
+    #     if type(cov_aln) != int:
+    #         print("BUG", type(cov_aln))
+    #         sys.exit()
 
-        print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "gene", args.type))
+    #     print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "gene", args.type))
 
-    for seq_id in set(gene_fam_cov_true) | set(gene_fam_cov_aligned) :
-        cov_aln = gene_fam_cov_aligned[seq_id] if seq_id in gene_fam_cov_aligned else 0
-        cov_true = gene_fam_cov_true[seq_id] if seq_id in gene_fam_cov_true else 0
-        if "," in seq_id:
-            print("BUG", seq_id)
-            sys.exit()
+    # for seq_id in set(gene_fam_cov_true) | set(gene_fam_cov_aligned) :
+    #     cov_aln = gene_fam_cov_aligned[seq_id] if seq_id in gene_fam_cov_aligned else 0
+    #     cov_true = gene_fam_cov_true[seq_id] if seq_id in gene_fam_cov_true else 0
+    #     if "," in seq_id:
+    #         print("BUG", seq_id)
+    #         sys.exit()
 
-        print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "gene_fam", args.type))      
+    #     print("{0},{1},{2},{3},{4}".format(seq_id, cov_aln, cov_true, "gene_fam", args.type))      
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")

@@ -468,10 +468,11 @@ def print_detailed_values_to_file(alignments_dict, annotations_dict, reads_to_cl
         else:
             cluster_size = 1
         read_length = len(reads[acc])
+        aligned_length = (ins + del_ + subs + matches)
         is_unaligned_in_other_method = 1 if acc in reads_unaligned_in_other_method else 0
         # is_missing_from_clustering_or_correction = 1 if acc in reads_missing_from_clustering_correction_output else 0
 
-        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, cluster_size, is_unaligned_in_other_method, *read_class, chr_id, reference_start, reference_end + 1, sam_flag) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
+        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, aligned_length, cluster_size, is_unaligned_in_other_method, *read_class, chr_id, reference_start, reference_end + 1, sam_flag) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
         # print(*info_tuple)
         # outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(*info_tuple))
         outfile.write( ",".join( [str(item) for item in info_tuple] ) + "\n")
@@ -1027,7 +1028,7 @@ def main(args):
     reads_unaligned_in_correction = set(corr_reads.keys()) - set(corr_primary_locations.keys()) 
 
     detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read.csv"), "w")
-    detailed_results_outfile.write("acc,read_type,ins,del,subs,matches,error_rate,read_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag\n")
+    detailed_results_outfile.write("acc,read_type,ins,del,subs,matches,error_rate,read_length,aligned_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag\n")
     print_detailed_values_to_file(corr, corr_splice_results, reads_to_cluster_size, corr_reads, detailed_results_outfile, reads_unaligned_in_original, reads_missing_from_clustering_correction_output, "corrected")    
     print_detailed_values_to_file(orig, orig_splice_results, reads_to_cluster_size, reads, detailed_results_outfile, reads_unaligned_in_correction, reads_missing_from_clustering_correction_output, "original")
     detailed_results_outfile.close()
