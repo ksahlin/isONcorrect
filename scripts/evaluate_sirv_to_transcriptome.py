@@ -377,10 +377,11 @@ def print_detailed_values_to_file(alignments_dict, reads, outfile, reads_unalign
     for (acc, (ins, del_, subs, matches, chr_id, reference_start, reference_end, sam_flag, read_index)) in alignments_sorted:
         error_rate = round( 100* (ins + del_ + subs) /float( (ins + del_ + subs + matches) ), 4 )
         read_length = len(reads[acc])
+        aligned_length = int( ins + del_ + subs + matches )
         is_unaligned_in_other_method = 1 if acc in reads_unaligned_in_other_method else 0
         # is_missing_from_clustering_or_correction = 1 if acc in reads_missing_from_clustering_correction_output else 0
 
-        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, chr_id) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
+        info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, aligned_length, chr_id) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
         # print(*info_tuple)
         # outfile.write("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}\n".format(*info_tuple))
         outfile.write( ",".join( [str(item) for item in info_tuple] ) + "\n")
@@ -837,7 +838,7 @@ def main(args):
     reads_unaligned_in_correction = set(corr_reads.keys()) - set(corr_primary_locations.keys()) 
 
     detailed_results_outfile = open(os.path.join(args.outfolder, "results_per_read_to_transcriptome.csv"), "w")
-    detailed_results_outfile.write("acc,read_type,ins,del,subs,matches,error_rate,read_length,chr_id\n")
+    detailed_results_outfile.write("acc,read_type,ins,del,subs,matches,error_rate,read_length,aligned_length,chr_id\n")
     print_detailed_values_to_file(corr, corr_reads, detailed_results_outfile, reads_unaligned_in_original, reads_missing_from_clustering_correction_output, "corrected")    
     print_detailed_values_to_file(orig, reads, detailed_results_outfile, reads_unaligned_in_correction, reads_missing_from_clustering_correction_output, "original")
     detailed_results_outfile.close()
