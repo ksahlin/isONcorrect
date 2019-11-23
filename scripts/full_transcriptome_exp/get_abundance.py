@@ -240,18 +240,17 @@ def get_abundance_aligned_reads(sam_file):
             gene_fam_cov_aligned[gene_fam_id] += 1
 
             assert read_acc not in read_specific
-            read_specific[read_acc] = set(transcript_id )
-
+            read_specific[read_acc] = set( )
+            read_specific[read_acc].add(transcript_id)
         elif read_acc not in read_specific:
-            read_specific[read_acc] = set( "unaligned" )
-
-        elif read.flag != 0 or read.flag != 16 and read_acc in primary_mapq_0:
+            read_specific[read_acc] = set( )
+            read_specific[read_acc].add("unaligned")
+        elif (read.flag != 0 and read.flag != 16) and read_acc in primary_mapq_0:
             if read.cigarstring == optimal_cigar_str[read_acc]:
-                print("HERE@@@")
                 ref_acc = read.reference_name            
                 transcript_id = ref_acc.split("|")[2]
                 read_specific[read_acc].add( transcript_id )
-
+                # print("HERE@@@", ref_acc, read_acc)
             # print("secondary", read.flag, read.reference_name)
 
     # read_specific_dict = {}
