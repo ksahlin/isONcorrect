@@ -292,8 +292,8 @@ def main(args):
         if is_correct == 1:
             ed_to_correct = "-" 
         else:
-            res1 = edlib.align(refs[aligned_to], refs[read_acc.split("_")[0]], mode="HW")
-            res2 = edlib.align(refs[read_acc.split("_")[0]], refs[aligned_to],  mode="HW")
+            res1 = edlib.align(refs[aligned_to], refs[true_transcript], mode="HW")
+            res2 = edlib.align(refs[true_transcript], refs[aligned_to],  mode="HW")
             ed_to_correct = min(res1["editDistance"],res2["editDistance"])
 
         print("{0},{1},{2},{3},{4},{5}".format(read_acc, aligned_to, true_transcript_abundance, is_correct, args.type, ed_to_correct))
