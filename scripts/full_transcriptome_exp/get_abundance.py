@@ -208,12 +208,17 @@ def get_abundance_aligned_reads(sam_file):
     transcript_cov_aligned = defaultdict(int)
     gene_fam_cov_aligned = defaultdict(int)
     read_specific = {}
+    primary_mapq_0 = set()
     for read in SAM_file.fetch(until_eof=True):
         if read.flag == 0 or read.flag == 16:
             # print(read.is_reverse)
             # print(read.cigartuples)
             
             read_acc = read.query_name
+
+            if read.mapping_quality == 0:
+                primary_mapq_0.add(read_acc)
+
             
             transcript_id = read_acc.split("|")[2].split("_")[0]
             gene_id = read_acc.split("|")[1] 
@@ -234,13 +239,25 @@ def get_abundance_aligned_reads(sam_file):
             gene_fam_cov_aligned[gene_fam_id] += 1
 
             assert read_acc not in read_specific
-            read_specific[read_acc] = transcript_id
+            read_specific[read_acc] = set( (transcript_id, read.cigarstring) )
 
         elif read_acc not in read_specific:
-            read_specific[read_acc] = "unaligned"
+            read_specific[read_acc] = set( ("unaligned", "*") )
 
-            # print("secondary", read.flag, read.reference_name) 
-    return transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific
+        elif read.flag != 0 or read.flag != 16 and read_acc in primary_mapq_0:
+            if read.cigarstring == read_specific[read_acc][1]:
+                print("HERE@@@")
+                ref_acc = read.reference_name            
+                transcript_id = ref_acc.split("|")[2]
+                read_specific[read_acc].add( (transcript_id, read.cigarstring) )
+
+            # print("secondary", read.flag, read.reference_name)
+
+    read_specific_dict = {}
+    for acc in  read_specific_dict:
+        all_ref = set([ t[0] for t in read_specific_dict[acc]])
+        read_specific_dict[acc] = all_ref
+    return transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific_dict
 
 # def get_summary_stats(reads, quantile):
 #     tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
@@ -262,11 +279,13 @@ def main(args):
     # reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
     transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific = get_abundance_aligned_reads(args.samfile)
     # "read_acc","aligned_to","transcript_abundance","is_tp","read_type"
-    for read_acc, aligned_to in read_specific.items():
+    for read_acc, set_aligned_to in read_specific.items():
         true_transcript = read_acc.split("|")[2].split("_")[0]
         if true_transcript in transcript_cov_true:
             true_transcript_abundance = transcript_cov_true[true_transcript]
-        is_correct = 1 if true_transcript == aligned_to else 0
+
+        is_correct = 1 if true_transcript in set_aligned_to else 0
+        aligned_to = true_transcript if is_correct = 1 else set_aligned_to.pop()
         print("{0},{1},{2},{3},{4}".format(read_acc, aligned_to, true_transcript_abundance, is_correct, args.type))
 
     # # print("id,cov_aln,cov_true,seq,type")
