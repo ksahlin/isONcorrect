@@ -275,9 +275,11 @@ def get_abundance_aligned_reads(sam_file):
 
 #     return tot_ins, tot_del, tot_subs, tot_match, sum_aln_bases
 
+import edlib
 
 def main(args):
-    # reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
+    reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
+    refs = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.refs, 'r')))}
     transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific = get_abundance_aligned_reads(args.samfile)
     # "read_acc","aligned_to","transcript_abundance","is_tp","read_type"
     for read_acc, set_aligned_to in read_specific.items():
@@ -287,7 +289,13 @@ def main(args):
 
         is_correct = 1 if true_transcript in set_aligned_to else 0
         aligned_to = true_transcript if is_correct == 1 else set_aligned_to.pop()
-        print("{0},{1},{2},{3},{4}".format(read_acc, aligned_to, true_transcript_abundance, is_correct, args.type))
+        if is_correct == 1:
+            ed_to_correct = "-" 
+        else:
+            res = edlib.align(reads[read_acc], refs[read_acc.split("_")[0]], mode="NW")
+            ed_to_correct = res["editDistance"]
+
+        print("{0},{1},{2},{3},{4},{5}".format(read_acc, aligned_to, true_transcript_abundance, is_correct, args.type, ed_to_correct))
 
     # # print("id,cov_aln,cov_true,seq,type")
     # for seq_id in set(transcript_cov_true) | set(transcript_cov_aligned) :
@@ -325,6 +333,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
     parser.add_argument('samfile', type=str, help='Path to the original read file')
+    parser.add_argument('refs', type=str, help='Fastq file. ')
+    parser.add_argument('reads', type=str, help='fastq file. ')
     parser.add_argument('type', type=str, help='Path to the original read file')
     # parser.add_argument('reads', type=str, help='Path to the original read file')
 
