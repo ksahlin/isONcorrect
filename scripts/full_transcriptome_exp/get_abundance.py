@@ -209,13 +209,14 @@ def get_abundance_aligned_reads(sam_file):
     gene_fam_cov_aligned = defaultdict(int)
     read_specific = {}
     primary_mapq_0 = set()
+    optimal_cigar_str = {}
     for read in SAM_file.fetch(until_eof=True):
         if read.flag == 0 or read.flag == 16:
             # print(read.is_reverse)
             # print(read.cigartuples)
-            
             read_acc = read.query_name
 
+            optimal_cigar_str[read_acc] = read.cigarstring
             if read.mapping_quality == 0:
                 primary_mapq_0.add(read_acc)
 
@@ -239,25 +240,26 @@ def get_abundance_aligned_reads(sam_file):
             gene_fam_cov_aligned[gene_fam_id] += 1
 
             assert read_acc not in read_specific
-            read_specific[read_acc] = set( (transcript_id, read.cigarstring) )
+            read_specific[read_acc] = set(transcript_id )
 
         elif read_acc not in read_specific:
-            read_specific[read_acc] = set( ("unaligned", "*") )
+            read_specific[read_acc] = set( "unaligned" )
 
         elif read.flag != 0 or read.flag != 16 and read_acc in primary_mapq_0:
-            if read.cigarstring == read_specific[read_acc][1]:
+            if read.cigarstring == optimal_cigar_str[read_acc]:
                 print("HERE@@@")
                 ref_acc = read.reference_name            
                 transcript_id = ref_acc.split("|")[2]
-                read_specific[read_acc].add( (transcript_id, read.cigarstring) )
+                read_specific[read_acc].add( transcript_id )
 
             # print("secondary", read.flag, read.reference_name)
 
-    read_specific_dict = {}
-    for acc in  read_specific_dict:
-        all_ref = set([ t[0] for t in read_specific_dict[acc]])
-        read_specific_dict[acc] = all_ref
-    return transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific_dict
+    # read_specific_dict = {}
+    # for acc in  read_specific_dict:
+    #     all_ref = set([ t[0] for t in read_specific_dict[acc]])
+    #     read_specific_dict[acc] = all_ref
+
+    return transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific
 
 # def get_summary_stats(reads, quantile):
 #     tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
