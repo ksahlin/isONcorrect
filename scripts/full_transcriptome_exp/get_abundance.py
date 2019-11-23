@@ -279,7 +279,7 @@ import edlib
 
 def main(args):
     reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
-    refs = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.refs, 'r')))}
+    refs = { acc.split("|")[2] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.refs, 'r')))}
     transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific = get_abundance_aligned_reads(args.samfile)
     # "read_acc","aligned_to","transcript_abundance","is_tp","read_type"
     for read_acc, set_aligned_to in read_specific.items():
