@@ -285,7 +285,7 @@ def main(args):
             true_transcript_abundance = transcript_cov_true[true_transcript]
 
         is_correct = 1 if true_transcript in set_aligned_to else 0
-        aligned_to = true_transcript if is_correct = 1 else set_aligned_to.pop()
+        aligned_to = true_transcript if is_correct == 1 else set_aligned_to.pop()
         print("{0},{1},{2},{3},{4}".format(read_acc, aligned_to, true_transcript_abundance, is_correct, args.type))
 
     # # print("id,cov_aln,cov_true,seq,type")
