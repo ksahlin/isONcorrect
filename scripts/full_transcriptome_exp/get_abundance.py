@@ -196,6 +196,7 @@ def cigar_to_seq_mm2_local(read, full_r_seq, full_q_seq):
     return "".join([s for s in r_line]), "".join([s for s in m_line]), "".join([s for s in q_line]), ins, del_, subs, matches
 
 
+
 def get_abundance_aligned_reads(sam_file):
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     references = SAM_file.references
@@ -210,6 +211,7 @@ def get_abundance_aligned_reads(sam_file):
     read_specific = {}
     primary_mapq_0 = set()
     optimal_cigar_str = {}
+    edit_distance_to_aligned = {}
     for read in SAM_file.fetch(until_eof=True):
         if read.flag == 0 or read.flag == 16:
             # print(read.is_reverse)
@@ -217,6 +219,11 @@ def get_abundance_aligned_reads(sam_file):
             read_acc = read.query_name
 
             optimal_cigar_str[read_acc] = read.cigarstring
+            ins = sum([length for type_, length in read.cigartuples if type_ == 1])
+            del_ = sum([length for type_, length in read.cigartuples if type_ == 2])
+            subs = sum([length for type_, length in read.cigartuples if type_ == 8])
+            edit_distance_to_aligned[read_acc] = ins + del_ + subs
+
             if read.mapping_quality == 0:
                 primary_mapq_0.add(read_acc)
 
@@ -245,6 +252,8 @@ def get_abundance_aligned_reads(sam_file):
         elif read_acc not in read_specific:
             read_specific[read_acc] = set( )
             read_specific[read_acc].add("unaligned")
+            edit_distance_to_aligned[read_acc] = '-'
+
         elif (read.flag != 0 and read.flag != 16) and read_acc in primary_mapq_0:
             if read.cigarstring == optimal_cigar_str[read_acc]:
                 ref_acc = read.reference_name            
@@ -258,7 +267,7 @@ def get_abundance_aligned_reads(sam_file):
     #     all_ref = set([ t[0] for t in read_specific_dict[acc]])
     #     read_specific_dict[acc] = all_ref
 
-    return transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific
+    return transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific, edit_distance_to_aligned
 
 # def get_summary_stats(reads, quantile):
 #     tot_ins, tot_del, tot_subs, tot_match = 0, 0, 0, 0
@@ -280,7 +289,7 @@ import edlib
 def main(args):
     reads = { acc : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
     refs = { acc.split("|")[2] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.refs, 'r')))}
-    transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific = get_abundance_aligned_reads(args.samfile)
+    transcript_cov_true, gene_cov_true, gene_fam_cov_true, transcript_cov_aligned, gene_cov_aligned, gene_fam_cov_aligned, read_specific, edit_distance_to_aligned = get_abundance_aligned_reads(args.samfile)
     # "read_acc","aligned_to","transcript_abundance","is_tp","read_type"
     for read_acc, set_aligned_to in read_specific.items():
         true_transcript = read_acc.split("|")[2].split("_")[0]
@@ -291,8 +300,8 @@ def main(args):
         aligned_to = true_transcript if is_correct == 1 else set_aligned_to.pop()
         if is_correct == 1:
             ed_btw_transcripts = "-" 
-            ed_read_to_true = '-'
-            ed_read_to_aligned = '-'
+            ed_read_to_true = edit_distance_to_aligned[read_acc]
+            ed_read_to_aligned = edit_distance_to_aligned[read_acc]
         else:
             res1 = edlib.align(refs[aligned_to], refs[true_transcript], mode="HW")
             res2 = edlib.align(refs[true_transcript], refs[aligned_to],  mode="HW")
@@ -300,9 +309,7 @@ def main(args):
 
             res = edlib.align(reads[read_acc], refs[true_transcript], mode="NW")
             ed_read_to_true = res["editDistance"]
-
-            res = edlib.align(reads[read_acc], refs[aligned_to], mode="NW")
-            ed_read_to_aligned = res["editDistance"]
+            ed_read_to_aligned = edit_distance_to_aligned[read_acc]
 
         print("{0},{1},{2},{3},{4},{5},{6},{7}".format(read_acc, aligned_to, true_transcript_abundance, is_correct, args.type, ed_btw_transcripts, ed_read_to_true, ed_read_to_aligned))
 
