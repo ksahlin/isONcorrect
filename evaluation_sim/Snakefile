@@ -161,13 +161,16 @@ rule align_original_reads_minimap2:
 rule overcorrection_analysis:
     input: original_reads_alignments = rules.align_original_reads_minimap2.output.original_reads_aligned,
             corrected_reads_alignments = rules.align_corrected_reads_minimap2.output.corrected_reads_aligned,
+            original_reads = rules.simulate.output.reads,
+            corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
+            ref = rules.remove_redundant.output.non_redundant_database
     output: abundance_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/{nr_reads}/{abundance}/abundance.csv"
     run:
         experiment_dir = config["ROOT_IN"] + "/scripts/full_transcriptome_exp"
-        shell('echo -n  "read_acc","aligned_to","transcript_abundance","is_tp","read_type"$"\n" > {output.abundance_file}')
+        shell('echo -n  "read_acc","aligned_to","transcript_abundance","is_tp","read_type","ed_to_correct"$"\n" > {output.abundance_file}')
         # shell('echo -n  "id","cov_aln","cov_true","seq","type"$"\n" > {output.abundance_file}')
-        shell("python  {experiment_dir}/get_abundance.py  {input.corrected_reads_alignments} 'corrected' >> {output.abundance_file}")
-        shell("python  {experiment_dir}/get_abundance.py {input.original_reads_alignments} 'original' >>  {output.abundance_file}")
+        shell("python  {experiment_dir}/get_abundance.py {input.corrected_reads_alignments} {input.ref} {input.corrected_reads}   'corrected' >> {output.abundance_file}")
+        shell("python  {experiment_dir}/get_abundance.py {input.original_reads_alignments} {input.ref} {input.original_reads}   'original' >>  {output.abundance_file}")
         # abundance_plot=$outbase/$id/$depth/"abundance.pdf" 
         # shell("python $experiment_dir/plot_abundance.py {output.abundance_file} 'transcript' $abundance_plot")
 

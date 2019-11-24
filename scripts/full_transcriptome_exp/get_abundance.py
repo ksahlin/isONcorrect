@@ -290,13 +290,19 @@ def main(args):
         is_correct = 1 if true_transcript in set_aligned_to else 0
         aligned_to = true_transcript if is_correct == 1 else set_aligned_to.pop()
         if is_correct == 1:
-            ed_to_correct = "-" 
+            ed_btw_transcripts = "-" 
         else:
             res1 = edlib.align(refs[aligned_to], refs[true_transcript], mode="HW")
             res2 = edlib.align(refs[true_transcript], refs[aligned_to],  mode="HW")
-            ed_to_correct = min(res1["editDistance"],res2["editDistance"])
+            ed_btw_transcripts = min(res1["editDistance"],res2["editDistance"])
 
-        print("{0},{1},{2},{3},{4},{5}".format(read_acc, aligned_to, true_transcript_abundance, is_correct, args.type, ed_to_correct))
+            res = edlib.align(reads[read_acc], refs[true_transcript], mode="NW")
+            ed_read_to_true = res["editDistance"]
+
+            res = edlib.align(reads[read_acc], refs[aligned_to], mode="NW")
+            ed_read_to_aligned = res["editDistance"]
+
+        print("{0},{1},{2},{3},{4},{5},{6},{7}".format(read_acc, aligned_to, true_transcript_abundance, is_correct, args.type, ed_btw_transcripts, ed_read_to_true, ed_read_to_aligned))
 
     # # print("id,cov_aln,cov_true,seq,type")
     # for seq_id in set(transcript_cov_true) | set(transcript_cov_aligned) :
