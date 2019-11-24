@@ -291,6 +291,8 @@ def main(args):
         aligned_to = true_transcript if is_correct == 1 else set_aligned_to.pop()
         if is_correct == 1:
             ed_btw_transcripts = "-" 
+            ed_read_to_true = '-'
+            ed_read_to_aligned = '-'
         else:
             res1 = edlib.align(refs[aligned_to], refs[true_transcript], mode="HW")
             res2 = edlib.align(refs[true_transcript], refs[aligned_to],  mode="HW")
