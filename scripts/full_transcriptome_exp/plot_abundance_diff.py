@@ -31,17 +31,26 @@ orig_good = 0
 corr_good = 0
 both_good = 0
 both_bad = 0
+x = []
+y = []
+overcorrection_amount = []
 for row in list_of_list:
-    acc, annot, ab, is_corr, read_type, ed_to_correct = row
+    acc, annot, ab, is_corr, read_type, ed_btw_transcripts, ed_read_to_true, ed_read_to_aligned = row
     if acc not in read_annot:
         read_annot[acc] = [None, None, ab, None, None]
 
     if read_type == 'corrected':
         read_annot[acc][1] =  is_corr
-        read_annot[acc][4] =  ed_to_correct
+        read_annot[acc][4] =  ed_read_to_true
     else:
         read_annot[acc][0] =  is_corr
-        read_annot[acc][3] =  ed_to_correct
+        read_annot[acc][3] =  ed_read_to_true
+
+
+    if is_corr == 0 and read_type == 'corrected':
+        x.append(ed_read_to_aligned)
+        y.append(ed_read_to_true)
+        overcorrection_amount.append(ed_read_to_true - ed_read_to_aligned)
 
 wrong_in_both = []
 wrong_in_orig = []
@@ -61,24 +70,40 @@ for acc in read_annot:
         both_bad += 1
         wrong_in_both.append(ed_orig)
 
-# print(wrong_in_both)
-print(wrong_in_orig)
-# print(sum(wrong_in_both)/float(len(wrong_in_both)))
-# print(sum(wrong_in_orig)/float(len(wrong_in_orig)))
-# print(sum(wrong_in_corr)/float(len(wrong_in_corr)))
-print(wrong_in_corr)
-print(both_good, orig_good, corr_good, both_bad)
-pyplot.hist(wrong_in_corr, 200, alpha=0.5, label='Corrected')
-pyplot.hist(wrong_in_orig, 200, alpha=0.5, label='Original')
-# plt.xscale('log')
-pyplot.legend(loc='upper right')
-pyplot.xlabel("Local edit distance to true ref")
+print(len(wrong_in_both), len(wrong_in_orig), len(wrong_in_corr))
+# # print(wrong_in_both)
+# print(wrong_in_orig)
+# # print(sum(wrong_in_both)/float(len(wrong_in_both)))
+# # print(sum(wrong_in_orig)/float(len(wrong_in_orig)))
+# # print(sum(wrong_in_corr)/float(len(wrong_in_corr)))
+# print(wrong_in_corr)
+# print(both_good, orig_good, corr_good, both_bad)
+# pyplot.hist(wrong_in_corr, 200, alpha=0.5, label='Corrected')
+# pyplot.hist(wrong_in_orig, 200, alpha=0.5, label='Original')
+# # plt.xscale('log')
+# pyplot.legend(loc='upper right')
+# pyplot.xlabel("Local edit distance to true ref")
+# pyplot.ylabel("Count")
+# plt.savefig(sys.argv[2] + '.eps')
+# plt.savefig(sys.argv[2])
+
+print(len([ed for ed in overcorrection_amount if ed <15]))
+print(len([ed for ed in overcorrection_amount if ed <=5]))
+
+pyplot.hist(overcorrection_amount, 400, alpha=0.5)
+plt.xscale('log')
+# pyplot.legend(loc='upper right')
+pyplot.xlabel("Overcorrected (edit distance)")
 pyplot.ylabel("Count")
 plt.savefig(sys.argv[2] + '.eps')
 plt.savefig(sys.argv[2])
 
 
-
+# d = {"ed_read_to_aligned" : x, "ed_read_to_true" : y}
+# df = pd.DataFrame(d)
+# ax = sns.scatterplot(x='ed_read_to_true', y='ed_read_to_aligned', alpha= 0.5, data = df)
+# plt.savefig(sys.argv[2] + '.eps')
+# plt.savefig(sys.argv[2])
 
 # ax = sns.lineplot(x="transcript_abundance", y="is_tp",  hue="read_type", 
 #                   ci = 'sd', data=indata)

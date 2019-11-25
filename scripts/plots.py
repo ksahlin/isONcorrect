@@ -153,6 +153,8 @@ def unique_fsm(input_csv, outfolder):
     plt.yscale('log')
     ax = sns.scatterplot(x='fsm_orig', y='fsm_corr', alpha= 0.5, data = df)
     # ax.set_title("FSM before and after correction")
+    # ax.set_xlim(1,10)
+    # ax.set_ylim(1,10)
     ax.set_ylabel("Read depth corrected (log(1+x) scale)")
     ax.set_xlabel("Read depth original (log(1+x) scale)")
     plt.savefig(os.path.join(outfolder, "fsm_breakdown.eps"))
@@ -207,7 +209,7 @@ def total_error_rate(input_csv, outfolder):
     # sys.exit()
     
     df_orig = df.loc[df['read_type'] == 'original']
-    
+
     median_error =  df_orig['error_rate'].median()
     df_orig['subs_rate'] = df_orig['subs']/df_orig['read_length']
     df_orig['ins_rate'] = df_orig['ins']/df_orig['read_length']
@@ -311,9 +313,9 @@ def main(args):
     # sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
     # splice_site_classification_plot(args.input_csv, args.outfolder)
-    # unique_fsm(args.input_csv, args.outfolder)
+    unique_fsm(args.input_csv, args.outfolder)
     # total_error_rate(args.input_csv, args.outfolder)
-    sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
+    # sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
 
 
     # total_error_rate2(args.input_csv, args.outfolder)
