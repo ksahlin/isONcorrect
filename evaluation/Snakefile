@@ -62,7 +62,7 @@ rule all:
           #config["ROOT_OUT"], "controlled.csv")
 
 rule sirv:
-    input: config["ROOT_OUT"] + "/evaluation_biological/SIRV/200000/results_per_read_to_transcriptome.csv"
+    input: expand(config["ROOT_OUT"] + "/evaluation_biological/SIRV/{exp_id}/results_per_read_to_transcriptome.csv", exp_id = [1,2,3,4,5,6,7,8,9,10])
 
 
 rule biological:
@@ -87,6 +87,8 @@ rule subsample:
 
         if wildcards.nr_reads == "999":
             shell("ln -s  {input.fastq} {output.subsampled_fastq} ")
+        elif wildcards.dataset == "SIRV":
+            shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads 10000 --min_length 200")
         else:
             shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads {wildcards.nr_reads} --min_length 200")
 
