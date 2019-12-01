@@ -63,7 +63,7 @@ rule all:
 
 rule sirv:
     input: config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
-            #expand(config["ROOT_OUT"] + "/evaluation_biological/SIRV/{exp_id}/results_per_read_to_transcriptome.csv", exp_id = [1,2,3,4,5,6,7,8,9,10])
+            #expand(config["ROOT_OUT"] + "/evaluation_biological/SIRV/{exp_id}/results_per_read_to_transcriptome.csv", exp_id = list(range(1,101)))
 
 
 rule biological:
@@ -246,14 +246,14 @@ rule evaluate_sirv:
         orig_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/original_to_transcripts.sam".format(wildcards.dataset, wildcards.nr_reads) 
         corr_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/corrected_to_transcripts.sam".format(wildcards.dataset, wildcards.nr_reads) 
 
-        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k13 -w4 {ref} {input.original_reads} >  {orig_reads_aligned} ")
-        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k13 -w4 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k13 -w1 {ref} {input.original_reads} >  {orig_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k13 -w1 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
         shell("python {eval_dir}/evaluate_sirv_to_transcriptome.py  {orig_reads_aligned}  {corr_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {outfolder}")
 
 
 rule sirv_summary:
-    input: all_experiments = expand(rules.evaluate_sirv.output.csv_file, dataset=["SIRV"], nr_reads = [1,2,3,4,5,6,7,8,9,10])
+    input: all_experiments = expand(rules.evaluate_sirv.output.csv_file, dataset=["SIRV"], nr_reads = list(range(1,101)))
     output: summary_table = config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
     run:
         shell("> {output.summary_table}")
