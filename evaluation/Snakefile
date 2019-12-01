@@ -62,7 +62,8 @@ rule all:
           #config["ROOT_OUT"], "controlled.csv")
 
 rule sirv:
-    input: expand(config["ROOT_OUT"] + "/evaluation_biological/SIRV/{exp_id}/results_per_read_to_transcriptome.csv", exp_id = [1,2,3,4,5,6,7,8,9,10])
+    input: config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
+            #expand(config["ROOT_OUT"] + "/evaluation_biological/SIRV/{exp_id}/results_per_read_to_transcriptome.csv", exp_id = [1,2,3,4,5,6,7,8,9,10])
 
 
 rule biological:
@@ -249,6 +250,28 @@ rule evaluate_sirv:
         shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k13 -w4 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
         shell("python {eval_dir}/evaluate_sirv_to_transcriptome.py  {orig_reads_aligned}  {corr_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {outfolder}")
+
+
+rule sirv_summary:
+    input: all_experiments = expand(rules.evaluate_sirv.output.csv_file, dataset=["SIRV"], exp_id = [1,2,3,4,5,6,7,8,9,10])
+    output: summary_table = config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
+    run:
+        shell("> {output.summary_table}")
+        outfile = open(output.summary_table ,"w")
+        for i, f in enumerate(input.all_experiments): 
+            
+            #write header
+            if i == 0:
+                outfile.write("experiment_id,acc,read_type,ins,del,subs,matches,error_rate,read_length,aligned_length,chr_id\n")
+                # outfile.write("{0},{1},{2}\n".format(nr_reads, dataset, ','.join(n for n in line.strip().split(',')) ))
+
+            exp_id = f.split('/')[-2]
+            for j, line in enumerate(open(f, 'r')):
+                # ignore header
+                if j == 0:
+                    continue
+                
+                outfile.write("{0},{1},{2}\n".format(exp_id, ','.join(n for n in line.strip().split(',')) ))
 
 
 rule summary:
