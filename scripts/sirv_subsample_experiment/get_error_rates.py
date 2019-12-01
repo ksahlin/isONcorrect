@@ -138,7 +138,9 @@ def main(args):
     tot_errors, tot_insertions, tot_deletions, tot_subs, tot_matches = 0,0,0,0,0
     outfile = open(args.outfile, 'w')
     outfile.write("read,ref,err,err_rate,subs,ins,del\n")
+    # print(outfile.name)
     error_rates_per_read = decide_primary_locations(args.samfile, args)
+    # print(error_rates_per_read)
     for acc in error_rates_per_read:
         reference_name, errors, insertions, deletions, subs, matches, err_rate = error_rates_per_read[acc]
         outfile.write("{0},{1},{2},{3},{4},{5},{6}\n".format(acc, reference_name, errors, err_rate, subs, insertions, deletions))

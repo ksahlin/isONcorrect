@@ -47,11 +47,16 @@ def readfq(fp): # this is a generator function
 
 def get_subsamples(transcript_cov):
     subsamples = {}
-    for subsample_size in [3,5,10,20,50,100,200,500]:
+    already_ampled = set()
+    for subsample_size in [3,5,10,20]: #,50,100,200,500]:
         large_enough_cov = [tr_id for tr_id in transcript_cov.keys() if len(transcript_cov[tr_id]) >= subsample_size]
         sampled_tr_id = random.choice(large_enough_cov)
+        while sampled_tr_id in already_ampled:
+            sampled_tr_id = random.choice(large_enough_cov)
+
         subset = random.sample(transcript_cov[sampled_tr_id], subsample_size)
         subsamples[subsample_size] = (sampled_tr_id, subset)
+        already_ampled.add(sampled_tr_id)
     return subsamples
 
 
