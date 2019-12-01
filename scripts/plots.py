@@ -265,7 +265,37 @@ def total_error_rate(input_csv, outfolder):
 #     plt.savefig(os.path.join(outfolder, "error_rate_per_cluster_size.pdf"))
 #     plt.close()
 
+def get_error_rates(input_csv, read_to_infer = "corrected"):
+    dels =[]
+    inses =[]
+    subses =[]
+    matcheses =[]
+    aln_lengths =[]
+    for line in open(input_csv, 'r'):
+        experiment_id,acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,chr_id = line.split(',')
+        if read_type == read_to_infer:
+            dels.append(int(del_))
+            inses.append(int(ins))
+            subses.append(int(subs))
+            matcheses.append(int(matches))
+            aln_lengths.append(int(aligned_length))
+
+    err_rates1 = [ (dels[i] + inses[i] + subses[i])/ float(aln_lengths[i]) for i in range(len(matcheses))]
+    err_rates2 = [ (dels[i] + inses[i] + subses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
+    dels_rates = [ (dels[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
+    inses_rates = [ (inses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
+    subses_rates = [ (subses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
+    print(sorted(err_rates1)[int(len(err_rates1)/2) ])
+    print(sorted(err_rates2)[int(len(err_rates2)/2) ])
+    print(sorted(dels_rates)[int(len(dels_rates)/2) ])
+    print(sorted(inses_rates)[int(len(inses_rates)/2) ])
+    print(sorted(subses_rates)[int(len(subses_rates)/2) ])
+    # print(sorted(subses_rates))
+
 def sirv_error_rate_per_transcript(input_csv, outfolder):
+    get_error_rates(input_csv)
+    get_error_rates(input_csv, read_to_infer = 'original' )
+    sys.exit()
     pd.set_option("display.precision", 8)
     indata = pd.read_csv(input_csv)
     df_corr = indata.loc[indata['read_type'] == 'corrected']
@@ -274,18 +304,23 @@ def sirv_error_rate_per_transcript(input_csv, outfolder):
     df_corr['subs_rate'] = df_corr['subs']/df_corr['aligned_length']
     df_corr['ins_rate'] = df_corr['ins']/df_corr['aligned_length']
     df_corr['del_rate'] = df_corr['del']/df_corr['aligned_length']
+    df_corr['error_rate_new'] = (df_corr['del'] + df_corr['ins'] + df_corr['del'] ) /df_corr['aligned_length']
     print(df_corr['subs'].sum())
     print(df_corr['del'].sum())
     print(df_corr['ins'].sum())
-    print("median error rate/subs/ins/del corrected:", df_corr['subs_rate'].median(), median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
+    print(df_corr['subs_rate'].mean(), df_corr['ins_rate'].mean(), df_corr['del_rate'].mean(), df_corr['error_rate'].mean(), 100*df_corr['error_rate_new'].mean(), 100*df_corr['error_rate_new'].median() )
+    print("median error rate/subs/ins/del corrected:", median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
 
     df_orig = indata.loc[indata['read_type'] == 'original']
     median_error =  df_orig['error_rate'].median()
     df_orig['subs_rate'] = df_orig['subs']/df_orig['aligned_length']
     df_orig['ins_rate'] = df_orig['ins']/df_orig['aligned_length']
     df_orig['del_rate'] = df_orig['del']/df_orig['aligned_length']
-    # print(df_orig['del_rate'])
 
+    df_orig['error_rate_new'] = (df_orig['del'] + df_orig['ins'] + df_orig['del'] ) /df_orig['aligned_length']
+
+    # print(df_orig['del_rate'])
+    print(df_orig['subs_rate'].mean(), df_orig['ins_rate'].mean(), df_orig['del_rate'].mean(), df_orig['error_rate'].mean(), 100*df_orig['error_rate_new'].mean(), 100*df_orig['error_rate_new'].median() )
     print("median error rate/subs/ins/del original:",median_error, 100*df_orig['subs_rate'].median(), 100*df_orig['ins_rate'].median(), 100*df_orig['del_rate'].median())
     # df_orig = indata.loc[indata['read_type'] == 'original']
 
@@ -304,7 +339,7 @@ def sirv_error_rate_per_transcript(input_csv, outfolder):
     # indata.join( df2['transcript_cov'] )
     print(indata['transcript_cov'].min())
     # print(indata['transcript_cov'])
-    print(indata.loc[indata['transcript_cov'] == 12])
+    # print(indata.loc[indata['transcript_cov'] == 12])
     ax = sns.lineplot(x="transcript_cov", y="error_rate",  hue="read_type",
                       ci = 'sd', estimator= 'median',  data=indata)
     ax.set_ylim(0,17)

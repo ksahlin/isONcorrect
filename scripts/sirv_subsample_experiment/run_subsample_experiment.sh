@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# RUN scripts e.g. as:   ./run_subsample_experiment.sh /Users/kxs624/Documents/workspace/isONcorrect/  /Users/kxs624/tmp/ISONCORRECT/sirv_subsample/ /Users/sahlkris/Documents/data/ONT_SIRV/lc19_pcs109_subsample_full_length.fq 
+# RUN scripts e.g. as:   ./run_subsample_experiment.sh /Users/kxs624/Documents/workspace/isONcorrect/  /Users/kxs624/tmp/ISONCORRECT/sirv_subsample/  /Users/kxs624/Documents/data/ont/lc19_pcs109_subsample_full_length_pychopper2_phmmer.fq
 
 inbase=$1
 outbase=$2
@@ -29,8 +29,8 @@ plot_file=$outbase/"summary"
 echo -n  "id","type","Depth","k","w","q_acc","r_acc","total_errors","error_rate","subs","ins","del"$'\n' > $results_file
 
 # # align original reads with minimap2 
-original_reads_mapped=$outbase/original_reads.sam
-# minimap2 -a --eqx -k 14 -w 4 $inbase/test_data/sirv_transcriptome.fasta  $original_reads  > $original_reads_mapped
+# original_reads_mapped=$outbase/original_reads.sam
+# minimap2 -a --eqx -k 14 -w 1 $inbase/test_data/sirv_transcriptome.fasta  $original_reads  > $original_reads_mapped
 
 # # Subsample reads
 # echo  python $experiment_dir/subsample_reads.py $original_reads $inbase/test_data/sirv_transcriptome.fasta $original_reads_mapped $outbase/fastq
@@ -42,57 +42,48 @@ original_reads_mapped=$outbase/original_reads.sam
 # python $inbase/run_isoncorrect --keep_old --t $cores --fastq_folder $outbase/fastq  --outfolder $outbase/isoncorrect/ --set_w_dynamically  # &> /dev/null            
 ###############################
 
-for id in $(seq 1 1 5)    
+for id in $(seq 1 1 10)    
 do 
-    mkdir -p $outbase/$id/fastq
-    python $experiment_dir/subsample_reads.py $original_reads $inbase/test_data/sirv_transcriptome.fasta $original_reads_mapped $outbase/$id/fastq > /dev/null
+    # mkdir -p $outbase/$id/fastq
+    # python $experiment_dir/subsample_reads.py $original_reads $inbase/test_data/sirv_transcriptome.fasta $original_reads_mapped $outbase/$id/fastq > /dev/null
     sampled_transcripts=$outbase/$id/fastq/sampled_transcripts.fasta
-    for depth in 3 5 10 20 50 # 100 200 500
+    for depth in 3 5 10 20 
     do
         echo
         echo $id,$depth
         reads=$outbase/$id/fastq/$depth
-        fastq2fasta -i $reads.fastq -o $outbase/$id/fastq/$depth.fasta &> /dev/null
+        fastq2fasta $reads.fastq $outbase/$id/fastq/$depth.fasta #&> /dev/null
 
 
         original_eval_out=$outbase/$id/$depth/original/evaluation
-        mkdir -p $original_eval_out
-        minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $reads.fasta  > $reads.sam 2>/dev/null
+        # mkdir -p $original_eval_out
+        # minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $reads.fasta  > $reads.sam 2>/dev/null
         python $experiment_dir/get_error_rates.py $sampled_transcripts  $reads.sam $original_eval_out/results.csv 
 
         for k_param in 7 8 9
         do
-            for window in 0 1 2 
+            for window in 0 2 4 
             do
+                echo $k_param,$window
 
                 w_param=$(( $k_param + $window ))
                 corrected_approximate=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/approximate/
                 eval_out=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/approximate/evaluation
-                mkdir -p $eval_out
-                python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_approximate --k $k_param --w $w_param  &> /dev/null            
-                minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_approximate/corrected_reads.fastq  > $corrected_approximate/corrected_reads.sam 2>/dev/null
+                # mkdir -p $eval_out
+                # python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_approximate --k $k_param --w $w_param  &> /dev/null            
+                # minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_approximate/corrected_reads.fastq  > $corrected_approximate/corrected_reads.sam 2>/dev/null
                 python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_approximate/corrected_reads.sam $eval_out/results.csv 
                 
-                # echo -n  $id,approx,$depth,$k_param,$w_param,&& head -n 1 $eval_out/summary.csv 
-                # echo -n  $id,approx,$depth,$k_param,$w_param, >> $summary_file && head -n 1 $eval_out/summary.csv >> $summary_file
-                awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$w_param  '{if (NR!=1) {print awk_id",approx,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file
-
-                
+                awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$window  '{if (NR!=1) {print awk_id",approx,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file                
                 corrected_exact=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/
                 eval_out=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/evaluation
-                mkdir -p $eval_out
-                python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_exact --k $k_param --w $w_param --exact  &> /dev/null            
-                minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_exact/corrected_reads.fastq  > $corrected_exact/corrected_reads.sam 2>/dev/null
+                # mkdir -p $eval_out
+                # python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_exact --k $k_param --w $w_param --exact  &> /dev/null            
+                # minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_exact/corrected_reads.fastq  > $corrected_exact/corrected_reads.sam 2>/dev/null
                 python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_exact/corrected_reads.sam  $eval_out/results.csv 
                 
-                # echo -n  $id,exact,$depth,$k_param,$w_param,&& head -n 1 $eval_out/summary.csv 
-                # echo -n  $id,exact,$depth,$k_param,$w_param, >> $summary_file && head -n 1 $eval_out/summary.csv >> $summary_file
-                awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$w_param '{if (NR!=1) {print awk_id",exact,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file
-
-
-                # echo -n  $id,original,$depth,$k_param,$w_param,&& head -n 1 $original_eval_out/summary.csv
-                # echo -n  $id,original,$depth,$k_param,$w_param, >> $summary_file && head -n 1 $original_eval_out/summary.csv  >> $summary_file
-                awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$w_param '{if (NR!=1) {print awk_id",original,"awk_depth","awk_k","awk_w","$0}}'  $original_eval_out/results.csv >> $results_file
+                awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$window '{if (NR!=1) {print awk_id",exact,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file
+                awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$window '{if (NR!=1) {print awk_id",original,"awk_depth","awk_k","awk_w","$0}}'  $original_eval_out/results.csv >> $results_file
 
             done
         done
@@ -100,75 +91,7 @@ do
 done
 
 python $experiment_dir/plot_error_rates.py $results_file $plot_file"_tot.pdf" error_rate
-python $experiment_dir/plot_error_rates.py $results_file $plot_file"_subs.pdf" subs
-python $experiment_dir/plot_error_rates.py $results_file $plot_file"_ind.pdf" ins
-python $experiment_dir/plot_error_rates.py $results_file $plot_file"_del.pdf" del
-
-# # Evaluate indiviually corrected clusters    
-# for folder in $(find $outbase/$depth/isoncorrect/*  -type d); #c_id in $(seq 0 1 1000) $"${FILES[@]}"
-#     do 
-#         # echo $folder
-#         cl_id=$(basename $folder)
-#         echo $cl_id
-#         # if (( $cl_id > 50 ));
-#         #     then
-#         #         break
-#         # fi
-
-#         # if [ *$cl_id*  == "evaluation_original isoncorrect"  ]; then
-#         #   echo "Strings are equal" $cl_id
-#         #   continue
-#         # fi
-
-#         if [ -f $folder/corrected_reads.fastq ]; then
-#             echo $folder/corrected_reads.fastq
-#             python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $folder/corrected_reads.fastq $database_filtered $folder/evaluation  #> /dev/null
-#             awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",isoncorrect,"awk_depth",0,"$0}}'  $folder/evaluation/results.csv >> $results_file
-            
-#             python $eval_dir/evaluate_simulated_reads.py --no_ref_sim $outbase/$depth/isonclust/fastq/$cl_id.fastq $database_filtered $folder/evaluation_reads  #> /dev/null
-#             awk -F "," -v awk_id=$cl_id -v awk_depth=$depth '{if (NR!=1) {print awk_id",original,"awk_depth",0,"$0}}'  $folder/evaluation_reads/results.csv >> $results_file
-
-#             # echo "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq
-#             # cat "$outbase/$id/$depth/isoncorrect"/$c_id/corrected_reads.fastq >> $corrected_reads_fastq
-#         else
-#            echo $folder  "File  does not exist."
-#         fi
-#     done
-# #######################################
-
-
-# python $experiment_dir/plot_abundance_diff.py $results_file $plot_file"_abundance_diff.pdf" 
-
-
-
-
-
-
-
-
-
-# # # Evaluate error rates OLD
-# error_plot=$outbase/$id/$depth/"error_rates_"$depth".pdf" 
-# python $experiment_dir/get_error_rates.py  $database_filtered $outbase/$id/$depth/reads.fq  $corrected_reads_fastq  > $error_rates_file #$outbase/$id/$depth/isoncorrect/evaluation #&> /dev/null
-# python $experiment_dir/plot_error_rates.py $error_rates_file  $error_plot
-# # ######################
-
-# # ## Map reads
-# minimap2 -ax splice --eqx $database_filtered -uf -k14 $corrected_reads_fastq > $corrected_reads_mappings
-# minimap2 -ax splice --eqx $database_filtered  -uf -k14 $outbase/$id/$depth/reads.fq > $original_reads_mappings
-# # ###################
-
-# # # Evaluate chnage in expression levels compared to true expression
-# abundance_file=$outbase/$id/$depth/"abundance.tsv"
-# > $abundance_file
-# echo -n  "id","cov_aln","cov_true","seq","type"$'\n' > $abundance_file
-# python $experiment_dir/get_abundance.py  $corrected_reads_mappings "corrected" >> $abundance_file
-# python $experiment_dir/get_abundance.py $original_reads_mappings  "original" >>  $abundance_file
-# abundance_plot=$outbase/$id/$depth/"abundance.pdf" 
-# python $experiment_dir/plot_abundance.py $abundance_file "transcript" $abundance_plot
-
-
-
-
-
+# python $experiment_dir/plot_error_rates.py $results_file $plot_file"_subs.pdf" subs
+# python $experiment_dir/plot_error_rates.py $results_file $plot_file"_ind.pdf" ins
+# python $experiment_dir/plot_error_rates.py $results_file $plot_file"_del.pdf" del
 
