@@ -274,8 +274,10 @@ def sirv_error_rate_per_transcript(input_csv, outfolder):
     df_corr['subs_rate'] = df_corr['subs']/df_corr['aligned_length']
     df_corr['ins_rate'] = df_corr['ins']/df_corr['aligned_length']
     df_corr['del_rate'] = df_corr['del']/df_corr['aligned_length']
-
-    print("median error rate/subs/ins/del corrected:", median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
+    print(df_corr['subs'].sum())
+    print(df_corr['del'].sum())
+    print(df_corr['ins'].sum())
+    print("median error rate/subs/ins/del corrected:", df_corr['subs_rate'].median(), median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
 
     df_orig = indata.loc[indata['read_type'] == 'original']
     median_error =  df_orig['error_rate'].median()
@@ -290,12 +292,22 @@ def sirv_error_rate_per_transcript(input_csv, outfolder):
     # error_rate_corr = df_corr['error_rate'].tolist()
 
     # print("median error rate ", df_orig['error_rate'].median() )
-
-
-    indata['transcript_cov'] = indata.groupby('chr_id')['chr_id'].transform('count')
+    # print(list(indata.groupby(["chr_id", "experiment_id"]).size()))
+    # indata['transcript_cov'] = indata.groupby(["chr_id", "experiment_id"]).size()
+    # print(indata.groupby(['chr_id', "experiment_id"])['chr_id', "experiment_id"].transform('count')) #transform('count'))
+    # print(indata.groupby(['chr_id', "experiment_id"])['chr_id', "experiment_id"].transform('count')) #transform('count'))
+    df2 = indata.groupby(['chr_id', "experiment_id"])['chr_id', "experiment_id"].transform('count')
+    # res = pd.concat([indata,df2])
+    df2 = df2.rename(columns={"chr_id": "transcript_cov", "experiment_id": "transcript_cov2"})
+    # print(df2)
+    indata = pd.concat([indata, df2], axis=1)
+    # indata.join( df2['transcript_cov'] )
     print(indata['transcript_cov'].min())
+    # print(indata['transcript_cov'])
+    print(indata.loc[indata['transcript_cov'] == 12])
     ax = sns.lineplot(x="transcript_cov", y="error_rate",  hue="read_type",
-                      ci = 'sd', estimator= 'median', data=indata)
+                      ci = 'sd', estimator= 'median',  data=indata)
+    ax.set_ylim(0,17)
     ax.set_xscale('log')
     ax.set_ylabel("Error rate (%)")
     ax.set_xlabel("Reads per transcript")
@@ -313,9 +325,9 @@ def main(args):
     # sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
     # splice_site_classification_plot(args.input_csv, args.outfolder)
-    unique_fsm(args.input_csv, args.outfolder)
+    # unique_fsm(args.input_csv, args.outfolder)
     # total_error_rate(args.input_csv, args.outfolder)
-    # sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
+    sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
 
 
     # total_error_rate2(args.input_csv, args.outfolder)
