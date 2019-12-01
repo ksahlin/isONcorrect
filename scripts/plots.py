@@ -201,9 +201,9 @@ def total_error_rate(input_csv, outfolder):
     df_corr = df.loc[df['read_type'] == 'corrected']
     
     median_error =  df_corr['error_rate'].median()
-    df_corr['subs_rate'] = df_corr['subs']/df_corr['read_length']
-    df_corr['ins_rate'] = df_corr['ins']/df_corr['read_length']
-    df_corr['del_rate'] = df_corr['del']/df_corr['read_length']
+    df_corr['subs_rate'] = df_corr['subs']/df_corr['aligned_length']
+    df_corr['ins_rate'] = df_corr['ins']/df_corr['aligned_length']
+    df_corr['del_rate'] = df_corr['del']/df_corr['aligned_length']
 
     print("median error rate/subs/ins/del corrected:", median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
     # sys.exit()
@@ -211,9 +211,9 @@ def total_error_rate(input_csv, outfolder):
     df_orig = df.loc[df['read_type'] == 'original']
 
     median_error =  df_orig['error_rate'].median()
-    df_orig['subs_rate'] = df_orig['subs']/df_orig['read_length']
-    df_orig['ins_rate'] = df_orig['ins']/df_orig['read_length']
-    df_orig['del_rate'] = df_orig['del']/df_orig['read_length']
+    df_orig['subs_rate'] = df_orig['subs']/df_orig['aligned_length']
+    df_orig['ins_rate'] = df_orig['ins']/df_orig['aligned_length']
+    df_orig['del_rate'] = df_orig['del']/df_orig['aligned_length']
     # print(df_orig['del_rate'])
 
     print("median error rate/subs/ins/del original:",median_error, 100*df_orig['subs_rate'].median(), 100*df_orig['ins_rate'].median(), 100*df_orig['del_rate'].median())
@@ -271,17 +271,17 @@ def sirv_error_rate_per_transcript(input_csv, outfolder):
     df_corr = indata.loc[indata['read_type'] == 'corrected']
 
     median_error =  df_corr['error_rate'].median()
-    df_corr['subs_rate'] = df_corr['subs']/df_corr['read_length']
-    df_corr['ins_rate'] = df_corr['ins']/df_corr['read_length']
-    df_corr['del_rate'] = df_corr['del']/df_corr['read_length']
+    df_corr['subs_rate'] = df_corr['subs']/df_corr['aligned_length']
+    df_corr['ins_rate'] = df_corr['ins']/df_corr['aligned_length']
+    df_corr['del_rate'] = df_corr['del']/df_corr['aligned_length']
 
     print("median error rate/subs/ins/del corrected:", median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
 
     df_orig = indata.loc[indata['read_type'] == 'original']
     median_error =  df_orig['error_rate'].median()
-    df_orig['subs_rate'] = df_orig['subs']/df_orig['read_length']
-    df_orig['ins_rate'] = df_orig['ins']/df_orig['read_length']
-    df_orig['del_rate'] = df_orig['del']/df_orig['read_length']
+    df_orig['subs_rate'] = df_orig['subs']/df_orig['aligned_length']
+    df_orig['ins_rate'] = df_orig['ins']/df_orig['aligned_length']
+    df_orig['del_rate'] = df_orig['del']/df_orig['aligned_length']
     # print(df_orig['del_rate'])
 
     print("median error rate/subs/ins/del original:",median_error, 100*df_orig['subs_rate'].median(), 100*df_orig['ins_rate'].median(), 100*df_orig['del_rate'].median())
