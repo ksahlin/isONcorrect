@@ -271,7 +271,7 @@ rule sirv_summary:
                 if j == 0:
                     continue
                 
-                outfile.write("{0},{1},{2}\n".format(exp_id, ','.join(n for n in line.strip().split(',')) ))
+                outfile.write("{0},{1}\n".format(exp_id, ','.join(n for n in line.strip().split(',')) ))
 
 
 rule summary:
