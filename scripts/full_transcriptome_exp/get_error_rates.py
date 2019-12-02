@@ -103,9 +103,10 @@ def get_error_profile(corr_seq, true_seq):
     deletions = read_alignment.count("-")
     # indels =  insertions + deletions
     subs = len([1 for n1, n2 in zip(read_alignment, ref_alignment) if n1 != n2 and n1 != "-" and n2 != "-"] )
+    matches = len([1 for n1, n2 in zip(read_alignment, ref_alignment) if n1 == n2 and n1 != "-" and n2 != "-"] )
     err_rate = round(100 * float(subs + insertions + deletions) / len(true_seq), 2)
     read_length = true_seq
-    return tot, insertions, deletions, subs, err_rate
+    return tot, insertions, deletions, subs, matches, err_rate
 
 
 def main(args):
@@ -116,7 +117,7 @@ def main(args):
     isoform_coverage = Counter([acc.split("|")[2].split("_")[0] for acc in original])
     gene_coverage = Counter([acc.split("|")[1] for acc in original])
     gene_fam_coverage = Counter([acc.split("|")[0] for acc in original])
-    print("read,read_length,err,subs,ins,del,err_rate,type,transcript_cov,gene_cov,gene_fam_cov")
+    print("read,read_length,err,ins,del,subs,matches,err_rate,type,transcript_cov,gene_cov,gene_fam_cov")
     for acc in corrected:
         transcript_id = acc.split("|")[2].split("_")[0]
         gene_id = acc.split("|")[1] 
@@ -128,8 +129,8 @@ def main(args):
         # read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, seq, spoa_ref)
 
         corr_seq = corrected[acc]
-        tot, ins, del_, subs, err_rate = get_error_profile(corr_seq, true_seq)
-        print("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}".format(acc, read_length, tot, ins, del_, subs, err_rate, "corrected", isoform_coverage[transcript_id], gene_coverage[gene_id], gene_fam_coverage[gene_fam_id] ))
+        tot, ins, del_, subs, matches, err_rate = get_error_profile(corr_seq, true_seq)
+        print("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11}".format(acc, read_length, tot, ins, del_, subs, matches, err_rate, "corrected", isoform_coverage[transcript_id], gene_coverage[gene_id], gene_fam_coverage[gene_fam_id] ))
         # print("corrected:", ed_corr, "cov:", isoform_coverage[transcript_id])
         err_rate_corr = err_rate
         orig_seq = original[acc]
@@ -145,8 +146,8 @@ def main(args):
         #     print("", file=sys.stderr)
             
 
-        tot, ins, del_, subs, err_rate = get_error_profile(orig_seq, true_seq)
-        print("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9}".format(acc, tot, ins, del_, subs, err_rate, "original", isoform_coverage[transcript_id], gene_coverage[gene_id], gene_fam_coverage[gene_fam_id] ))
+        tot, ins, del_, subs, matches, err_rate = get_error_profile(orig_seq, true_seq)
+        print("{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11}".format(acc, read_length, tot, ins, del_, subs, matches, err_rate, "original", isoform_coverage[transcript_id], gene_coverage[gene_id], gene_fam_coverage[gene_fam_id] ))
 
         # res = edlib.align(orig_seq, true_seq, task="path", mode="NW")
         # ed_orig = res["editDistance"]

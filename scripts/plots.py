@@ -275,13 +275,13 @@ def get_error_rates(input_csv, read_to_infer = "corrected"):
     for line in open(input_csv, 'r'):
 
         # if SIRV
-        experiment_id,acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,chr_id = line.split(',')
+        # experiment_id,acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,chr_id = line.split(',')
         
         # if Drosophila
         # acc,read_type,ins,del_,subs,matches,error_rate,read_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag = line.split(',')
         
         # if SIM
-        # read,err,subs,ins,del_,err_rate,read_type,transcript_cov,gene_cov,gene_fam_cov = line.split(',')
+        read,read_length,err,ins,del_,subs,matches,error_rate,read_type,transcript_cov,gene_cov,gene_fam_cov = line.split(',')
 
         if read_type == read_to_infer:
             # read_length =  (int(subs)+ int(ins) + int(del_))/ (float(err_rate)/100.0)
