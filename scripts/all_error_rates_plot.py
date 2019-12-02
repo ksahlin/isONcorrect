@@ -30,14 +30,16 @@ print(df)
 
 # y=sys.argv[3]
 g = sns.catplot(x="dataset", y='percentage', col="type",
-            data=df, hue="error_type", hue_order= ["subs", "ins", "del", "matches"],
+            data=df, hue="error_type", hue_order= ["subs", "ins", "del"],
             kind="bar",  aspect=1)
 
-g.set(ylim=(0.1,100))
+g.set(ylim=(0.1,10))
 plt.yscale('log')
 g.set_ylabels("Error rate (%)")
 g.set_xlabels("Dataset")
 
+# plt.setp(g.ax.get_yticklabels(["0.1","1.0", "10.0" ]))
+(g.set_yticklabels(["0", "0.1","1.0", "10.0"]).set_titles("{col_name}")) 
 
 plt.savefig(sys.argv[2])
 plt.close()
