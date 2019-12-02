@@ -1,4 +1,12 @@
 dataset,type,error_type,count,percentage
+SIM,original,ins,8010909,0.4692855704
+SIM,original,del,122998464,7.2053501468
+SIM,original,subs,43742983,2.5624995527
+SIM,original,matches,1532291181,89.76286473
+SIM,corrected,ins,2768291,0.1626683221  
+SIM,corrected,del,8696100,0.5109939654
+SIM,corrected,subs,2196237,0.1290536969
+SIM,corrected,matches,1688140291,99.1972840156
 SIRV,original,ins,15167501,2.18657477
 SIRV,original,del,20766477,2.99373342
 SIRV,original,subs,17168449,2.475035106
@@ -15,4 +23,5 @@ Drosophila,corrected,ins,9629436,0.397037507
 Drosophila,corrected,del,21080406,0.869179861
 Drosophila,corrected,subs,13698087,0.5647946892
 Drosophila,corrected,matches,2380913566,98.16898794
+
 
