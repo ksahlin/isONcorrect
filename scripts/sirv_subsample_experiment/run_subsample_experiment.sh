@@ -26,10 +26,10 @@ results_file=$outbase/"results.csv"
 summary_file=$outbase/"summary.csv"
 plot_file=$outbase/"summary"
 
-echo -n  "id","type","Depth","k","w","q_acc","r_acc","total_errors","error_rate","subs","ins","del"$'\n' > $results_file
+# echo -n  "id","type","Depth","k","w","q_acc","r_acc","total_errors","error_rate","subs","ins","del"$'\n' > $results_file
 
 # # align original reads with minimap2 
-# original_reads_mapped=$outbase/original_reads.sam
+original_reads_mapped=$outbase/original_reads.sam
 # minimap2 -a --eqx -k 14 -w 1 $inbase/test_data/sirv_transcriptome.fasta  $original_reads  > $original_reads_mapped
 
 # # Subsample reads
@@ -42,10 +42,73 @@ echo -n  "id","type","Depth","k","w","q_acc","r_acc","total_errors","error_rate"
 # python $inbase/run_isoncorrect --keep_old --t $cores --fastq_folder $outbase/fastq  --outfolder $outbase/isoncorrect/ --set_w_dynamically  # &> /dev/null            
 ###############################
 
+
+##### EXPERMENT FOR k AND w ################
+############################################
+############################################
+
+# for id in $(seq 1 1 10)    
+# do 
+#     mkdir -p $outbase/$id/fastq
+#     python $experiment_dir/subsample_reads.py $original_reads $inbase/test_data/sirv_transcriptome.fasta $original_reads_mapped $outbase/$id/fastq > /dev/null
+#     sampled_transcripts=$outbase/$id/fastq/sampled_transcripts.fasta
+#     for depth in 3 5 10 20 
+#     do
+#         echo
+#         echo $id,$depth
+#         reads=$outbase/$id/fastq/$depth
+#         fastq2fasta $reads.fastq $outbase/$id/fastq/$depth.fasta #&> /dev/null
+
+
+#         original_eval_out=$outbase/$id/$depth/original/evaluation
+#         mkdir -p $original_eval_out
+#         minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $reads.fasta  > $reads.sam 2>/dev/null
+#         python $experiment_dir/get_error_rates.py $sampled_transcripts  $reads.sam $original_eval_out/results.csv 
+
+#         for k_param in 7 8 9
+#         do
+#             for window in 0 2 4 
+#             do
+#                 echo $k_param,$window
+
+#                 w_param=$(( $k_param + $window ))
+#                 corrected_approximate=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/approximate/
+#                 eval_out=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/approximate/evaluation
+#                 mkdir -p $eval_out
+#                 python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_approximate --k $k_param --w $w_param  &> /dev/null            
+#                 minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_approximate/corrected_reads.fastq  > $corrected_approximate/corrected_reads.sam 2>/dev/null
+#                 python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_approximate/corrected_reads.sam $eval_out/results.csv 
+                
+#                 awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$window  '{if (NR!=1) {print awk_id",approx,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file                
+#                 corrected_exact=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/
+#                 eval_out=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/evaluation
+#                 mkdir -p $eval_out
+#                 python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_exact --k $k_param --w $w_param --exact  &> /dev/null            
+#                 minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_exact/corrected_reads.fastq  > $corrected_exact/corrected_reads.sam 2>/dev/null
+#                 python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_exact/corrected_reads.sam  $eval_out/results.csv 
+                
+#                 awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$window '{if (NR!=1) {print awk_id",exact,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file
+#                 awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$window '{if (NR!=1) {print awk_id",original,"awk_depth","awk_k","awk_w","$0}}'  $original_eval_out/results.csv >> $results_file
+
+#             done
+#         done
+#     done
+# done
+
+############################################
+############################################
+
+
+####### EXPERMENT FOR xmax ################
+############################################
+############################################
+
+echo -n  "id","type","Depth","xmax","q_acc","r_acc","total_errors","error_rate","subs","ins","del"$'\n' > $results_file
+
 for id in $(seq 1 1 10)    
 do 
-    # mkdir -p $outbase/$id/fastq
-    # python $experiment_dir/subsample_reads.py $original_reads $inbase/test_data/sirv_transcriptome.fasta $original_reads_mapped $outbase/$id/fastq > /dev/null
+    mkdir -p $outbase/$id/fastq
+    python $experiment_dir/subsample_reads.py $original_reads $inbase/test_data/sirv_transcriptome.fasta $original_reads_mapped $outbase/$id/fastq > /dev/null
     sampled_transcripts=$outbase/$id/fastq/sampled_transcripts.fasta
     for depth in 3 5 10 20 
     do
@@ -56,41 +119,37 @@ do
 
 
         original_eval_out=$outbase/$id/$depth/original/evaluation
-        # mkdir -p $original_eval_out
-        # minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $reads.fasta  > $reads.sam 2>/dev/null
+        mkdir -p $original_eval_out
+        minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $reads.fasta  > $reads.sam 2>/dev/null
         python $experiment_dir/get_error_rates.py $sampled_transcripts  $reads.sam $original_eval_out/results.csv 
 
-        for k_param in 7 8 9
+        for xmax in 40 60 80 100 
         do
-            for window in 0 2 4 
-            do
-                echo $k_param,$window
+            corrected_approximate=$outbase/$id/isoncorrect/$depth/$xmax/approximate/
+            eval_out=$outbase/$id/isoncorrect/$depth/$xmax/approximate/evaluation
+            mkdir -p $eval_out
+            python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_approximate --k 9 --w 9 --xmax $xmax  &> /dev/null            
+            minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_approximate/corrected_reads.fastq  > $corrected_approximate/corrected_reads.sam 2>/dev/null
+            python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_approximate/corrected_reads.sam $eval_out/results.csv 
+            
+            awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_x=$xmax '{if (NR!=1) {print awk_id",approx,"awk_depth","awk_x","$0}}'  $eval_out/results.csv >> $results_file                
+            corrected_exact=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/
+            eval_out=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/evaluation
+            mkdir -p $eval_out
+            python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_exact --k 9 --w 9 --xmax $xmax  --exact  &> /dev/null            
+            minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_exact/corrected_reads.fastq  > $corrected_exact/corrected_reads.sam 2>/dev/null
+            python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_exact/corrected_reads.sam  $eval_out/results.csv 
+            
+            awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_x=$xmax   '{if (NR!=1) {print awk_id",exact,"awk_depth","awk_x","$0}}'  $eval_out/results.csv >> $results_file
+            awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_x=$xmax  '{if (NR!=1) {print awk_id",original,"awk_depth","awk_x","$0}}'  $original_eval_out/results.csv >> $results_file
 
-                w_param=$(( $k_param + $window ))
-                corrected_approximate=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/approximate/
-                eval_out=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/approximate/evaluation
-                # mkdir -p $eval_out
-                # python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_approximate --k $k_param --w $w_param  &> /dev/null            
-                # minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_approximate/corrected_reads.fastq  > $corrected_approximate/corrected_reads.sam 2>/dev/null
-                python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_approximate/corrected_reads.sam $eval_out/results.csv 
-                
-                awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$window  '{if (NR!=1) {print awk_id",approx,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file                
-                corrected_exact=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/
-                eval_out=$outbase/$id/isoncorrect/$depth/$k_param/$w_param/exact/evaluation
-                # mkdir -p $eval_out
-                # python $inbase/isONcorrect3 --fastq $reads.fastq  --outfolder $corrected_exact --k $k_param --w $w_param --exact  &> /dev/null            
-                # minimap2 -a --eqx -k 14 -w 4 $sampled_transcripts $corrected_exact/corrected_reads.fastq  > $corrected_exact/corrected_reads.sam 2>/dev/null
-                python $experiment_dir/get_error_rates.py $sampled_transcripts $corrected_exact/corrected_reads.sam  $eval_out/results.csv 
-                
-                awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$window '{if (NR!=1) {print awk_id",exact,"awk_depth","awk_k","awk_w","$0}}'  $eval_out/results.csv >> $results_file
-                awk -F "," -v awk_id=$id -v awk_depth=$depth -v awk_k=$k_param -v awk_w=$window '{if (NR!=1) {print awk_id",original,"awk_depth","awk_k","awk_w","$0}}'  $original_eval_out/results.csv >> $results_file
-
-            done
         done
     done
 done
 
 python $experiment_dir/plot_error_rates.py $results_file $plot_file"_tot.pdf" error_rate
+
+# python $experiment_dir/plot_error_rates.py $results_file $plot_file"_tot.pdf" error_rate
 # python $experiment_dir/plot_error_rates.py $results_file $plot_file"_subs.pdf" subs
 # python $experiment_dir/plot_error_rates.py $results_file $plot_file"_ind.pdf" ins
 # python $experiment_dir/plot_error_rates.py $results_file $plot_file"_del.pdf" del
