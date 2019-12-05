@@ -10,9 +10,10 @@ from collections import defaultdict
 
 
 def simulate_read(i, transcript_acc, isoform ):
-    error_lvls = [0.6, 0.7, 0.8, 0.9, 0.92, 0.94, 0.96,0.98, 0.99, 0.995]
+    error_lvls = [0.8, 0.9, 0.92, 0.96, 0.98, 0.99, 0.995]
     read = []
     qual = []
+    del_, ins, subs = 0,0,0
     was_del = False
     for l, n in enumerate(isoform):
         # if l <= 15 or l >= len(isoform) - 15: # no errors first and last 15 bases
@@ -32,22 +33,25 @@ def simulate_read(i, transcript_acc, isoform ):
 
         if error:
             r = random.uniform(0,1)
-            if r < 0.6: #deletion
+            if r < 0.45: #deletion
                 was_del = p_error
+                del_ += 1
                 pass 
-            elif 0.6 <= r < 0.9:
-                read.append(random.choice("ACGT"))
+            elif 0.45 <= r < 0.8:
+                read.append(random.choice( list(set("ACGT").difference( set(n))) ))
                 qual.append( round(-math.log(p_error,10)*10) )
-
+                subs += 1
             else:
                 read.append(n)
                 qual.append( round(-math.log(p_error,10)*10) )
 
                 r_ins = random.uniform(0,1)
+                ins += 1
                 while r_ins >= 0.7:
                     read.append(random.choice("ACGT"))
                     r_ins = random.uniform(0,1)
                     qual.append( round(-math.log(0.7,10)*10) )
+                    ins += 1
 
         else:
             if was_del: # adding uncertainty from prevous deleted base
@@ -65,7 +69,7 @@ def simulate_read(i, transcript_acc, isoform ):
     # print(read_seq)
     # print(qual_seq)
 
-    return acc, read_seq, qual_seq
+    return acc, read_seq, qual_seq, del_, ins, subs 
 
 
 def main(args):
@@ -76,6 +80,7 @@ def main(args):
     ont_reads = {}
     reads_generated_log = defaultdict(int)
     errors = []
+    tot_del_, tot_ins, tot_subs, tot_len = 0, 0, 0, 0
     all_transctript_accessions = list(sequence_transcripts.keys())
     if args.exponential:
         abundance = [1,2,4,8,16,32]
@@ -83,19 +88,26 @@ def main(args):
         accessions = random.choices(all_transctript_accessions, weights=transcript_weights, k = args.read_count)
         for i, acc in enumerate(accessions):
             transcript = sequence_transcripts[acc]
-            read_acc, read, qual = simulate_read(i, acc, transcript)
+            read_acc, read, qual, del_, ins, subs  = simulate_read(i, acc, transcript)
+            tot_err = (del_ + ins + subs)/float(len(transcript))
             ont_reads[read_acc] = (read, qual)
+            args.logfile.write("del:{0}, ins:{1}, subs:{2}, tot_err:{3}\n".format(del_, ins, subs, tot_err))
+            tot_del_ += del_
+            tot_ins += ins
+            tot_subs += subs
+            tot_len += len(transcript)
+
             if i % 5000 == 0:
                 print(i, "reads simulated.")
     else:
         accessions = random.choices(all_transctript_accessions, k = args.read_count)
         for i, acc in enumerate(accessions):
             transcript = sequence_transcripts[acc]
-            read_acc, read, qual = simulate_read(i, acc, transcript)
+            read_acc, read, qual, del_, ins, subs  = simulate_read(i, acc, transcript)
             ont_reads[read_acc] = (read, qual)
             if i % 5000 == 0:
                 print(i, "reads simulated.")
-
+    print(tot_del_, tot_ins, tot_subs, (tot_del_ + tot_ins + tot_subs)/float(tot_len))
 
     # for acc, abundance in misc_functions.iteritems(reads_generated_log):
     #     args.logfile.write("{0}\t{1}\n".format(acc, abundance))
