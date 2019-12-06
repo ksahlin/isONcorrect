@@ -116,7 +116,7 @@ rule isoncorrect:
         infolder =  config["ROOT_OUT"] + "/clustering/{0}/{1}/{2}/fastq/".format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance) 
         outfolder = config["ROOT_OUT"] + "/correction/{0}/{1}/{2}/".format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance)   
         isoncorrect_dir = config["ROOT_IN"]
-        shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 20  --xmax 80 --keep_old")
+        shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 20 ")
         shell("touch {output.flag}")
 
 
