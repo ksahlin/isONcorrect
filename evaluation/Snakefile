@@ -89,9 +89,9 @@ rule subsample:
         if wildcards.nr_reads == "999":
             shell("ln -s  {input.fastq} {output.subsampled_fastq} ")
         elif wildcards.dataset == "SIRV":
-            shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads 10000 --min_length 200")
+            shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads 1000 --min_length 100")
         else:
-            shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads {wildcards.nr_reads} --min_length 200")
+            shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads {wildcards.nr_reads} --min_length 100")
 
 
 rule isONclust:
@@ -238,7 +238,7 @@ rule evaluate_sirv:
             corrected_reads = rules.split_accessions_corr.output.original_reads_split_accessions #rules.combine_isoncorrect.output.corrected_reads_fastq,
     output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}/results_per_read_to_transcriptome.csv"
     run:
-        ref = config["SIRV_TRANSCRIPTOME"]
+        ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
         eval_dir = config["ROOT_IN"] + "/scripts/"
         outfolder = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)  
         mkdir_p(outfolder) 
@@ -246,8 +246,8 @@ rule evaluate_sirv:
         orig_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/original_to_transcripts.sam".format(wildcards.dataset, wildcards.nr_reads) 
         corr_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/corrected_to_transcripts.sam".format(wildcards.dataset, wildcards.nr_reads) 
 
-        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k13 -w1 {ref} {input.original_reads} >  {orig_reads_aligned} ")
-        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k13 -w1 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k8 -w1 {ref} {input.original_reads} >  {orig_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k8 -w1 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
         shell("python {eval_dir}/evaluate_sirv_to_transcriptome.py  {orig_reads_aligned}  {corr_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {outfolder}")
 
