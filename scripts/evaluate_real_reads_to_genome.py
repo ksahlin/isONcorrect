@@ -1023,6 +1023,13 @@ def main(args):
     reads_to_cluster_size = get_cluster_sizes(args.cluster_file, reads)
 
     reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
+
+    for r_acc in reads_missing_from_clustering_correction_output:
+        if r_acc in orig and r_acc not in corr:
+            corr[r_acc] = orig[r_acc]
+            corr_splice_results[r_acc] = orig_splice_results[r_acc]
+            corr_reads[r_acc] = reads[r_acc]
+
     bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
     reads_unaligned_in_original = set(reads.keys()) - set(orig_primary_locations.keys())
     reads_unaligned_in_correction = set(corr_reads.keys()) - set(corr_primary_locations.keys()) 
@@ -1034,7 +1041,7 @@ def main(args):
     detailed_results_outfile.close()
 
     print()
-    print("Reads successfully aligned (original/corrected):", len(orig),len(corr))
+    print("Reads successfully aligned all (original/corrected):", len(orig),len(corr))
     print("Total reads (original/corrected):", len(reads),len(corr_reads))
     print("READS MISSING FROM CLUSTERING/CORRECTION INPUT:", len(reads_missing_from_clustering_correction_output))
     print("READS UNALIGNED (ORIGINAL/CORRECTED):", len(reads_unaligned_in_original), len(reads_unaligned_in_correction) )

@@ -287,8 +287,8 @@ rule evaluate_sirv_full:
         orig_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/SIRV/999/original_to_transcripts.sam" 
         corr_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/SIRV/999/corrected_to_transcripts.sam"
 
-        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k8 -w1 {ref} {input.original_reads} >  {orig_reads_aligned} ")
-        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k8 -w1 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
+        # shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k8 -w1 {ref} {input.original_reads} >  {orig_reads_aligned} ")
+        # shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k8 -w1 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
         shell("python {eval_dir}/evaluate_sirv_to_transcriptome.py  {orig_reads_aligned}  {corr_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {outfolder}")
         shell("cp {outfolder}/results_per_read_to_transcriptome.csv {output.csv_file}")
