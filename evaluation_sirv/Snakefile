@@ -73,7 +73,7 @@ rule sirv_subsample:
 
 
 rule isONclust:
-    input:  fastq = rules.subsample.output,
+    input:  fastq = rules.sirv_subsample.output,
     output: time_and_mem =  config["ROOT_OUT"] + "/time_and_mem/{dataset}/{nr_reads}/{exp_id}/time_and_mem.txt",
             clusters = config["ROOT_OUT"] + "/clustering/{dataset}/{nr_reads}/{exp_id}/final_clusters.tsv" 
     run:
