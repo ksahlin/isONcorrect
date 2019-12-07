@@ -275,7 +275,7 @@ rule sirv_summary:
 
 
 rule evaluate_sirv_full:
-    input: original_reads = config["ROOT_OUT"] + "/data/SIRV/999_split_accs.fq"   #rules.split_accessions_orig.output.original_reads_split_accessions, #rules.subsample.output.subsampled_fastq,
+    input: original_reads = config["ROOT_OUT"] + "/data/SIRV/999_split_accs.fq",   #rules.split_accessions_orig.output.original_reads_split_accessions, #rules.subsample.output.subsampled_fastq,
             corrected_reads = config["ROOT_OUT"] + "/correction/SIRV/999/isONcorrect_split_accs.fq" #rules.split_accessions_corr.output.original_reads_split_accessions #rules.combine_isoncorrect.output.corrected_reads_fastq,
     output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/SIRV_full_results_per_read_to_transcriptome.csv"
     run:
