@@ -828,11 +828,16 @@ def main(args):
     corr = get_error_rate_stats_per_read(corr_primary_locations, corr_reads, args)
     orig = get_error_rate_stats_per_read(orig_primary_locations, reads, args)
 
-    print( "Reads successfully aligned:", len(orig),len(corr))
+    print( "Reads successfully aligned (as found in sam file):", len(orig),len(corr))
 
 
 
     reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
+    for r_acc in reads_missing_from_clustering_correction_output:
+        if r_acc in orig and r_acc not in corr:
+            corr[r_acc] = orig[r_acc]
+            corr_reads[r_acc] = reads[r_acc]
+
     bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
     reads_unaligned_in_original = set(reads.keys()) - set(orig_primary_locations.keys())
     reads_unaligned_in_correction = set(corr_reads.keys()) - set(corr_primary_locations.keys()) 
@@ -844,7 +849,7 @@ def main(args):
     detailed_results_outfile.close()
 
     print()
-    print("Reads successfully aligned (original/corrected):", len(orig),len(corr))
+    print("Reads successfully aligned all reads (original/corrected):", len(orig),len(corr))
     print("Total reads (original/corrected):", len(reads),len(corr_reads))
     print("READS MISSING FROM CLUSTERING/CORRECTION INPUT:", len(reads_missing_from_clustering_correction_output))
     print("READS UNALIGNED (ORIGINAL/CORRECTED):", len(reads_unaligned_in_original), len(reads_unaligned_in_correction) )
