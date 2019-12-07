@@ -232,7 +232,7 @@ rule evaluate:
         else:
             shell("python {eval_dir}/evaluate_real_reads_to_genome.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {input.clusters_tsv} {input.gtf_annotation} {outfolder} --infer_genes")
-
+        shell("touch {output.csv_file}")
 
 rule evaluate_sirv:
     input: original_reads = rules.split_accessions_orig.output.original_reads_split_accessions, #rules.subsample.output.subsampled_fastq,
