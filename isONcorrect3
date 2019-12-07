@@ -1075,6 +1075,8 @@ def batch(dictionary, size):
     if i/size != 0:
         sub_dict[acc] = seq
         batches.append(sub_dict)
+    elif len(dictionary) == 1:
+        batches.append(sub_dict)        
     
     return batches
 
