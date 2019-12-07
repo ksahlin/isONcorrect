@@ -63,7 +63,7 @@ rule all:
 
 rule sirv:
     input: config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv",
-            config["ROOT_OUT"] + "/SIRV/999/results_per_read_to_transcriptome.csv"
+            config["ROOT_OUT"] + "evaluation_biological/SIRV_full_results_per_read_to_transcriptome.csv"
             #expand(config["ROOT_OUT"] + "/evaluation_biological/SIRV/{exp_id}/results_per_read_to_transcriptome.csv", exp_id = list(range(1,101)))
 
 
@@ -158,15 +158,15 @@ rule combine_isoncorrect:
 
 
 rule split_accessions_corr:
-    input: original_reads = rules.combine_isoncorrect.output.corrected_reads_fastq
-    output: original_reads_split_accessions = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/isONcorrect_split_accs.fq" 
+    input: corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq
+    output: corrected_reads_split_accessions = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/isONcorrect_split_accs.fq" 
 
     run:
         eval_dir = config["ROOT_IN"] + "/scripts/"
-        shell("python {eval_dir}/split_accessions.py {input.original_reads} {output.original_reads_split_accessions}")
+        shell("python {eval_dir}/split_accessions.py {input.corrected_reads} {output.corrected_reads_split_accessions}")
 
 rule align_corrected_reads_minimap2:
-    input: corrected_reads = rules.split_accessions_corr.output.original_reads_split_accessions
+    input: corrected_reads = rules.split_accessions_corr.output.corrected_reads_split_accessions
     output: corrected_reads_aligned = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/isONcorrect.sam"
     run:
         if wildcards.dataset == "SIRV":
@@ -236,7 +236,7 @@ rule evaluate:
 
 rule evaluate_sirv:
     input: original_reads = rules.split_accessions_orig.output.original_reads_split_accessions, #rules.subsample.output.subsampled_fastq,
-            corrected_reads = rules.split_accessions_corr.output.original_reads_split_accessions #rules.combine_isoncorrect.output.corrected_reads_fastq,
+            corrected_reads = rules.split_accessions_corr.output.corrected_reads_split_accessions #rules.combine_isoncorrect.output.corrected_reads_fastq,
     output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}/results_per_read_to_transcriptome.csv"
     run:
         ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
@@ -275,9 +275,9 @@ rule sirv_summary:
 
 
 rule evaluate_sirv_full:
-    input: original_reads = rules.split_accessions_orig.output.original_reads_split_accessions, #rules.subsample.output.subsampled_fastq,
-            corrected_reads = rules.split_accessions_corr.output.original_reads_split_accessions #rules.combine_isoncorrect.output.corrected_reads_fastq,
-    output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/SIRV/999/results_per_read_to_transcriptome.csv"
+    input: original_reads = config["ROOT_OUT"] + "/data/SIRV/999_split_accs.fq"   #rules.split_accessions_orig.output.original_reads_split_accessions, #rules.subsample.output.subsampled_fastq,
+            corrected_reads = config["ROOT_OUT"] + "/correction/SIRV/999/isONcorrect_split_accs.fq" #rules.split_accessions_corr.output.original_reads_split_accessions #rules.combine_isoncorrect.output.corrected_reads_fastq,
+    output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/SIRV_full_results_per_read_to_transcriptome.csv"
     run:
         ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
         eval_dir = config["ROOT_IN"] + "/scripts/"
