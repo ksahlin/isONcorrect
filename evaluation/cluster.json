@@ -3,7 +3,7 @@
     "__default__" : 
     {
         "account" : "",
-        "cpus-per-task" : "8",
+        "cpus-per-task" : "4",
         "mem" : "128G",
         "Nodes" : 1,
         "runtime" : "3-00:00:00",
@@ -28,9 +28,9 @@
     "isoncorrect" : 
     {
         "jobname" : "isoncorrect",
-        "cpus-per-task" : "64",
+        "cpus-per-task" : "4",
         "Nodes" : 1,
-        "mem" : "500G",
+        "mem" : "32G",
         "runtime" : "14-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
@@ -52,9 +52,9 @@
     "isONclust" : 
     {
         "jobname" : "isONclust",
-        "cpus-per-task" : "64",
+        "cpus-per-task" : "1",
         "Nodes" : 1,
-        "mem" : "500G",
+        "mem" : "8G",
         "runtime" : "7-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",

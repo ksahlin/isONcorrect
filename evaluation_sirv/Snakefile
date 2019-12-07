@@ -234,18 +234,30 @@ rule evaluate:
                                                         {input.corrected_reads} {ref} {input.clusters_tsv} {input.gtf_annotation} {outfolder} --infer_genes")
 
 
-rule evaluate_sirv:
-    input: original_reads = rules.split_accessions_orig.output.original_reads_split_accessions, #rules.subsample.output.subsampled_fastq,
-            corrected_reads = rules.split_accessions_corr.output.original_reads_split_accessions #rules.combine_isoncorrect.output.corrected_reads_fastq,
-    output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}/results_per_read_to_transcriptome.csv"
+
+rule sirv_subsample:
+    input:  fastq = config["ROOT_OUT"] + "/data/SIRV/all_fl_reads.fq",
+    output: subsampled_fastq =  config["ROOT_OUT"] + "/data/SIRV/{nr_reads}/{exp_id}.fq"
+    run:
+
+        inbase= config["ROOT_IN"]
+        mkdir_p(config["ROOT_OUT"] + "/data/SIRV/{1}/{2}/".format(wildcards.nr_reads, wildcards.exp_id ) )
+        ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
+        shell("python {inbase}/scripts/sirv_subsample_depth.py --transcriptome {ref} --fastq {input.fastq} --outfile {output.subsampled_fastq} --depth_per_transcript {wildcards.nr_reads} --min_length 100")
+
+
+rule evaluate_sirv_subsample:
+    input: original_reads = rules.sirv_subsample.output.subsampled_fastq,
+            corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
+    output: csv_file =  config["ROOT_OUT"] + "/evaluation_biological/{dataset}/{nr_reads}/{exp_id}/results_per_read_to_transcriptome.csv"
     run:
         ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
         eval_dir = config["ROOT_IN"] + "/scripts/"
-        outfolder = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)  
+        outfolder = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/{2}".format(wildcards.dataset, wildcards.nr_reads, wildcards.exp_id)  
         mkdir_p(outfolder) 
         
-        orig_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/original_to_transcripts.sam".format(wildcards.dataset, wildcards.nr_reads) 
-        corr_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/corrected_to_transcripts.sam".format(wildcards.dataset, wildcards.nr_reads) 
+        orig_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/{2}/original_to_transcripts.sam".format(wildcards.dataset, wildcards.nr_reads,wildcards.exp_id) 
+        corr_reads_aligned = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/{2}/corrected_to_transcripts.sam".format(wildcards.dataset, wildcards.nr_reads,wildcards.exp_id) 
 
         shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k8 -w1 {ref} {input.original_reads} >  {orig_reads_aligned} ")
         shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k8 -w1 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
@@ -253,7 +265,7 @@ rule evaluate_sirv:
                                                         {input.corrected_reads} {ref} {outfolder}")
 
 rule sirv_summary:
-    input: all_experiments = expand(rules.evaluate_sirv.output.csv_file, dataset=["SIRV"], nr_reads = list(range(1,101)))
+    input: all_experiments = expand(rules.evaluate_sirv_subsample.output.csv_file, dataset=["SIRV"], nr_reads = list(range(1,101)), exp_id = list(range(1,11)) )
     output: summary_table = config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
     run:
         shell("> {output.summary_table}")
@@ -262,16 +274,17 @@ rule sirv_summary:
             
             #write header
             if i == 0:
-                outfile.write("experiment_id,acc,read_type,ins,del,subs,matches,error_rate,read_length,aligned_length,chr_id\n")
+                outfile.write("experiment_id,nr_reads,acc,read_type,ins,del,subs,matches,error_rate,read_length,aligned_length,chr_id\n")
                 # outfile.write("{0},{1},{2}\n".format(nr_reads, dataset, ','.join(n for n in line.strip().split(',')) ))
 
             exp_id = f.split('/')[-2]
+            nr_reads = f.split('/')[-3]
             for j, line in enumerate(open(f, 'r')):
                 # ignore header
                 if j == 0:
                     continue
                 
-                outfile.write("{0},{1}\n".format(exp_id, ','.join(n for n in line.strip().split(',')) ))
+                outfile.write("{0},{1},{2}\n".format(exp_id, nr_reads, ','.join(n for n in line.strip().split(',')) ))
 
 
 rule evaluate_sirv_full:
