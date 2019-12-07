@@ -291,6 +291,8 @@ rule evaluate_sirv_full:
         shell("/usr/bin/time -v  minimap2 --eqx -t 8 -a -k8 -w1 {ref} {input.corrected_reads} >  {corr_reads_aligned} ")
         shell("python {eval_dir}/evaluate_sirv_to_transcriptome.py  {orig_reads_aligned}  {corr_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {outfolder}")
+        shell("cp {outfolder}/results_per_read_to_transcriptome.csv {output.csv_file}")
+
 
 rule summary:
     input: all_experiments = expand(rules.evaluate.output.csv_file, dataset=config["DATASETS"], nr_reads=config["NR_READS"])
