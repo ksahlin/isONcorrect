@@ -59,6 +59,7 @@ def mkdir_p(path):
 rule all:
    input:  config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
 
+
 rule sirv_subsample:
     input:  fastq = config["ROOT_OUT"] + "/data/SIRV/all_fl_reads.fq",
     output: subsampled_fastq =  config["ROOT_OUT"] + "/data/SIRV/{nr_reads}/{exp_id}.fq"
@@ -66,8 +67,9 @@ rule sirv_subsample:
 
         inbase= config["ROOT_IN"]
         mkdir_p(config["ROOT_OUT"] + "/data/SIRV/{1}/{2}/".format(wildcards.nr_reads, wildcards.exp_id ) )
-        ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
-        shell("python {inbase}/scripts/sirv_subsample_depth.py --transcriptome {ref} --fastq {input.fastq} --outfile {output.subsampled_fastq} --depth_per_transcript {wildcards.nr_reads} --min_length 100")
+        alignments = config["ROOT_OUT"] + "/evaluation_biological/SIRV/999/original_to_transcripts.sam"
+        # ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
+        shell("python {inbase}/scripts/sirv_subsample_depth.py {input.fastq} {alignments} {output.subsampled_fastq} {wildcards.nr_reads}")
 
 
 rule isONclust:
