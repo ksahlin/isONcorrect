@@ -62,7 +62,7 @@ rule all:
           #config["ROOT_OUT"], "controlled.csv")
 
 rule sirv:
-    input: config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv",
+    input: #config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv",
             config["ROOT_OUT"] + "/evaluation_biological/SIRV_full_results_per_read_to_transcriptome.csv"
             #expand(config["ROOT_OUT"] + "/evaluation_biological/SIRV/{exp_id}/results_per_read_to_transcriptome.csv", exp_id = list(range(1,101)))
 
