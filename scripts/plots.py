@@ -218,15 +218,17 @@ def total_error_rate(input_csv, outfolder):
 
     print("median error rate/subs/ins/del original:",median_error, 100*df_orig['subs_rate'].median(), 100*df_orig['ins_rate'].median(), 100*df_orig['del_rate'].median())
 
-
     error_rate_orig = df_orig['error_rate'].tolist()
     error_rate_corr = df_corr['error_rate'].tolist()
+    print("total number of original reads aligned:", len(error_rate_orig))
+    print("total number of corrected reads aligned:", len(error_rate_corr))
 
     # bins = [0.1*i for i in range(300)]
     pyplot.hist(error_rate_corr, 100, range=[0, 20], alpha=0.5, label='Corrected')
     pyplot.hist(error_rate_orig, 100, range=[0, 20], alpha=0.5, label='Original')
     pyplot.legend(loc='upper right')
-    pyplot.xlabel("Difference to genome (%)")
+    # pyplot.xlabel("Difference to genome (%)")
+    pyplot.xlabel("Error rate (%)")
     pyplot.ylabel("Read count")
     plt.savefig(os.path.join(outfolder, "error_rate.eps"))
     plt.savefig(os.path.join(outfolder, "error_rate.pdf"))
@@ -276,12 +278,15 @@ def get_error_rates(input_csv, read_to_infer = "corrected"):
 
         # if SIRV
         # experiment_id,acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,chr_id = line.split(',')
+
+        # if SIRV full        
+        # acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,chr_id = line.split(',')
         
         # if Drosophila
-        # acc,read_type,ins,del_,subs,matches,error_rate,read_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag = line.split(',')
+        acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag = line.split(',')
         
         # if SIM
-        read,read_length,err,ins,del_,subs,matches,error_rate,read_type,transcript_cov,gene_cov,gene_fam_cov = line.split(',')
+        # read,read_length,err,ins,del_,subs,matches,error_rate,read_type,transcript_cov,gene_cov,gene_fam_cov = line.split(',')
 
         if read_type == read_to_infer:
             # read_length =  (int(subs)+ int(ins) + int(del_))/ (float(err_rate)/100.0)
@@ -314,65 +319,34 @@ def sirv_error_rate_per_transcript(input_csv, outfolder):
     # sys.exit()
     pd.set_option("display.precision", 8)
     indata = pd.read_csv(input_csv)
-    df_corr = indata.loc[indata['read_type'] == 'corrected']
 
-    median_error =  df_corr['error_rate'].median()
-    df_corr['subs_rate'] = df_corr['subs']/df_corr['aligned_length']
-    df_corr['ins_rate'] = df_corr['ins']/df_corr['aligned_length']
-    df_corr['del_rate'] = df_corr['del']/df_corr['aligned_length']
-    df_corr['error_rate_new'] = (df_corr['subs'] + df_corr['ins'] + df_corr['del'] ) /df_corr['aligned_length']
-    
-    # print()
-    # print(df_corr['subs'].sum())
-    # print(df_corr['del'].sum())
-    # print(df_corr['ins'].sum())
-    # print(df_corr['matches'].sum())
-    # print(df_corr['read_length'].sum())
-    # print(df_corr['aligned_length'].sum())
+    # df_corr = indata.loc[indata['read_type'] == 'corrected']
+    # median_error =  df_corr['error_rate'].median()
+    # df_corr['subs_rate'] = df_corr['subs']/df_corr['aligned_length']
+    # df_corr['ins_rate'] = df_corr['ins']/df_corr['aligned_length']
+    # df_corr['del_rate'] = df_corr['del']/df_corr['aligned_length']
+    # df_corr['error_rate_new'] = (df_corr['subs'] + df_corr['ins'] + df_corr['del'] ) /df_corr['aligned_length']
 
-    # print(df_corr['subs_rate'].mean(), df_corr['ins_rate'].mean(), df_corr['del_rate'].mean(), df_corr['error_rate'].mean(), 100*df_corr['error_rate_new'].mean(), 100*df_corr['error_rate_new'].median() )
-    # print("median error rate/subs/ins/del corrected:", median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
-
-    df_orig = indata.loc[indata['read_type'] == 'original']
-    median_error =  df_orig['error_rate'].median()
-    df_orig['subs_rate'] = df_orig['subs']/df_orig['aligned_length']
-    df_orig['ins_rate'] = df_orig['ins']/df_orig['aligned_length']
-    df_orig['del_rate'] = df_orig['del']/df_orig['aligned_length']
-
-    df_orig['error_rate_new'] = (df_orig['del'] + df_orig['ins'] + df_orig['del'] ) /df_orig['aligned_length']
-
-    # print(df_orig['del_rate'])
-    # print(df_orig['subs_rate'].mean(), df_orig['ins_rate'].mean(), df_orig['del_rate'].mean(), df_orig['error_rate'].mean(), 100*df_orig['error_rate_new'].mean(), 100*df_orig['error_rate_new'].median() )
-    # print("median error rate/subs/ins/del original:",median_error, 100*df_orig['subs_rate'].median(), 100*df_orig['ins_rate'].median(), 100*df_orig['del_rate'].median())
     # df_orig = indata.loc[indata['read_type'] == 'original']
+    # median_error =  df_orig['error_rate'].median()
+    # df_orig['subs_rate'] = df_orig['subs']/df_orig['aligned_length']
+    # df_orig['ins_rate'] = df_orig['ins']/df_orig['aligned_length']
+    # df_orig['del_rate'] = df_orig['del']/df_orig['aligned_length']
+    # df_orig['error_rate_new'] = (df_orig['del'] + df_orig['ins'] + df_orig['del'] ) /df_orig['aligned_length']
 
-    # error_rate_corr = df_corr['error_rate'].tolist()
 
-    # print("median error rate ", df_orig['error_rate'].median() )
-    # print(list(indata.groupby(["chr_id", "experiment_id"]).size()))
-    # indata['transcript_cov'] = indata.groupby(["chr_id", "experiment_id"]).size()
-    # print(indata.groupby(['chr_id', "experiment_id"])['chr_id', "experiment_id"].transform('count')) #transform('count'))
-    # print(indata.groupby(['chr_id', "experiment_id"])['chr_id', "experiment_id"].transform('count')) #transform('count'))
-    df2 = indata.groupby(['chr_id', "experiment_id"])['chr_id', "experiment_id"].transform('count')
-    # res = pd.concat([indata,df2])
-    df2 = df2.rename(columns={"chr_id": "transcript_cov", "experiment_id": "transcript_cov2"})
-    # print(df2)
-    indata = pd.concat([indata, df2], axis=1)
-    # indata.join( df2['transcript_cov'] )
-    # print(indata['transcript_cov'].min())
-    # print(indata['transcript_cov'])
-    # print(indata.loc[indata['transcript_cov'] == 1])
-    # print()
-    # print(indata.loc[indata['transcript_cov'] == 2])
-    # print()
-    # print(indata.loc[indata['transcript_cov'] == 3])
-    # print()
-    # print(indata.loc[indata['transcript_cov'] == 4])
+    # df2 = indata.groupby(['chr_id', "experiment_id"])['chr_id', "experiment_id"].transform('count')
+    # df2 = df2.rename(columns={"chr_id": "transcript_cov", "experiment_id": "transcript_cov2"})
+    # indata = pd.concat([indata, df2], axis=1)
+    # ax = sns.lineplot(x="transcript_cov", y="error_rate",  hue="read_type",
+    #                   ci = 'sd', estimator= 'median',  data=indata)
 
-    ax = sns.lineplot(x="transcript_cov", y="error_rate",  hue="read_type",
+    # new controlled experiment:
+    ax = sns.lineplot(x="nr_reads", y="error_rate",  hue="read_type",
                       ci = 'sd', estimator= 'median',  data=indata)
     ax.set_ylim(0,17)
     ax.set_xscale('log')
+    ax.set_xticks([1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100])
     ax.set_ylabel("Error rate (%)")
     ax.set_xlabel("Reads per transcript")
 
@@ -388,13 +362,13 @@ def main(args):
     # flatui = ["#2ecc71", "#e74c3c"] # https://chrisalbon.com/python/data_visualization/seaborn_color_palettes/
     # sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
-    get_error_rates(args.input_csv, read_to_infer = 'corrected')
-    get_error_rates(args.input_csv, read_to_infer = 'original' )
+    # get_error_rates(args.input_csv, read_to_infer = 'corrected')
+    # get_error_rates(args.input_csv, read_to_infer = 'original' )
 
     # splice_site_classification_plot(args.input_csv, args.outfolder)
     # unique_fsm(args.input_csv, args.outfolder)
     # total_error_rate(args.input_csv, args.outfolder)
-    # sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
+    sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
 
 
     # total_error_rate2(args.input_csv, args.outfolder)
