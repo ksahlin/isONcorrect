@@ -141,7 +141,8 @@ rule isoncorrect:
             # if wildcards.nr_reads == "999":
             #     shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 50  --xmax 80 --split_mod 2 --residual 1 ")
             # else:
-        shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 62  --xmax 80")
+        time_and_mem = config["ROOT_OUT"] + "/time_and_mem/{0}/{1}/correction_time_and_mem.txt".format(wildcards.dataset, wildcards.nr_reads) 
+        shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 62  --xmax 80 2>&1 | tee {time_and_mem}")
 
         # shell("python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --t 32 --k 7 --w 10 --xmax 80")
         shell("touch {output.flag}")
