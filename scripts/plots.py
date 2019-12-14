@@ -283,10 +283,10 @@ def get_error_rates(input_csv, read_to_infer = "corrected"):
         # acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,chr_id = line.split(',')
         
         # if Drosophila
-        acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag = line.split(',')
+        # acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag = line.split(',')
         
         # if SIM
-        # read,read_length,err,ins,del_,subs,matches,error_rate,read_type,transcript_cov,gene_cov,gene_fam_cov = line.split(',')
+        read,read_length,err,ins,del_,subs,matches,error_rate,read_type,transcript_cov,gene_cov,gene_fam_cov = line.split(',')
 
         if read_type == read_to_infer:
             # read_length =  (int(subs)+ int(ins) + int(del_))/ (float(err_rate)/100.0)
@@ -306,9 +306,9 @@ def get_error_rates(input_csv, read_to_infer = "corrected"):
     subses_rates = [ (subses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
     # print(sorted(err_rates1)[int(len(err_rates1)/2) ])
     print(sorted(err_rates2)[int(len(err_rates2)/2) ])
-    print(sorted(dels_rates)[int(len(dels_rates)/2) ])
-    print(sorted(inses_rates)[int(len(inses_rates)/2) ])
-    print(sorted(subses_rates)[int(len(subses_rates)/2) ])
+    print("dels_rates", sorted(dels_rates)[int(len(dels_rates)/2) ])
+    print("inses_rates",sorted(inses_rates)[int(len(inses_rates)/2) ])
+    print("subses_rates", sorted(subses_rates)[int(len(subses_rates)/2) ])
     print("type,ins,del,subs,matches")
     print( "{0},{1},{2},{3},{4}".format(read_to_infer,sum(inses),sum(dels), sum(subses), sum(matcheses)))
     # print(sorted(subses_rates))
@@ -362,13 +362,13 @@ def main(args):
     # flatui = ["#2ecc71", "#e74c3c"] # https://chrisalbon.com/python/data_visualization/seaborn_color_palettes/
     # sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
 
-    # get_error_rates(args.input_csv, read_to_infer = 'corrected')
-    # get_error_rates(args.input_csv, read_to_infer = 'original' )
+    get_error_rates(args.input_csv, read_to_infer = 'corrected')
+    get_error_rates(args.input_csv, read_to_infer = 'original' )
 
     # splice_site_classification_plot(args.input_csv, args.outfolder)
     # unique_fsm(args.input_csv, args.outfolder)
-    # total_error_rate(args.input_csv, args.outfolder)
-    sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
+    total_error_rate(args.input_csv, args.outfolder)
+    # sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
 
 
     # total_error_rate2(args.input_csv, args.outfolder)

@@ -10,7 +10,7 @@ from collections import defaultdict
 
 
 def simulate_read(i, transcript_acc, isoform ):
-    error_lvls = [0.8, 0.9, 0.92, 0.96, 0.98, 0.99, 0.995]
+error_lvls = [0.85, 0.875, 0.9, 0.92, 0.96, 0.98, 0.99, 0.995]
     read = []
     qual = []
     del_, ins, subs = 0,0,0
@@ -44,9 +44,9 @@ def simulate_read(i, transcript_acc, isoform ):
             else:
                 read.append(n)
                 qual.append( round(-math.log(p_error,10)*10) )
-
-                r_ins = random.uniform(0,1)
+                read.append(random.choice("ACGT"))
                 ins += 1
+                r_ins = random.uniform(0,1)
                 while r_ins >= 0.7:
                     read.append(random.choice("ACGT"))
                     r_ins = random.uniform(0,1)
@@ -81,6 +81,7 @@ def main(args):
     reads_generated_log = defaultdict(int)
     errors = []
     tot_del_, tot_ins, tot_subs, tot_len = 0, 0, 0, 0
+    error_lvls = []
     all_transctript_accessions = list(sequence_transcripts.keys())
     if args.exponential:
         abundance = [1,2,4,8,16,32]
@@ -96,7 +97,7 @@ def main(args):
             tot_ins += ins
             tot_subs += subs
             tot_len += len(transcript)
-
+            error_lvls.append( (del_ + ins +subs)/float(len(transcript))  )
             if i % 5000 == 0:
                 print(i, "reads simulated.")
     else:
@@ -104,9 +105,11 @@ def main(args):
         for i, acc in enumerate(accessions):
             transcript = sequence_transcripts[acc]
             read_acc, read, qual, del_, ins, subs  = simulate_read(i, acc, transcript)
+            error_lvls.append( (del_ + ins +subs)/float(len(transcript))  )
             ont_reads[read_acc] = (read, qual)
             if i % 5000 == 0:
                 print(i, "reads simulated.")
+    print("median error rate:", sorted(error_lvls)[int(len(error_lvls)/2)])
     print(tot_del_, tot_ins, tot_subs, (tot_del_ + tot_ins + tot_subs)/float(tot_len))
 
     # for acc, abundance in misc_functions.iteritems(reads_generated_log):
