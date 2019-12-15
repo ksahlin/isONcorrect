@@ -10,7 +10,7 @@ from collections import defaultdict
 
 
 def simulate_read(i, transcript_acc, isoform ):
-error_lvls = [0.85, 0.875, 0.9, 0.92, 0.96, 0.98, 0.99, 0.995]
+    error_lvls = [0.85, 0.875, 0.9, 0.92, 0.96, 0.98, 0.99, 0.995]
     read = []
     qual = []
     del_, ins, subs = 0,0,0
