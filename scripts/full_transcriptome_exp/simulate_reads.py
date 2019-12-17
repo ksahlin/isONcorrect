@@ -45,6 +45,7 @@ def simulate_read(i, transcript_acc, isoform ):
                 read.append(n)
                 qual.append( round(-math.log(p_error,10)*10) )
                 read.append(random.choice("ACGT"))
+                qual.append( round(-math.log(p_error,10)*10) )
                 ins += 1
                 r_ins = random.uniform(0,1)
                 while r_ins >= 0.7:
@@ -64,6 +65,7 @@ def simulate_read(i, transcript_acc, isoform ):
 
     read_seq = "".join([n for n in read])
     qual_seq = "".join([chr(q + 33) for q in qual])
+    assert len(read_seq) == len(qual_seq)
     acc = str(transcript_acc) + "_" +  str(i) #= (read_seq, qual_seq)
 
     # print(read_seq)
