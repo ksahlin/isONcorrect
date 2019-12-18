@@ -32,7 +32,7 @@ def mkdir_p(path):
 def isoncorrect(data):
     isoncorrect_location, read_fastq_file, outfolder, cl_id, isoncorrect_algorithm_params = data[0],data[1],data[2], data[3], data[4]
     mkdir_p(outfolder)
-    isoncorrect_exec = os.path.join(isoncorrect_location, "isONcorrect3")
+    isoncorrect_exec = os.path.join(isoncorrect_location, "isONcorrect")
     isoncorrect_error_file = os.path.join(outfolder, "stderr.txt")
     with open(isoncorrect_error_file, "w") as error_file:
         print('Running isoncorrect cl_id:{0}...'.format(cl_id), end=' ')

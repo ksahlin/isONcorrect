@@ -53,7 +53,7 @@ do
         python $experiment_dir/generate_abundance.py --transcript_file $outbase/$id/biological_material.fa --abundance $abundance $outbase/$id/$depth/biological_material_abundance.fa   > /dev/null
         python $experiment_dir/generate_ont_reads.py $outbase/$id/$depth/biological_material_abundance.fa $outbase/$id/$depth/reads.fq $depth > /dev/null
 
-        python $inbase/isONcorrect3 --fastq $outbase/$id/$depth/reads.fq   --outfolder $outbase/$id/$depth/isoncorrect/ --T 0.1 --k 9 --w 10 --xmax 80  &> /dev/null            
+        python $inbase/isONcorrect --fastq $outbase/$id/$depth/reads.fq   --outfolder $outbase/$id/$depth/isoncorrect/ --T 0.1 --k 9 --w 10 --xmax 80  &> /dev/null            
         python $eval_dir/evaluate_simulated_reads.py  $outbase/$id/$depth/isoncorrect/corrected_reads.fastq  $outbase/$id/biological_material.fa $outbase/$id/$depth/isoncorrect/evaluation > /dev/null
         echo -n  $id,approx,$depth,$mut_rate,&& head -n 1 $outbase/$id/$depth/isoncorrect/evaluation/summary.csv 
         echo -n  $id,approx,$depth,$mut_rate, >> $summary_file && head -n 1 $outbase/$id/$depth/isoncorrect/evaluation/summary.csv >> $summary_file
@@ -79,7 +79,7 @@ do
             echo "Depth greater than 100, skipping exact";
             continue
         else
-            python $inbase/isONcorrect3 --fastq $outbase/$id/$depth/reads.fq   --outfolder $outbase/$id/$depth/isoncorrect_exact/ --T 0.1 --k 9 --w 10 --xmax 80 --exact   &> /dev/null            
+            python $inbase/isONcorrect --fastq $outbase/$id/$depth/reads.fq   --outfolder $outbase/$id/$depth/isoncorrect_exact/ --T 0.1 --k 9 --w 10 --xmax 80 --exact   &> /dev/null            
             python $eval_dir/evaluate_simulated_reads.py  $outbase/$id/$depth/isoncorrect_exact/corrected_reads.fastq  $outbase/$id/biological_material.fa $outbase/$id/$depth/isoncorrect_exact/evaluation > /dev/null
             echo -n  $id,exact,$depth,$mut_rate,&& head -n 1 $outbase/$id/$depth/isoncorrect_exact/evaluation/summary.csv 
             echo -n  $id,exact,$depth,$mut_rate, >> $summary_file && head -n 1 $outbase/$id/$depth/isoncorrect_exact/evaluation/summary.csv >> $summary_file
