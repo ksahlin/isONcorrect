@@ -299,6 +299,11 @@ def get_error_rates(input_csv, read_to_infer = "corrected"):
             # aln_lengths.append(int(aligned_length))
             read_lengths.append(int(read_length))
 
+    # if SIM:
+    tot_bases = sum(read_lengths)
+    # tot_bases = sum(read_lengths)
+
+
     # err_rates1 = [ (dels[i] + inses[i] + subses[i])/ float(aln_lengths[i]) for i in range(len(matcheses))]
     err_rates2 = [ (dels[i] + inses[i] + subses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
     dels_rates = [ (dels[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
@@ -306,11 +311,11 @@ def get_error_rates(input_csv, read_to_infer = "corrected"):
     subses_rates = [ (subses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
     # print(sorted(err_rates1)[int(len(err_rates1)/2) ])
     print(sorted(err_rates2)[int(len(err_rates2)/2) ])
-    print("dels_rates", sorted(dels_rates)[int(len(dels_rates)/2) ])
-    print("inses_rates",sorted(inses_rates)[int(len(inses_rates)/2) ])
-    print("subses_rates", sorted(subses_rates)[int(len(subses_rates)/2) ])
-    print("type,ins,del,subs,matches")
-    print( "{0},{1},{2},{3},{4}".format(read_to_infer,sum(inses),sum(dels), sum(subses), sum(matcheses)))
+    print("median dels_rates", sorted(dels_rates)[int(len(dels_rates)/2) ])
+    print("median inses_rates",sorted(inses_rates)[int(len(inses_rates)/2) ])
+    print("median subses_rates", sorted(subses_rates)[int(len(subses_rates)/2) ])
+    print("type,ins,del,subs,matches,tot_bases")
+    print( "{0},{1},{2},{3},{4},{5}".format(read_to_infer,sum(inses),sum(dels), sum(subses), sum(matcheses), tot_bases))
     # print(sorted(subses_rates))
 
 def sirv_error_rate_per_transcript(input_csv, outfolder):
