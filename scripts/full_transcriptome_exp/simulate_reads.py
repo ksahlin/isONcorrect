@@ -107,11 +107,11 @@ def main(args):
         for i, acc in enumerate(accessions):
             transcript = sequence_transcripts[acc]
             read_acc, read, qual, del_, ins, subs  = simulate_read(i, acc, transcript)
-            error_lvls.append( (del_ + ins +subs)/float(len(transcript))  )
+            error_lvls.append( (del_ + ins +subs)/float(len(transcript) + ins)  )
             ont_reads[read_acc] = (read, qual)
             if i % 5000 == 0:
                 print(i, "reads simulated.")
-    print("median error rate:", sorted(error_lvls)[int(len(error_lvls)/2)])
+    print("median accuracy (divided by aligmnet length):", sorted(error_lvls)[int(len(error_lvls)/2)])
     print(tot_del_, tot_ins, tot_subs, (tot_del_ + tot_ins + tot_subs)/float(tot_len))
 
     # for acc, abundance in misc_functions.iteritems(reads_generated_log):
