@@ -118,7 +118,7 @@ rule isoncorrect:
         outfolder = config["ROOT_OUT"] + "/correction/{0}/{1}/{2}/".format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance)   
         isoncorrect_dir = config["ROOT_IN"]
         time_and_mem = config["ROOT_OUT"] + "/time_and_mem/{0}/{1}/{2}/correction_time_and_mem.txt".format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance)
-        shell("{time} python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 30 2>&1 | tee {time_and_mem}")
+        shell("{time} python {isoncorrect_dir}/run_isoncorrect  --fastq_folder {infolder}  --outfolder {outfolder} --set_w_dynamically --t 30 --keep_old 2>&1 | tee {time_and_mem}")
         shell("touch {output.flag}")
 
 
