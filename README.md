@@ -1,7 +1,7 @@
 isONcorrect
 ===========
 
-isONcorrect is a tool for error-corecting  Oxford Nanopore cDNA reads. It is designed to handle highly variable coverage and exon variation within reads and achieves about a 0.5-1% median error rate after correction (see [preprint]() for details). It leverages reagions shared between reads from different isoforms acheve low error rates even for low abundant transcripts. [preprint]().  
+isONcorrect is a tool for error-correcting  Oxford Nanopore cDNA reads. It is designed to handle highly variable coverage and exon variation within reads and achieves about a 0.5-1% median error rate after correction (see [preprint]() for details). It leverages regions shared between reads from different isoforms achieve low error rates even for low abundant transcripts. See [preprint]() for details.  
 
 Processing and error correction of full-length ONT cDNA reads is acheved by the pipeline of running [pychopper](https://github.com/nanoporetech/pychopper) --> [isONclust](https://github.com/ksahlin/isONclust) --> [isONcorrect](https://github.com/ksahlin/isONcorrect) 
 
@@ -58,7 +58,7 @@ source activate isoncorrect
 
 To install isONcorrect, run:
 ```
-pip install  isONcorrect
+pip install isONcorrect
 ```
 `pip` will install the dependencies automatically for you. `pip` is pythons official package installer and is included in most python versions. If you do not have `pip`, it can be easily installed [from here](https://pip.pypa.io/en/stable/installing/) and upgraded with `pip install --upgrade pip`. 
 
@@ -95,17 +95,20 @@ USAGE
  
 ### Running
 
-For a file with raw ONT cDNA reads the following pipeline is recommended
+For a file with raw ONT cDNA reads the following pipeline is recommended (bash script provided below)
 1.  Get full-length ONT cDNA sequences produced by [pychopper](https://github.com/nanoporetech/pychopper) (a.k.a. `cdna_classifier`)
 2.  Cluster the full length reads where a cluster corresponds to a gene/gene-family
 3.  Make fastq files of each cluster
 4.  Correct individual clusters
-5.  Optional (join then back to a single file)
+5.  Optional (join reads from separate clusters back to a single file)
 
 Below shows specific pipeline script to go from raw reads `raw_reads.fq` to corrected full-length reads `all_corrected_reads.fq` (please modify/remove arguments as needed). 
 
 ```
 #!/bin/bash
+
+# isonano pipeline to get high quality full length reads from transcriots
+
 cdna_classifier.py  raw_reads.fq outfolder/reads_full_length.fq \
                       [-t cores]  [-w outfolder/rescued.fq  -u outfolder/unclassified.fq  -S outfolder/stats.txt] 
 
