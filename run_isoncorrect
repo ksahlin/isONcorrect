@@ -29,6 +29,14 @@ def mkdir_p(path):
             raise
 
 
+def wccount(filename):
+    out = subprocess.Popen(['wc', '-l', filename],
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT
+                         ).communicate()[0]
+    # print(int(out.split()[0]))
+    return int(out.split()[0])
+
 def isoncorrect(data):
     isoncorrect_location, read_fastq_file, outfolder, cl_id, isoncorrect_algorithm_params = data[0],data[1],data[2], data[3], data[4]
     mkdir_p(outfolder)
@@ -69,17 +77,22 @@ def main(args):
             # print(cl_id, outfolder, read_fastq_file, directory)
             fastq_file_path = os.path.join(os.fsdecode(directory), read_fastq_file)
             # print(fastq_file_path)
+            compute = True
             if args.keep_old:
-                if os.path.isfile(os.path.join(outfolder, "corrected_reads.fastq")): 
-                    print("already computed cluster", cl_id)
-                else:
-                    isoncorrect_algorithm_params = {  "set_w_dynamically" : args.set_w_dynamically, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
-                    instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
-            else:
+                candidate_corrected_file = os.path.join(outfolder, "corrected_reads.fastq")
+                if os.path.isfile(candidate_corrected_file): 
+                    if wccount(candidate_corrected_file) == wccount(fastq_file_path):
+                        print("already computed cluster and complete file", cl_id)
+                        compute = False
+
+            if compute:
                 isoncorrect_algorithm_params = {  "set_w_dynamically" : args.set_w_dynamically, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
                 instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
+            # else:
+            #     isoncorrect_algorithm_params = {  "set_w_dynamically" : args.set_w_dynamically, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
+            #     instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
             # print(os.path.join(directory, read_fastq_file))
-            continue
+            # continue
         else:
             continue
 
@@ -127,7 +140,7 @@ if __name__ == '__main__':
     parser.add_argument('--T', type=float, default=0.1, help='Minimum fraction keeping substitution')
     parser.add_argument('--exact_instance_limit', type=int, default=50,  help='Do exact correction for clusters under this threshold')
     # parser.add_argument('--w_equal_k_limit', type=int, default=100,  help='Do not recompute previous results')
-    parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results')
+    parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results if corrected_reads.fq is found and has the smae number of reads as input file (i.e., is complete).')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
 
     parser.add_argument('--split_mod', type=int, default=1, help='Splits cluster ids in n (default=1) partitions by computing residual of cluster_id divided by n.\
