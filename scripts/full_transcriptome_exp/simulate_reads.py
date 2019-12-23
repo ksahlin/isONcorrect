@@ -96,8 +96,9 @@ def main(args):
         for i, acc in enumerate(sequence_transcripts):
             transcript = sequence_transcripts[acc]
             abundance = random.choice(abundance_vector)
+            print(abundance)
             for a in range(abundance):
-                read_acc, read, qual, del_, ins, subs  = simulate_read(i, acc, transcript)
+                read_acc, read, qual, del_, ins, subs  = simulate_read(a, acc, transcript)
                 tot_err = (del_ + ins + subs)/float(len(transcript))
                 ont_reads[read_acc] = (read, qual)
                 args.logfile.write("del:{0}, ins:{1}, subs:{2}, tot_err:{3}\n".format(del_, ins, subs, tot_err))
