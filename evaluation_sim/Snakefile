@@ -57,7 +57,9 @@ def mkdir_p(path):
 
 rule all:
    input: config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/exponential/abundance.csv",
-          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/exponential/results.csv"
+          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/exponential/results.csv",
+          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/exponential/abundance.csv",
+          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/exponential/results.csv"
           #   config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/abundance.csv",
           # config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/results.csv",
           #config["ROOT_OUT"], "eval_sim_table.csv"),
@@ -81,7 +83,9 @@ rule simulate:
     run:
         experiment_dir = config["ROOT_IN"] + "/scripts/full_transcriptome_exp"
         mkdir_p(config["ROOT_OUT"] + "/data/{0}/{1}/{2}".format(wildcards.dataset, wildcards.nr_reads, wildcards.abundance) )
-        if wildcards.abundance == "exponential":
+        if wildcards.nr_reads == "1":
+            shell("python {experiment_dir}/simulate_reads.py {input.database_filtered} {output.reads} {wildcards.nr_reads} --controlled")            
+        elif wildcards.abundance == "exponential":
             shell("python {experiment_dir}/simulate_reads.py {input.database_filtered} {output.reads} {wildcards.nr_reads} --exponential")
         else:
             shell("python {experiment_dir}/simulate_reads.py {input.database_filtered} {output.reads} {wildcards.nr_reads}")
