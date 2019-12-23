@@ -85,7 +85,32 @@ def main(args):
     tot_del_, tot_ins, tot_subs, tot_len = 0, 0, 0, 0
     error_lvls = []
     all_transctript_accessions = list(sequence_transcripts.keys())
-    if args.exponential:
+    if args.controlled:
+        # 1+2+..+10+20+..+100 = 545
+        abundance_vector = []
+        for i in list(range(1,11)) +  list(range(20,101,10)):
+            for j in range(int(100/i)):
+                abundance_vector.append(i)
+        print(abundance_vector)
+        print(len(abundance_vector))
+        for i, acc in enumerate(sequence_transcripts):
+            transcript = sequence_transcripts[acc]
+            abundance = random.choice(abundance_vector)
+            for a in range(abundance):
+                read_acc, read, qual, del_, ins, subs  = simulate_read(i, acc, transcript)
+                tot_err = (del_ + ins + subs)/float(len(transcript))
+                ont_reads[read_acc] = (read, qual)
+                args.logfile.write("del:{0}, ins:{1}, subs:{2}, tot_err:{3}\n".format(del_, ins, subs, tot_err))
+                tot_del_ += del_
+                tot_ins += ins
+                tot_subs += subs
+                tot_len += len(transcript)
+                error_lvls.append( (del_ + ins +subs)/float(len(transcript))  )
+            if i % 500 == 0:
+                print(i, "transcripts simulated from.")                
+
+
+    elif args.exponential:
         abundance = [1,2,4,8,16,32]
         transcript_weights = [ random.choice(abundance) for i in range(len(all_transctript_accessions))]
         accessions = random.choices(all_transctript_accessions, weights=transcript_weights, k = args.read_count)
@@ -142,6 +167,7 @@ if __name__ == '__main__':
     parser.add_argument('outfile', type=str, help='Output path to fasta file')
     parser.add_argument('read_count', type=int, help='Number of reads to simulate.')
     parser.add_argument('--exponential', action="store_true", help='Give transcripts weights from 1,2,4,8,16,32.')
+    parser.add_argument('--controlled', action="store_true", help='Give transcripts weights from 1,2,..,10,20,...,100.')
     # parser.add_argument('config', type=str, help='config file')
 
 
