@@ -24,7 +24,7 @@ setup(
     long_description=long_description,  # Optional
     url='https://github.com/ksahlin/isONcorrect',  # Optional
     author='Kristoffer Sahlin',  # Optional
-    author_email='kxs624@psu.edu',  # Optional
+    author_email='ksahlin@kth.se',  # Optional
 
     # Classifiers help users find your project by categorizing it.
     #
@@ -75,8 +75,8 @@ setup(
     #
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['edlib',
-                      'spoa'],  # Optional
+    install_requires=['edlib>=1.1.2',
+                      'spoa>=1.1.5'],  # Optional
     # dependency_links=[], # Optional
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
