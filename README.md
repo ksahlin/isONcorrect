@@ -86,7 +86,7 @@ cd isONcorrect
 You can verify successul installation by running isONcorrect on this [small dataset](https://github.com/ksahlin/isONcorrect/tree/master/test/sample_alz_2k.fastq). Simply download the test dataset and run:
 
 ```
-isONcorrect --fastq [test/sirv.fa] --outfolder [output path]
+isONcorrect --fastq [path to isONcorrect basefolder]/test_data/isoncorrect/0.fastq --outfolder [output path]
 ```
 
 
