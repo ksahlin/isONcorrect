@@ -139,7 +139,7 @@ CREDITS
 
 Please cite [1] when using isONcorrect.
 
-1. Kristoffer Sahlin, Botond Sipos, Daniel Turner, Phillip L James, Paul Medvedev (2020)  [Link]().
+1. Kristoffer Sahlin, Botond Sipos, Phillip L James, Daniel Turner, Paul Medvedev (2020)  [Link]().
 
 Bib record: 
 
