@@ -16,6 +16,7 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 from matplotlib import pyplot
+from collections import defaultdict
 
 sns.set(style="whitegrid")
 
@@ -34,6 +35,13 @@ both_bad = 0
 x = []
 y = []
 overcorrection_amount = []
+abundance = []
+overcorr_and_ab = defaultdict(lambda: defaultdict(int))
+# overcorr_and_ab = []
+# for i in range(17):
+#     overcorr_and_ab.append([])
+#     for j in range(19):
+#         overcorr_and_ab[-1].append(0)
 for row in list_of_list:
     acc, annot, ab, is_corr, read_type, ed_btw_transcripts, ed_read_to_true, ed_read_to_aligned = row
     if acc not in read_annot:
@@ -46,11 +54,24 @@ for row in list_of_list:
         read_annot[acc][0] =  is_corr
         read_annot[acc][3] =  ed_read_to_true
 
-
-    if is_corr == 0 and read_type == 'corrected':
+    if is_corr == 0 and read_type == 'corrected' and ed_read_to_aligned < ed_read_to_true:
         x.append(ed_read_to_aligned)
         y.append(ed_read_to_true)
         overcorrection_amount.append(ed_read_to_true - ed_read_to_aligned)
+        abundance.append(ab)
+
+        if ed_read_to_true - ed_read_to_aligned > 15:
+            overcorr_and_ab[16][ab] += 1
+        else:
+            overcorr_and_ab[ed_read_to_true - ed_read_to_aligned][ab] += 1
+        # if ab > 10:
+        #     index = 10 + int(ab/10) - 2
+        # else:
+        #     index = ab - 1
+        # if ed_read_to_true - ed_read_to_aligned > 15:
+        #     overcorr_and_ab[-1][index] += 1
+        # else:
+        #     overcorr_and_ab[ed_read_to_true - ed_read_to_aligned][index] += 1
 
 wrong_in_both = []
 wrong_in_orig = []
@@ -70,7 +91,9 @@ for acc in read_annot:
         both_bad += 1
         wrong_in_both.append(ed_orig)
 
-print(len(wrong_in_both), len(wrong_in_orig), len(wrong_in_corr))
+print("over corrected:", len(overcorrection_amount) )
+# print(len(wrong_in_both), len(wrong_in_orig), len(wrong_in_corr))
+print(abundance)
 # # print(wrong_in_both)
 # print(wrong_in_orig)
 # # print(sum(wrong_in_both)/float(len(wrong_in_both)))
@@ -87,17 +110,44 @@ print(len(wrong_in_both), len(wrong_in_orig), len(wrong_in_corr))
 # plt.savefig(sys.argv[2] + '.eps')
 # plt.savefig(sys.argv[2])
 
-print(len([ed for ed in overcorrection_amount if ed <15]))
+print(len([ed for ed in overcorrection_amount if ed <=15]))
 print(len([ed for ed in overcorrection_amount if ed <=5]))
 
-pyplot.hist(overcorrection_amount, 400, alpha=0.5)
-plt.xscale('log')
+print(len([ab for ab in abundance if ab <=15]))
+print(len([ab for ab in abundance if ab <=5]))
+
+pyplot.hist(overcorrection_amount, 40, alpha=0.5)
+# plt.xscale('log')
 # pyplot.legend(loc='upper right')
 pyplot.xlabel("Overcorrected (edit distance)")
 pyplot.ylabel("Count")
 plt.savefig(sys.argv[2] + '.eps')
 plt.savefig(sys.argv[2])
 
+print(overcorr_and_ab)
+
+# import numpy as np; np.random.seed(0)
+# uniform_data = np.random.rand(10, 12)
+# print(uniform_data)
+# flights = sns.load_dataset("flights")
+# print(flights)
+# d = {"overcorrection_amount" : overcorrection_amount, "abundance" : abundance}
+df = pd.DataFrame(overcorr_and_ab)
+df = df.reindex(sorted(df.columns), axis=1)
+df = df.reindex(sorted(df.index, reverse=True), axis=0)
+# df.sort_index(level=1, ascending=True, inplace=True)
+
+print(df)
+plt.clf()
+xticks= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,">15"]
+ax = sns.heatmap(df, cmap='coolwarm', annot=True, xticklabels = xticks)
+ax.set_ylabel("Abundance")
+ax.set_xlabel("Overcorrection (edit distance)")
+
+plt.savefig(sys.argv[2]+ '_heatmap.pdf')
+# ax = sns.scatterplot(x="overcorrection_amount", y="abundance", data=df)
+# plt.savefig(sys.argv[2]+ '_scatter.pdf')
+# plt.savefig(sys.argv[2]+ '_scatter.eps')
 
 # d = {"ed_read_to_aligned" : x, "ed_read_to_true" : y}
 # df = pd.DataFrame(d)

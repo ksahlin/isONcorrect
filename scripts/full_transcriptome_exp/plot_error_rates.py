@@ -52,9 +52,9 @@ print("median error rate/subs/ins/del original:",median_error) #, 100*df_orig['s
 
 ax = sns.lineplot(x="transcript_cov", y="err_rate",  hue="type", 
                   ci = 'sd', estimator='median', data=indata)
+ax.set_ylim(0,12)
 ax.set_xscale('log')
-ax.set_xscale('log')
-ax.set_xticks([1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100,200,300])
+ax.set_xticks([1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100])
 ax.set_ylabel("Error rate (%)")
 ax.set_xlabel("Reads per transcript")
 
