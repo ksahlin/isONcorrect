@@ -40,10 +40,13 @@ def splice_site_classification_plot(input_csv, outfolder):
     # indata = df.loc[df['q_acc'] == df['r_acc']]
     # print(len(indata))
 
+    # g = sns.catplot(x="transcript_type", #col="Depth",
+    #             data=indata,  hue="read_type", hue_order= ["corrected", "original"],
+    #             order= ["FSM", "ISM", "NIC", "NNC", 'NO_SPLICE'], kind="count", aspect=1)
+
     g = sns.catplot(x="transcript_type", #col="Depth",
                 data=indata,  hue="read_type", hue_order= ["corrected", "original"],
-                order= ["FSM", "ISM", "NIC", "NNC", 'NO_SPLICE'], kind="count", aspect=1)
-
+                order= ["FSM", "ISM", "NIC", "NNC"], kind="count", aspect=1)
     # g.set(ylim=(0,15))
     g.set_ylabels("Count")
     g.set_xlabels("Transcript type")
@@ -349,7 +352,7 @@ def sirv_error_rate_per_transcript(input_csv, outfolder):
     # new controlled experiment:
     ax = sns.lineplot(x="nr_reads", y="error_rate",  hue="read_type",
                       ci = 'sd', estimator= 'median',  data=indata)
-    ax.set_ylim(0,17)
+    ax.set_ylim(0,12)
     ax.set_xscale('log')
     ax.set_xticks([1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100])
     ax.set_ylabel("Error rate (%)")
@@ -372,7 +375,7 @@ def main(args):
 
     # splice_site_classification_plot(args.input_csv, args.outfolder)
     # unique_fsm(args.input_csv, args.outfolder)
-    total_error_rate(args.input_csv, args.outfolder)
+    # total_error_rate(args.input_csv, args.outfolder)
     # sirv_error_rate_per_transcript(args.input_csv, args.outfolder)
 
 
