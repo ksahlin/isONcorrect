@@ -114,15 +114,16 @@ Below shows specific pipeline script to go from raw reads `raw_reads.fq` to corr
 # isonano pipeline to get high quality full length reads from transcriots
 
 cdna_classifier.py  raw_reads.fq outfolder/reads_full_length.fq \
-                      [-t cores]  [-w outfolder/rescued.fq  -u outfolder/unclassified.fq  -S outfolder/stats.txt] 
+                      [-t cores]  [-w outfolder/rescued.fq  \
+                      -u outfolder/unclassified.fq  -S outfolder/stats.txt] 
 
-isONclust  --ont --fastq outfolder/reads_full_length.fq \
-             --outfolder outfolder/clustering  [--t cores] 
+isONclust  [--t cores]  --ont --fastq outfolder/reads_full_length.fq \
+             --outfolder outfolder/clustering
 
 isONclust write_fastq --N 1 --clusters outfolder/clustering/final_clusters.csv \
-          --fastq reads_full_length.fq --outfolder  outfolder/clustering/fastq_files 
+                      --fastq reads_full_length.fq --outfolder  outfolder/clustering/fastq_files 
 
-run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ 
+run_isoncorrect [--t cores]  --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ 
 
 # OPTIONAL BELOW TO MERGE ALL CORRECTED READS INTO ONE FILE
 touch all_corrected_reads.fq
