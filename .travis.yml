@@ -20,9 +20,10 @@ before_install:
 # command to install dependencies
 install:
   - conda create --yes -n isoncorrect python=$TRAVIS_PYTHON_VERSION pip 
+  - source activate isoncorrect
   - pip install isONcorrect
   - conda install --yes -c bioconda spoa
-  - source activate isoncorrect
+
   # - pip install coveralls
 # os:
 #   - linux
