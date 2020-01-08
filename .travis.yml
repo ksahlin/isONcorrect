@@ -6,10 +6,23 @@ python:
   - "3.6"
   - "3.6-dev"  # 3.6 development branch
   # - "3.7"
+
+before_install:
+
+  # Here we just install Miniconda, which you shouldn't have to change.
+
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - chmod +x miniconda.sh
+  - ./miniconda.sh -b
+  - export PATH=/home/travis/miniconda/bin:$PATH
+  - conda update --yes conda
+
 # command to install dependencies
 install:
+  - conda create --yes -n isoncorrect python=$TRAVIS_PYTHON_VERSION pip 
   - pip install isONcorrect
-  - conda install -c bioconda spoa
+  - conda install --yes -c bioconda spoa
+  - source activate isoncorrect
   # - pip install coveralls
 # os:
 #   - linux
