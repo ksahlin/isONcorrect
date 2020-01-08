@@ -22,6 +22,7 @@ setup(
     version='0.0.1',  # Required
     description='De novo error-correction of long-read transcriptome reads.',  # Required
     long_description=long_description,  # Optional
+    long_description_content_type='text/markdown',
     url='https://github.com/ksahlin/isONcorrect',  # Optional
     author='Kristoffer Sahlin',  # Optional
     author_email='ksahlin@kth.se',  # Optional
@@ -75,8 +76,7 @@ setup(
     #
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['edlib>=1.1.2',
-                      'spoa>=1.1.5'],  # Optional
+    install_requires=['edlib>=1.1.2'],  # Optional
     # dependency_links=[], # Optional
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"

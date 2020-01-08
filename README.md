@@ -39,10 +39,11 @@ conda create -n isoncorrect python=3 pip
 source activate isoncorrect
 ```
 
-2. Install isONcorrect 
+2. Install isONcorrect and its dependency `spoa`.
 
 ```
 pip install isONcorrect
+conda install -c bioconda spoa
 ```
 3. You should now have 'isONcorrect' installed; try it:
 ```
