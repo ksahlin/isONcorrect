@@ -20,7 +20,7 @@ Table of Contents
   * [USAGE](#USAGE)
     * [Running](#Running)
     * [Output](#Output)
-    * [Parameters](#Parameters)
+    * [Parallelization](#Parallelization)
   * [CREDITS](#CREDITS)
   * [LICENCE](#LICENCE)
 
@@ -63,7 +63,7 @@ To install isONcorrect, run:
 ```
 pip install isONcorrect
 ```
-Then install [spoa](https://github.com/rvaser/spoa).
+Then install [spoa](https://github.com/rvaser/spoa) and include it in your path.
 
 
 ### Downloading source from GitHub
@@ -99,11 +99,11 @@ USAGE
  
 ### Running
 
-For a file with raw ONT cDNA reads the following pipeline is recommended (bash script provided below)
-1.  Get full-length ONT cDNA sequences produced by [pychopper](https://github.com/nanoporetech/pychopper) (a.k.a. `cdna_classifier`)
-2.  Cluster the full length reads where a cluster corresponds to a gene/gene-family
+For a single file with raw ONT cDNA reads, the following pipeline is recommended (bash script to run this provided below)
+1.  Get full-length ONT cDNA sequences ([pychopper](https://github.com/nanoporetech/pychopper) (a.k.a. `cdna_classifier`))
+2.  Cluster the full length reads where a cluster corresponds to a gene/gene-family (isONclust)
 3.  Make fastq files of each cluster
-4.  Correct individual clusters
+4.  Correct individual clusters (isONcorrect)
 5.  Optional (join reads from separate clusters back to a single file)
 
 Below shows specific pipeline script to go from raw reads `raw_reads.fq` to corrected full-length reads `all_corrected_reads.fq` (please modify/remove arguments as needed). 
@@ -118,11 +118,13 @@ cdna_classifier.py  raw_reads.fq outfolder/reads_full_length.fq \
 
 isONclust  --ont --fastq outfolder/reads_full_length.fq \
              --outfolder outfolder/clustering  [--t cores] 
+
 isONclust write_fastq --N 1 --clusters outfolder/clustering/final_clusters.csv \
           --fastq reads_full_length.fq --outfolder  outfolder/clustering/fastq_files 
+
 run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ 
 
-# OPTIONAL BELOW 
+# OPTIONAL BELOW TO MERGE ALL CORRECTED READS INTO ONE FILE
 touch all_corrected_reads.fq
 for f in in outfolder/clustering/fastq_files/*/corrected_reads.fastq; 
 do 
@@ -134,9 +136,20 @@ isONcorrect does not need ONT reads to be full-length (i.e., produced by `pychop
 
 ### Output
 
-The output of `run_isoncorrect` are one file per cluster with identical headers to the original reads.
+The output of `run_isoncorrect` is one file per cluster with identical headers to the original reads.
 
+### Parallelization
 
+isONcorrect currently supports parallelization across cores on a node, but not across several nodes. There is a way to overcome this limitation if you have access to multiple nodes as follows. The `run_isoncorrect` step can be parallilized across n nodes by (in bash or other environment, e.g., snakemake) parallelizing the following commands
+
+```
+run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual 0
+run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual 1
+run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual 2
+...
+run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual n-1
+```
+Which tells isONcorrect to only work with distinct cluster IDs.
 
 CREDITS
 ----------------
