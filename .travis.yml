@@ -34,7 +34,8 @@ branches:
   - master
   # - develop
 # command to run tests
-script: python isONcorrect --fastq  test_data/isoncorrect/0.fastq --outfolder ~/tmp/test/ 
-        python run_isoncorrect --t 3 --fastq_folder  test_data/isoncorrect/ --outfolder ~/tmp/test_parallel/ 
+script: 
+      - python isONcorrect --fastq  test_data/isoncorrect/0.fastq --outfolder ~/tmp/test/ 
+      - python run_isoncorrect --t 3 --fastq_folder  test_data/isoncorrect/ --outfolder ~/tmp/test_parallel/ 
 # after_success:
 #  - coveralls
