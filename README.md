@@ -57,11 +57,13 @@ source activate isoncorrect
 
 ### Using pip 
 
+`pip` is pythons official package installer and is included in most python versions. If you do not have `pip`, it can be easily installed [from here](https://pip.pypa.io/en/stable/installing/) and upgraded with `pip install --upgrade pip`. 
+
 To install isONcorrect, run:
 ```
 pip install isONcorrect
 ```
-`pip` will install the dependencies automatically for you. `pip` is pythons official package installer and is included in most python versions. If you do not have `pip`, it can be easily installed [from here](https://pip.pypa.io/en/stable/installing/) and upgraded with `pip install --upgrade pip`. 
+Then install [spoa](https://github.com/rvaser/spoa).
 
 
 ### Downloading source from GitHub
@@ -69,8 +71,9 @@ pip install isONcorrect
 #### Dependencies
 
 Make sure the below listed dependencies are installed (installation links below). Versions in parenthesis are suggested as isONcorrect has not been tested with earlier versions of these libraries. However, isONcorrect may also work with earliear versions of these libaries.
-* [spoa]()
-* [edlib]()
+* [spoa](https://github.com/rvaser/spoa) (1.1.5)
+* [edlib](https://github.com/Martinsos/edlib/tree/master/bindings/python) (1.1.2)
+* [NumPy](https://numpy.org/) (1.16.2)
 
 In addition, please make sure you use python version >=3.
 
