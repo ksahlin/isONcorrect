@@ -157,7 +157,7 @@ CREDITS
 
 Please cite [1] when using isONcorrect.
 
-1. Kristoffer Sahlin, Botond Sipos, Phillip L James, Daniel Turner, Paul Medvedev (2020)  [Link]().
+1. Kristoffer Sahlin, Botond Sipos, Phillip L James, Daniel Turner, Paul Medvedev, Error correction enables use of Oxford Nanopore technology for reference-free transcriptome analysis (bioRxiv, 2020)  [Link](https://www.biorxiv.org/content/10.1101/2020.01.07.897512v1).
 
 Bib record: 
 
