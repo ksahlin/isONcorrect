@@ -29,6 +29,8 @@ Table of Contents
 INSTALLATION
 ----------------
 
+Typical install time on a desktop computer is about 10 minutes with conda for this software.
+
 ### Using conda
 Conda is the preferred way to install isONcorrect.
 
@@ -87,19 +89,19 @@ cd isONcorrect
 
 ### Testing installation
 
-You can verify successul installation by running isONcorrect on this [small dataset](https://github.com/ksahlin/isONcorrect/tree/master/test_data/isoncorrect/0.fastq). Assuming you have cloned this repository and the repository is found in /my/path/isONcorrect, simply run:
+You can verify successul installation by running isONcorrect on this [small dataset of 100 reads](https://github.com/ksahlin/isONcorrect/tree/master/test_data/isoncorrect/0.fastq). Assuming you have cloned this repository and the repository is found in /my/path/isONcorrect, simply run:
 
 ```
 isONcorrect --fastq /my/path/isONcorrect/test_data/isoncorrect/0.fastq \
             --outfolder [output path]
 ```
-Testing the paralleized version (by separate clusters) of isONcorrect can be done by running
+Expected runtime for this test data is about 15 seconds. The output will be found in `[output path]/corrected_reads.fastq` where the 100 reads have the same headers as in the original file, but with corrected sequence. Testing the paralleized version (by separate clusters) of isONcorrect can be done by running
 
 ```
 ./run_isoncorrect --t 3 --fastq_folder /my/path/isONcorrect/test_data/isoncorrect/ \
                   --outfolder [output path]
 ```
-This will perform correction on `0.fastq` and `1.fastq` in parallel.
+This will perform correction on `0.fastq` and `1.fastq` in parallel. Expected runtime for this test data is about 15 seconds. The output will be found in `[output path]/0/corrected_reads.fastq` and `[output path]/1/corrected_reads.fastq` where the 100 reads in each separate cluster have the same headers as in the respective original files, but with corrected sequence. 
 
 
 USAGE
