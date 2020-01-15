@@ -1,7 +1,7 @@
 isONcorrect
 ===========
 
-isONcorrect is a tool for error-correcting  Oxford Nanopore cDNA reads. It is designed to handle highly variable coverage and exon variation within reads and achieves about a 0.5-1% median error rate after correction (see [preprint]() for details). It leverages regions shared between reads from different isoforms achieve low error rates even for low abundant transcripts. See [preprint]() for details.  
+isONcorrect is a tool for error-correcting  Oxford Nanopore cDNA reads. It is designed to handle highly variable coverage and exon variation within reads and achieves about a 0.5-1% median error rate after correction (see [preprint](https://www.biorxiv.org/content/10.1101/2020.01.07.897512v1) for details). It leverages regions shared between reads from different isoforms achieve low error rates even for low abundant transcripts. See [preprint](https://www.biorxiv.org/content/10.1101/2020.01.07.897512v1) for details.  
 
 Processing and error correction of full-length ONT cDNA reads is acheved by the pipeline of running [pychopper](https://github.com/nanoporetech/pychopper) --> [isONclust](https://github.com/ksahlin/isONclust) --> [isONcorrect](https://github.com/ksahlin/isONcorrect) 
 
@@ -87,11 +87,19 @@ cd isONcorrect
 
 ### Testing installation
 
-You can verify successul installation by running isONcorrect on this [small dataset](https://github.com/ksahlin/isONcorrect/tree/master/test/sample_alz_2k.fastq). Simply download the test dataset and run:
+You can verify successul installation by running isONcorrect on this [small dataset](https://github.com/ksahlin/isONcorrect/tree/master/test_data/isoncorrect/0.fastq). Assuming you have cloned this repository and the repository is found in /my/path/isONcorrect, simply run:
 
 ```
-isONcorrect --fastq [path to isONcorrect basefolder]/test_data/isoncorrect/0.fastq --outfolder [output path]
+isONcorrect --fastq /my/path/isONcorrect/test_data/isoncorrect/0.fastq \
+            --outfolder [output path]
 ```
+Testing the paralleized version (by separate clusters) of isONcorrect can be done by running
+
+```
+./run_isoncorrect --t 3 --fastq_folder /my/path/isONcorrect/test_data/isoncorrect/ \
+                  --outfolder [output path]
+```
+This will perform correction on `0.fastq` and `1.fastq` in parallel.
 
 
 USAGE
