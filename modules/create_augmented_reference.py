@@ -200,9 +200,10 @@ def run_spoa(reads, spoa_out_file, spoa_path):
         subprocess.check_call([ spoa_path, reads, "-l", "0", "-r", "0", "-g", "-2"], stdout=output_file, stderr=null)
         # print('Done.')
         stdout.flush()
-    output_file.close()
+    # output_file.close()
     l = open(spoa_out_file, "r").readlines()
     consensus = l[1].strip()
+    del l
     return consensus
 
 

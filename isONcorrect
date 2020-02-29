@@ -5,7 +5,7 @@ import os,sys
 import argparse
 
 import errno
-from time import time
+from time import time, sleep
 import itertools
 import tempfile
 import shutil
@@ -111,21 +111,11 @@ def get_minimizers_and_positions(reads, w, k, hash_fcn):
     return M
 
 
-# def get_minimizers_comb(reads, M, k, x):
-#     reads_to_minimizer_combinations_database = {}
-#     M2 = defaultdict(lambda: defaultdict(list))
-#     for r_id in M:
-#         # print(reads[r_id][1])
-#         reads_to_M2[r_id] = [] # defaultdict(list)
-#         minimizers = M[r_id]
-#         for (m1,p1), (m2, p2) in  minimizers_comb_iterator(minimizers, k, x):
-#             # reads_to_M2[r_id][(m1, m2)].append((p1,p2))
-#             reads_to_M2[r_id].append( ((m1,p1), (m2,p2)) )
-#             M2[(m1, m2)][r_id].append((p1,p2))
-#     return reads_to_M2, M2
 
+from array import array
 def get_minimizer_combinations_database(reads, M, k, x_low, x_high):
-    M2 = defaultdict(lambda: defaultdict(list))
+    # M2 = defaultdict(lambda: defaultdict(list))
+    M2 = defaultdict(lambda: defaultdict(lambda :array("I")))
     tmp_cnt = 0
     forbidden = 'A'*k
     for r_id in M:
@@ -136,9 +126,18 @@ def get_minimizer_combinations_database(reads, M, k, x_low, x_high):
                     continue
 
                 tmp_cnt +=1
-                M2[m1][m2].append((r_id, p1, p2))
+                # t = array('I', [r_id, p1, p2])
+                # M2[m1][m2].append( t )
+                # M2[m1][m2].append((r_id, p1, p2))
+
+                M2[m1][m2].append(r_id)
+                M2[m1][m2].append(p1)
+                M2[m1][m2].append(p2)
 
     print(tmp_cnt, "MINIMIZER COMBINATIONS GENERATED")
+    # import time
+    # time.sleep(10)
+    # sys.exit()
 
     avg_bundance = 0
     singleton_minimzer = 0
@@ -146,15 +145,15 @@ def get_minimizer_combinations_database(reads, M, k, x_low, x_high):
     abundants=[]
     for m1 in list(M2.keys()):
         for m2 in list(M2[m1].keys()):
-            if len(M2[m1][m2]) > 1:
-                avg_bundance += len(M2[m1][m2])
+            if len(M2[m1][m2]) > 3:
+                avg_bundance += len(M2[m1][m2])//3
                 cnt +=1
             else:
                 del M2[m1][m2]
                 singleton_minimzer += 1
 
-            if len(M2[m1][m2]) > len(reads):
-                abundants.append((m1,m2, len(M2[m1][m2])))
+            if len(M2[m1][m2])// 3 > len(reads):
+                abundants.append((m1,m2, len(M2[m1][m2])//3 ))
                 if m2 == forbidden: # poly A tail
                     del M2[m1][m2]
     for m1,m2,ab in sorted(abundants, key=lambda x: x[2], reverse=True):
@@ -162,6 +161,7 @@ def get_minimizer_combinations_database(reads, M, k, x_low, x_high):
 
     print("Average abundance for non-unique minimizer-combs:", avg_bundance/float(cnt))
     print("Number of singleton minimizer combinations filtered out:", singleton_minimzer)
+
     return M2
 
 
@@ -177,26 +177,6 @@ def minimizers_comb_iterator(minimizers, k, x_low, x_high):
             elif p2 - p1 > x_high:
                 break
         yield (m1, p1), m1_curr_spans[::-1]
-
-
-# def time_test(sorted_left_reads, sorted_right_reads, relevant_reads, r_id, k, x):
-#     curr_min_r_pos = 0
-#     for l_pos in sorted_left_reads:
-#         tmp_add = 0
-#         for j, r_pos in enumerate(sorted_right_reads[curr_min_r_pos:]):
-#             if k < r_pos - l_pos <= x:
-#                 relevant_reads[r_id].append((l_pos, r_pos))
-#             elif l_pos > r_pos:
-#                 tmp_add = j 
-#                 continue
-#             elif r_pos > l_pos + x:
-#                 break
-#         curr_min_r_pos += tmp_add   
-
-
-# def get_relevant_reads(M2, m1, m2):
-#     return M2[m1][m2]
-
 
 
 def edlib_alignment(x, y, k):
@@ -435,24 +415,26 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
     #     for 
     return alternative_contexts
 
-def get_best_corrections(curr_best_seqs, k_size, work_dir,  v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200, disable_numpy=False):
-    weight = len(curr_best_seqs)
-    # r_seq = curr_best_seqs["curr_read"][0]
-    # print(r_seq)
-    # print(curr_best_seqs)
-    # sys.exit()
-    #### TMP
-    #### TMP
+def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200, disable_numpy=False):
+    """
+        curr_best_seqs is an array with q_id, pos1, pos2
+        the current read is on index 0 in curr_best_seqs array
+    """
+    weight = len(curr_best_seqs)//3
+
+    # print()
+    # print()
+    # print(weight)
+    # print()
+    # print()
 
     reads_path = open(os.path.join(work_dir, "reads_tmp.fa"), "w")
-
-    # for q_id, (s_tmp, s_qual, pos1, pos2) in curr_best_seqs.items():
-    for i, (q_id, (seq, qual, pos1, pos2)) in enumerate(curr_best_seqs.items()):
+    curr_read_id = curr_best_seqs[0]
+    # for i, (q_id, (seq, pos1, pos2)) in enumerate(curr_best_seqs.items()):
+    for i, (q_id, pos1, pos2) in  enumerate(grouper(curr_best_seqs, 3)):
+        seq = reads[q_id][1][pos1: pos2 + k_size]
         if i > max_seqs_to_spoa:
             break
-        # assert len(list_of_spans) == 1
-        # for (seq, qual, pos1, pos2) in list_of_spans:
-            # print(q_id, str(pos1), str(pos2))
         reads_path.write(">{0}\n{1}\n".format(str(q_id)+str(pos1)+str(pos2), seq))
     reads_path.close()
     spoa_ref = create_augmented_reference.run_spoa(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
@@ -462,8 +444,8 @@ def get_best_corrections(curr_best_seqs, k_size, work_dir,  v_depth_ratio_thresh
     #################################################
     #################################################
 
-    start_anchor = curr_best_seqs["curr_read"][0][:k_size]
-    stop_anchor = curr_best_seqs["curr_read"][0][-k_size:]
+    start_anchor = reads[curr_read_id][1][:k_size] # curr_best_seqs["curr_read"][0][:k_size]
+    stop_anchor = reads[curr_read_id][1][-k_size:]  # curr_best_seqs["curr_read"][0][-k_size:]
     start_index = spoa_ref.find(start_anchor) 
     stop_index = len(spoa_ref) - spoa_ref[::-1].find(stop_anchor[::-1]) 
     # print(start_index, stop_index)
@@ -477,24 +459,15 @@ def get_best_corrections(curr_best_seqs, k_size, work_dir,  v_depth_ratio_thresh
     
     
     partition = {"ref" : (0, spoa_ref, spoa_ref, 1)}
-    # partition = {"ref" : (0, r_seq, r_seq, 1)}
-    # for q_id, (s_tmp, s_qual, pos1, pos2) in curr_best_seqs.items():
-    for q_id, (seq, qual, pos1, pos2) in curr_best_seqs.items():
-        # for (seq, qual, pos1, pos2) in list_of_spans:
-        # if s_tmp == r_seq:
-        #     continue
+    for q_id, pos1, pos2 in  grouper(curr_best_seqs, 3):
+        seq = reads[q_id][1][pos1: pos2 + k_size]
+    # for q_id, (seq, pos1, pos2) in curr_best_seqs.items():
         res = edlib.align(seq, spoa_ref, task="path", mode="NW")
-        # result_read_to_ref = edlib.align(seq, ref_tmp, task="path", mode="HW")
-        # print(result_read_to_ref)
         cigar_string = res["cigar"]
         read_alignment, ref_alignment = help_functions.cigar_to_seq(cigar_string, seq, spoa_ref)
         partition[(q_id, pos1, pos2)] = (res["editDistance"], ref_alignment, read_alignment, 1)
-        # print(read_alignment, ref_alignment)
-    # sep_function_only_str(partition)
+
     alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
-    # print(alignment_matrix)
-    # for r_tmp, aln_list in alignment_matrix.items():
-    #     print(aln_list)
     nr_columns = len(alignment_matrix["ref"])
     PFM = [{"A": 0, "C": 0, "G": 0, "T": 0, "U" : 0, "-": 0, "N": 0} for j in range(nr_columns)]
     for r_tmp, aln_list in alignment_matrix.items():
@@ -502,31 +475,8 @@ def get_best_corrections(curr_best_seqs, k_size, work_dir,  v_depth_ratio_thresh
             continue
         for j, n in enumerate(aln_list):
             PFM[j][n] += 1
-    # print(PFM)
 
     other_corrections = defaultdict(list)
-    # read_aln = alignment_matrix["curr_read"]
-
-    # # get homopolymer adjustment
-    # h_tmp = [(len(list(_)), ch ) for ch, _ in itertools.groupby(spoa_ref) ]
-    # # print(h_tmp)
-    # # print(spoa_ref)
-    # h_tmp2 = []
-    # h_tmp2 = [(c, ch, i) for (c, ch) in h_tmp for i in range(c)]
-    # # print(h_tmp2)
-    # assert len(h_tmp2) == len(spoa_ref)
-    # curr_pos = 0
-    # h_pol_counts = []
-    # n_cols = len(h_tmp2)
-    # for nucl in alignment_matrix["ref"]:
-    #     # print(curr_pos, len(h_tmp2))
-    #     h_pol_counts.append(h_tmp2[min(n_cols - 1,curr_pos)])
-    #     if nucl != "-":
-    #         curr_pos += 1
-    # # print(alignment_matrix["ref"])
-    # # print(h_pol_counts)    
-    # assert len(alignment_matrix["ref"]) == len(h_pol_counts)
-
 
     # TODO: potentially add context around substitutions here
     variant_threshold = max(5, len(curr_best_seqs) * v_depth_ratio_threshold)
@@ -534,7 +484,6 @@ def get_best_corrections(curr_best_seqs, k_size, work_dir,  v_depth_ratio_thresh
     # print(variant_threshold, context_threshold, len(curr_best_seqs), spoa_ref)
 
     contexts_per_pos = get_contexts(alignment_matrix, k_size)
-    # alternative_refs = [set() for j in range(nr_columns)]
     alternative_refs = get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_threshold, disable_numpy)
     ref_aln = alignment_matrix["ref"]
 
@@ -593,62 +542,14 @@ def get_best_corrections(curr_best_seqs, k_size, work_dir,  v_depth_ratio_thresh
                         if variant_threshold <= d[read_nucl]:
                             if ref_aln[contexts_per_pos[i][0]: i] == read_aln[contexts_per_pos[i][0]: i] and ref_aln[i+1: contexts_per_pos[i][1]] == read_aln[i+1: contexts_per_pos[i][1]]: # potential variant position
                                 other_corrections[q_id_tuple].append(read_nucl)
-                                # print("KEEPING HERE")
-                                # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
-                                # print(read_aln[contexts_per_pos[i][0]:contexts_per_pos[i][1]])
-                                # print(variant_threshold, len(curr_best_seqs), "actual ab:", d[read_nucl] )
-                                # print()
-                                # print()
                             else:
-                                # print("FAILED CONTEXT")
-                                # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
-                                # print(read_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
-                                # print(variant_threshold, len(curr_best_seqs), read_nucl, ref_nucl, "actual ab:", d[read_nucl] )
-                                # print()
-                                # print()
                                 other_corrections[q_id_tuple].append(ref_nucl)
 
                         else:
                             other_corrections[q_id_tuple].append(ref_nucl)
-                    # elif read_nucl != ref_nucl
                     else:
                         other_corrections[q_id_tuple].append(ref_nucl)
 
-
-
-    # for i, d in enumerate(PFM):
-    #     # calculate reference context here the first thing we do from ref_aln
-    #     ref_nucl = alignment_matrix["ref"][i]
-    #     if ref_nucl != "-":
-    #         for q_id_tuple in alignment_matrix:
-    #             if q_id_tuple == "ref":
-    #                 continue
-    #             read_aln = alignment_matrix[q_id_tuple]
-    #             read_nucl = read_aln[i]
-    #             if read_nucl != "-" and read_nucl != ref_nucl:
-    #                 if variant_threshold <= d[read_nucl]:
-    #                     if ref_aln[contexts_per_pos[i][0]: i] == read_aln[contexts_per_pos[i][0]: i] and ref_aln[i+1: contexts_per_pos[i][1]] == read_aln[i+1: contexts_per_pos[i][1]]: # potential variant position
-    #                         other_corrections[q_id_tuple].append(read_nucl)
-    #                         # print("KEEPING HERE")
-    #                         # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
-    #                         # print(read_aln[contexts_per_pos[i][0]:contexts_per_pos[i][1]])
-    #                         # print(variant_threshold, len(curr_best_seqs), "actual ab:", d[read_nucl] )
-    #                         # print()
-    #                         # print()
-    #                     else:
-    #                         # print("FAILED CONTEXT")
-    #                         # print(ref_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
-    #                         # print(read_aln[contexts_per_pos[i][0]: contexts_per_pos[i][1]])
-    #                         # print(variant_threshold, len(curr_best_seqs), read_nucl, ref_nucl, "actual ab:", d[read_nucl] )
-    #                         # print()
-    #                         # print()
-    #                         other_corrections[q_id_tuple].append(ref_nucl)
-
-    #                 else:
-    #                     other_corrections[q_id_tuple].append(ref_nucl)
-    #             # elif read_nucl != ref_nucl
-    #             else:
-    #                 other_corrections[q_id_tuple].append(ref_nucl)
 
 
     other_corrections_final = defaultdict(list)
@@ -660,27 +561,13 @@ def get_best_corrections(curr_best_seqs, k_size, work_dir,  v_depth_ratio_thresh
         # print()
         other_corrections_final[q_id].append( (q_p1 + k_size, q_p2, weight, other_read_corr[k_size:-k_size] ))
 
-        if q_id == "curr_read":
+        if q_id == curr_read_id:
             curr_read_corr = "".join([n for n in other_read_corr if n != "-"]) #spoa_ref #
 
     return curr_read_corr[k_size:-k_size], other_corrections_final
 
 
-# def fill_p(p, all_intervals_sorted_by_finish):
-#     for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
-#         if j == 0:
-#             p.append(0)
-#             continue
-#         dep = 0
-#         k = j - 1
-#         while k >= 0:
-#             dep+=1
-#             if all_intervals_sorted_by_finish[k][1] <= start:
-#                 break
-#             k -= 1
-#         p.append(max(0,k))
-#         # print("dep", dep)
-#     return p
+
 
 def fill_p2(p, all_intervals_sorted_by_finish):
 
@@ -698,7 +585,7 @@ def fill_p2(p, all_intervals_sorted_by_finish):
         p.append(j_max)
     return p
 
-def solve_WIS2(all_intervals_sorted_by_finish):
+def solve_WIS(all_intervals_sorted_by_finish):
     # print("instance size", len(all_intervals_sorted_by_finish))
     # p = [None]
     # fill_p(p, all_intervals_sorted_by_finish)
@@ -730,146 +617,51 @@ def solve_WIS2(all_intervals_sorted_by_finish):
     return opt_indicies
 
 
+from itertools import zip_longest
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
 
-
-def solve_WIS(all_intervals_sorted_by_finish):
-    p = [None]
-    v = [None] + [w*(stop-start) for (start, stop, w, _) in all_intervals_sorted_by_finish]
-    for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
-        if j == 0:
-            p.append(0)
-            continue
-
-        k = j - 1
-        while k >= 0:
-            if all_intervals_sorted_by_finish[k][1] <= start:
-                break
-            k -= 1
-        p.append(max(0,k))
-
-    # for i, interval in enumerate(all_intervals_sorted_by_finish):
-    #     print(i, p[i+1], interval[0], interval[1], interval[2])
-
-    OPT = [0]
-    for j in range(1, len(all_intervals_sorted_by_finish) +1):
-        OPT.append( max(v[j] + OPT[ p[j] ], OPT[j-1] ) )
-    # print(OPT, OPT[-1], all_intervals_sorted_by_finish)
-
-    assert len(p) == len(all_intervals_sorted_by_finish) + 1 == len(v) == len(OPT)
-
-    # Find solution
-    # def find_solution(j, opt_indicies): 
-    #     if j == 0:
-    #         return 
-    #     elif v[j] + OPT[p[j]] > OPT[j-1]:
-    #         print(j)
-    #         opt_indicies.append(j - 1) # we have shifted all indices forward by one so we neew to reduce to j -1 because of indexing in python works
-    #         find_solution( p[j], opt_indicies ) 
-    #     else:
-    #         find_solution(j-1, opt_indicies) 
-    # opt_indicies = []
-    # find_solution(len(all_intervals_sorted_by_finish), opt_indicies)
-    # print("test",opt_indicies)
-
-    # Find solution
-    opt_indicies = []
-    j = len(all_intervals_sorted_by_finish)
-    while j >= 0:
-        if j == 0:
-            break
-        if v[j] + OPT[p[j]] > OPT[j-1]:
-            # print(j)
-            opt_indicies.append(j - 1) # we have shifted all indices forward by one so we neew to reduce to j -1 because of indexing in python works
-            j = p[j]
-            # find_solution( p[j], opt_indicies ) 
-        else:
-            j -= 1
-    # print( "hi", opt_indicies, "optimal value:", OPT[-1])
-    # assert opt_indicies2 == opt_indicies
-    return opt_indicies
-
-
-
-
-# def eval_sim(corr, seq, qual, tot_before, tot_after):
-#     true = "AGCAATCAGACTCAAGCATTAAAATACCCGCCCAGAATATGCCATCAAACTGCCTGGCCCGACAAATTAATGCTGAAATTGTTAACTGACCGGAGGTCGACGTACCGACACTAGGAGGAGCGGGACTGTAGGAAAACCACTATCCTTTTC"
-#     r1 = edlib.align(true, corr, task="path", mode="NW")
-#     ref_alignment1, read_alignment = help_functions.cigar_to_seq(r1["cigar"], true, corr)
-
-#     ins = len([1 for n in ref_alignment1[10:-10] if n == "-"])
-#     del_ = len([1 for n in read_alignment[10:-10] if n == "-"])
-#     subs =  len([p for p, (n1,n2) in enumerate(zip(read_alignment[10:-10], ref_alignment1[10:-10])) if n1 != "-" and n2 != "-" and n1 != n2 ])
-#     tot_after["subs"] += subs
-#     tot_after["ins"] += ins
-#     tot_after["del"] += del_
-
-#     r2 = edlib.align(true, seq, task="path", mode="NW")
-#     ref_alignment2, read_orig_alignment = help_functions.cigar_to_seq(r2["cigar"], true, seq)
-
-#     ins = len([1 for n in ref_alignment2 if n == "-"])
-#     del_ = len([1 for n in read_orig_alignment if n == "-"])
-#     subs =  r2["editDistance"] - ins - del_
-#     tot_before["subs"] += subs
-#     tot_before["ins"] += ins
-#     tot_before["del"] += del_
-
-# def eval_sim2(corr, seq, qual, tot_before, tot_after):
-#     true = "ACCCGGCGGTACCATACTTCCGAACGACATATTAGTACGTGTACGTTTGAGTCGTCATTCGGCATGCGTAATAACGCTTACGTTGATTCTCAACGTGATACACTAGTTGTCGACGTGAGTACGAAGGTCGGTAGTGGAATATGGTCGCACAGGGTCGGACGCAAAGAATTTTTCAAGACAGCCTGAGTGCGGTGCAACAATCGGTGAGTAACCGTGGGCGAAACTTGAAGTCAGGGTATCGATGCATCACGGACATTAATCGAGGCTGTGAAGGCCTCACCCATTGCATAGTCATGCCCG"
-#     r1 = edlib.align(true, corr, task="path", mode="NW")
-#     ref_alignment1, read_alignment = help_functions.cigar_to_seq(r1["cigar"], true, corr)
-#     print(ref_alignment1)
-#     print(read_alignment)
-
-#     ins = len([1 for n in ref_alignment1 if n == "-"])
-#     del_ = len([1 for n in read_alignment if n == "-"])
-#     subs =  len([p for p, (n1,n2) in enumerate(zip(read_alignment, ref_alignment1)) if n1 != "-" and n2 != "-" and n1 != n2 ])
-#     tot_after["subs"] += subs
-#     tot_after["ins"] += ins
-#     tot_after["del"] += del_
-
-#     r2 = edlib.align(true, seq, task="path", mode="NW")
-#     ref_alignment2, read_orig_alignment = help_functions.cigar_to_seq(r2["cigar"], true, seq)
-
-#     ins = len([1 for n in ref_alignment2 if n == "-"])
-#     del_ = len([1 for n in read_orig_alignment if n == "-"])
-#     subs =  r2["editDistance"] - ins - del_
-#     tot_before["subs"] += subs
-#     tot_before["ins"] += ins
-#     tot_before["del"] += del_
-
+def add_items(seqs, r_id, p1, p2):
+    seqs.append(r_id)
+    seqs.append(p1)
+    seqs.append(p2)
 
 def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, read_complexity_cnt, quality_values_database, already_computed):
 
-    # curr_m_pos = read_min_comb[0][0][1]
-    # curr_m_pos2 = read_min_comb[0][1][1]
     acc, seq, qual = reads[r_id]
-    curr_best_seqs = {}
-    curr_best_seqs_to_id = {}
-    # cnt = 0
     for (m2,p2) in m1_curr_spans:
         # print(p1,p2)
         relevant_reads = minimizer_combinations_database[m1][m2]
-        seqs = {} #defaultdict(list)
+        seqs = array("I") #{} #defaultdict(list)
         added_strings = {} 
+        locations = {}
         # not_added_strings = set() 
-        if len(relevant_reads) >= max(3,len(curr_best_seqs)): #max(3, previously_calculated_regions_read[p2]): # 
+        if len(relevant_reads)//3 >= 3: 
             # cnt += 1
             ref_seq = seq[p1  : p2 + k_size]
-            ref_qual = qual[p1 : p2 + k_size]            
+            # ref_qual = qual[p1 : p2 + k_size]            
             p_error_ref = (quality_values_database[r_id][p2 + k_size] - quality_values_database[r_id][p1])/(p2 + k_size - p1)
 
-            seqs["curr_read"] = (ref_seq, ref_qual, p1, p2)
+            # seqs["curr_read"] = (p1, p2)
+            # add_items(seqs, "curr_read", p1, p2)
+            add_items(seqs, r_id, p1, p2) 
+            locations[0] = len(seqs) - 3
             added_strings[ref_seq] = 0
             reads_visited = {}
-            for relevant_read_id, pos1, pos2 in relevant_reads:
+            for relevant_read_id, pos1, pos2 in grouper(relevant_reads, 3): #relevant_reads:
                 if r_id  == relevant_read_id:
                     continue
                 
                 read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
-                read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
+                #read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
 
                 if read_seq == ref_seq:
-                    seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                    # seqs[relevant_read_id] = (pos1, pos2)
+                    add_items(seqs, relevant_read_id, pos1, pos2)
+                    locations[relevant_read_id] = len(seqs) - 3
                     reads_visited[relevant_read_id] = 0
                     already_computed[relevant_read_id] = (p1,p2,pos1,pos2, 0)
                     continue
@@ -880,15 +672,13 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         # Implement if we see this to recompute all the aligments exact ed here instead!! Thats the only way to guarantee exactly the same
         # or maybe use this traceback to get exact: https://github.com/Martinsos/edlib/pull/132#issuecomment-522258271
                 elif read_seq in added_strings:  #== ref_seq:
-                    # seqs[relevant_read_id] = []
-                    seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                    # seqs[relevant_read_id] = (pos1, pos2)
+                    add_items(seqs, relevant_read_id, pos1, pos2)
+                    locations[relevant_read_id] = len(seqs) - 3
                     reads_visited[relevant_read_id] = added_strings[read_seq]
                     already_computed[relevant_read_id] = (p1,p2,pos1,pos2, added_strings[read_seq])
-                    # print("Saved!!")
                     continue
-                # elif read_seq in not_added_strings:
-                #     # print("save")
-                #     continue
+
                 elif relevant_read_id in already_computed:
                     curr_ref_start, curr_ref_end, curr_read_start, curr_read_end, curr_ed = already_computed[relevant_read_id]
                     if (curr_read_start <= pos1 and pos2 <= curr_read_end) and (curr_ref_start <= p1 and p2 <=  curr_ref_end):
@@ -901,20 +691,11 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
                         ed_est = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff) 
                         if 0 <= ed_est <= p_error_sum_thresh*len(ref_seq): # < curr_p_error_sum_thresh*len(ref_seq):
-                            # print("saved:",pos1, pos2, p1,p2, curr_ref_start, curr_ref_end, curr_read_start, curr_read_end, curr_ed, curr_p_error_sum_thresh)
-                            # print("saved", (curr_ref_end - curr_ref_start) - (p2-p1), (curr_read_end - curr_read_start) - (pos2 - pos1))
-
-                            # read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
-                            # read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
-                            seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                            # seqs[relevant_read_id] = (pos1, pos2)
+                            add_items(seqs, relevant_read_id, pos1, pos2)
+                            locations[relevant_read_id] = len(seqs) - 3
                             added_strings[read_seq] = ed_est
                             reads_visited[relevant_read_id] = ed_est
-
-                            # est = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff)
-                            # act = edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq))
-                            # if est != act:
-                            #     print("estimated", est)
-                            #     print("Actual", act)
 
                             continue
 
@@ -925,78 +706,60 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
                 p_error_read = (quality_values_database[relevant_read_id][pos2 + k_size] - quality_values_database[relevant_read_id][pos1])/(pos2 + k_size - pos1)
                 p_error_sum_thresh = p_error_ref + p_error_read #sum([D[char_] for char_ in read_qual])/len(read_qual) #+ 0.1
-                # p_error_sum_thresh = max(4, p_error_ref + p_error_read) #sum([D[char_] for char_ in read_qual])/len(read_qual) #+ 0.1
-                # error_cutoff = max(5, p_error_sum_thresh*(max(len(ref_seq), len(read_seq)) -2*k_size) )
-                # print(p_error_sum_thresh, p_error_sum_thresh*len(ref_seq),len(ref_seq) )
                 editdist = edlib_alignment(ref_seq, read_seq, p_error_sum_thresh*len(ref_seq))
 
-                # if editdist == 0:
-                #     print("Here!")
                 tmp_cnt += 1
                 if editdist >= 0:    # passing second edit distance check
                     if relevant_read_id in reads_visited: # we have already seen the minimizer combination
-                        prev_read_seq, read_read_qual, prev_pos1, prev_pos2 = seqs[relevant_read_id]
+                        # prev_pos1, prev_pos2 = seqs[relevant_read_id]
+                        prev_pos1, prev_pos2 = seqs[ locations[relevant_read_id] + 1], seqs[ locations[relevant_read_id] + 2]
+                        prev_read_seq = reads[relevant_read_id][1][prev_pos1: prev_pos2 + k_size]
                         editdist_prev = edlib_alignment(ref_seq, prev_read_seq, len(ref_seq))
                         tmp_cnt += 1
                         read_complexity_cnt += 1
-                        # print("Read already visited lool", "prev:",reads_visited[relevant_read_id], "this:", editdist)
-                        # print(seqs[relevant_read_id])
-                        # print(p_error_sum_thresh)
-                        # print(ref_seq,p1,p2)
-                        # print(read_seq, pos1, pos2)
-                        # print("current:", editdist, "prev", reads_visited[relevant_read_id])
+
                         if editdist < editdist_prev:
-                            # seqs[relevant_read_id] = []
-                            seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                            # seqs[relevant_read_id] = (pos1, pos2)
+                            seqs[locations[relevant_read_id] + 1] = pos1
+                            seqs[locations[relevant_read_id] + 2] = pos2
                             added_strings[read_seq] = editdist
                             reads_visited[relevant_read_id] = editdist
-                            already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
+                            already_computed[relevant_read_id] = (p1, p2, pos1, pos2, editdist)
                             # print("REPLACED OLD MATCH")
-                        else:
-                            # seqs[relevant_read_id] = []
-                            seqs[relevant_read_id] = (prev_read_seq, read_read_qual, prev_pos1, prev_pos2)
-                            added_strings[prev_read_seq] = editdist_prev
-                            reads_visited[relevant_read_id] = editdist_prev
-                            already_computed[relevant_read_id] = (p1,p2,prev_pos1, prev_pos2, editdist_prev)
+                        # else:
+                        #     # seqs[relevant_read_id] = (prev_pos1, prev_pos2)
+                        #     added_strings[prev_read_seq] = editdist_prev
+                        #     reads_visited[relevant_read_id] = editdist_prev
+                        #     already_computed[relevant_read_id] = (p1,p2,prev_pos1, prev_pos2, editdist_prev)
                     else:
-                        seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
+                        # seqs[relevant_read_id] = (pos1, pos2)
+                        add_items(seqs, relevant_read_id, pos1, pos2)
+                        locations[relevant_read_id] = len(seqs) - 3
                         added_strings[read_seq] = editdist
                         reads_visited[relevant_read_id] = editdist
                         already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
-                # else:
-                #     not_added_strings.add(read_seq)
-                #     # print(read_seq, "not considered, store?")
 
 
-            # zz_cnt = 0
-
-            # # make sure all identical strings are added to he same instance
-            # for relevant_read_id, pos1, pos2 in relevant_reads:
-            #     if r_id  == relevant_read_id:
-            #         continue
-            #     read_seq = reads[relevant_read_id][1][pos1: pos2 + k_size]
-            #     read_qual = reads[relevant_read_id][2][pos1: pos2 + k_size]
-            #     if read_seq in added_strings and relevant_read_id not in seqs:
-            #         seqs[relevant_read_id] = (read_seq, read_qual, pos1, pos2)
-            #         # zz_cnt += 1
-            #         # print("Not added but others are!!!", zz_cnt, read_seq, ref_seq, read_seq == ref_seq)
-
-
-            all_intervals.append( (p1 + k_size, p2,  len(seqs), seqs) )
-
+            all_intervals.append( (p1 + k_size, p2,  len(seqs)//3, seqs) )
+    del seqs
     return tmp_cnt, read_complexity_cnt
 
-def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, work_dir, v_depth_ratio_threshold,  max_seqs_to_spoa, disable_numpy, verbose):
+def get_intervals_to_correct(opt_indicies, all_intervals_sorted_by_finish):
+    intervals_to_correct =[]
+    for j in opt_indicies:
+        start, stop, weights, instance = all_intervals_sorted_by_finish[j]
+        intervals_to_correct.append( (start, stop, weights, instance))
+
+    return intervals_to_correct
+
+def correct_read(seq, reads, intervals_to_correct, k_size, work_dir, v_depth_ratio_threshold,  max_seqs_to_spoa, disable_numpy, verbose):
     corr_seq = []
     # print(opt_indicies)
     other_reads_corrected_regions = defaultdict(list)
-    first_start = all_intervals_sorted_by_finish[opt_indicies[0]][0]
-    final_stop = all_intervals_sorted_by_finish[opt_indicies[-1]][1]
     prev_stop = 0
-    for j in opt_indicies:
-        # print(all_intervals_sorted_by_finish[j])
-        start, stop, weights, instance = all_intervals_sorted_by_finish[j]
-        # print(start-7, stop+7, weights)
+    for start, stop, weights, instance in intervals_to_correct:
+    # for j in opt_indicies:
+    #     start, stop, weights, instance = all_intervals_sorted_by_finish[j]
         if start - k_size > prev_stop and prev_stop > 0:
             # print()
             if verbose:
@@ -1008,15 +771,13 @@ def correct_read(seq, opt_indicies, all_intervals_sorted_by_finish, k_size, work
         if isinstance(instance, str): # already corrected
             best_corr = instance
         else:
-            best_corr, other_corrections = get_best_corrections(instance, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, disable_numpy) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
+            best_corr, other_corrections = get_best_corrections(instance, reads, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, disable_numpy) # store all corrected regions within all reads in large container and keep track when correcting new read to not re-compute these regions     
             for other_r_id, other_corr_regions in other_corrections.items():
                 for region in other_corr_regions:
                     other_reads_corrected_regions[other_r_id].append(region)
         # print(seq[start: stop],  best_corr)
         corr_seq.append((start,stop, best_corr))
-    # corr_seq = corr_seq
-    # print(corr_seq, len(seq))
-    # eprint(first_start, final_stop)
+
     tmp = [seq[0 : corr_seq[0][0]] ]
     for cnt, (start_, stop_, seq_segment) in enumerate(corr_seq):
         tmp.append(seq_segment)
@@ -1052,15 +813,6 @@ def get_qvs(reads):
 
 
 
-# def store_intervals(all_intervals, interval_database, instance_hash_table):
-#     record_id = len(instance_hash_table) 
-#     for start_pos, stop_pos, instance_size, instance in all_intervals:
-#         if not isinstance(instance, str):
-#             instance_hash_table[record_id] = instance
-#             for read_acc, (read_seq, read_qual, pos1, pos2) in instance.items():
-#                 interval_database[read_acc][pos1][pos2] = record_id #.append((pos1, pos2, record_id))
-#         record_id += 1
-
 def batch(dictionary, size):
     batches = []
     sub_dict = {}
@@ -1082,7 +834,7 @@ def batch(dictionary, size):
 
 def main(args):
     # start = time()
-    all_reads = { i : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
+    all_reads = { i + 1 : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
     eprint("Total cluster of {0} reads.".format(len(all_reads)))
     max_seqs_to_spoa = args.max_seqs_to_spoa
     if len(all_reads) <= args.exact_instance_limit:
@@ -1107,11 +859,7 @@ def main(args):
     for batch_id, reads in enumerate(batch(all_reads, args.max_seqs)):
         print("correcting {0} reads in a batch".format(len(reads)))
         batch_start_time = time()
-        # interval_database = defaultdict(lambda: defaultdict(dict))
-        instance_hash_table = {}
-    # for k_size in range(args.k, args.k +1):
-        # DBG, position_DBG = create_augmented_reference.kmer_counter(reads, k_size)
-        # print("done createng DB")
+
         w = args.w
         x_high = args.xmax
         x_low = args.xmin
@@ -1188,6 +936,7 @@ def main(args):
             all_intervals = []
             # prev_visited_intervals = []
 
+
             for (m1,p1), m1_curr_spans in read_min_comb: 
                 # If any position is not in range of current corrections: then correct, not just start and stop
                 not_prev_corrected_spans = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) ] 
@@ -1195,55 +944,23 @@ def main(args):
                 not_prev_corrected_spans2 = [(m2,p2) for (m2,p2) in m1_curr_spans if (m2,p2) not in set_not_prev and (p1 + k_size in pos_group and p2 - 1 in pos_group and pos_group[p1 + k_size] != pos_group[p2 - 1]) ] 
                 not_prev_corrected_spans += not_prev_corrected_spans2
 
-                # not_prev_corrected_spans_test = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) and p2 not in interval_database[r_id][p1] ] 
-                # not_prev_corrected_spans2_test = [(m2,p2) for (m2,p2) in m1_curr_spans if (m2,p2) not in set_not_prev and p2 not in interval_database[r_id][p1] and (p1 + k_size in pos_group and p2 - 1 in pos_group and pos_group[p1 + k_size] != pos_group[p2 - 1]) ] 
-                # not_prev_corrected_spans_test += not_prev_corrected_spans2_test
-
-                # prev_visited_but_not_corrected_spans_test = [(m2,p2) for (m2,p2) in m1_curr_spans if not (p1 + k_size in read_previously_considered_positions and p2 - 1 in read_previously_considered_positions) and (p2 in interval_database[r_id][p1]) ] 
-                # prev_visited_but_not_corrected_spans2_test = [(m2,p2) for (m2,p2) in m1_curr_spans if (m2,p2) not in set_not_prev and (p2 in interval_database[r_id][p1]) and (p1 + k_size in pos_group and p2 - 1 in pos_group and pos_group[p1 + k_size] != pos_group[p2 - 1]) ] 
-                # prev_visited_but_not_corrected_spans_test += prev_visited_but_not_corrected_spans2_test
-
-
-                # test_cnt += len(not_prev_corrected_spans_test)
-                # old_cnt += len(not_prev_corrected_spans)
-
-                # old_cnt += sum([len(minimizer_combinations_database[m1][m2]) for m2, p2 in not_prev_corrected_spans])
-                # test_cnt += sum([len(minimizer_combinations_database[m1][m2]) for m2, p2 in not_prev_corrected_spans_test])
-                # test_cnt2 += sum([len(minimizer_combinations_database[m1][m2]) for m2, p2 in prev_visited_but_not_corrected_spans_test])
-
-                # if prev_visited_but_not_corrected_spans_test:
-                #     tmp_all_intervals = []
-                #     tmp_prev_visited_intervals = []
-                #     for (m2,p2) in prev_visited_but_not_corrected_spans_test:
-                #         if p2 in interval_database[r_id][p1]:
-                #             instance_id = interval_database[r_id][p1][p2]
-                #             instance = instance_hash_table[instance_id]
-                #             # switch to the current read instead of the old read that is already corrected
-                #             # set to -r_id to assure uniqueness for later reads calling the same instance
-                #             curr_read_data = instance[r_id]
-                #             instance[-r_id] = instance["curr_read"]
-                #             instance["curr_read"] = curr_read_data
-                #             del instance[r_id]
-                #             # (p1 + k_size, p2,  len(seqs), seqs)
-                #             prev_visited_intervals.append( (p1 + k_size, p2,  len(instance), instance) )
-                #             tmp_prev_visited_intervals.append( (p1 + k_size, p2,  len(instance), instance) )
-                #             # print("went here saved {0} computations".format(len(instance)))
-                #     _, _ = find_most_supported_span(r_id, m1, p1, prev_visited_but_not_corrected_spans_test, minimizer_combinations_database, reads, tmp_all_intervals, k_size, tmp_cnt, read_complexity_cnt, quality_values_database, already_computed)
-                    
-                #     if tmp_all_intervals[0][2] < tmp_prev_visited_intervals[0][2] - 20: 
-                #         print(tmp_all_intervals[0][3]["curr_read"])
-                #         print(tmp_prev_visited_intervals[0][3]["curr_read"])
-                #         print(len(tmp_all_intervals), [ (zz[2], [(tup[0], tup[2],tup[3]) for zzz, tup in zz[3].items()]) for zz in tmp_all_intervals])
-                #         print(len(tmp_prev_visited_intervals), [ (zz[2], [(tup[0], tup[2],tup[3]) for zzz, tup in zz[3].items()]) for zz in tmp_prev_visited_intervals])
-
                 if not_prev_corrected_spans: # p1 + k_size not in read_previously_considered_positions:
                     tmp_cnt, read_complexity_cnt = find_most_supported_span(r_id, m1, p1, not_prev_corrected_spans, minimizer_combinations_database, reads, all_intervals, k_size, tmp_cnt, read_complexity_cnt, quality_values_database, already_computed)
-            
-            # print("Ratio computations saved:", old_cnt, test_cnt, test_cnt2)
-            # assert old_cnt == test_cnt + test_cnt2
-            # store_intervals(all_intervals, interval_database, instance_hash_table)
-            # print("keeping ",len(instance_hash_table), "intervals.")
-            # print("For a total of ", len(interval_database), "reads")
+
+
+            # from pympler import asizeof
+            # print("reads", asizeof.asizeof(reads)/1000000)
+            # print("not_prev_corrected_spans", asizeof.asizeof(not_prev_corrected_spans)/1000000)
+            # # print("other_reads_corrected_regions", asizeof.asizeof(other_reads_corrected_regions)/1000000)
+            # print("previously_corrected_regions", asizeof.asizeof(previously_corrected_regions)/1000000)
+            # print("all_intervals", asizeof.asizeof(all_intervals)/1000000)
+            # print("read_min_comb", asizeof.asizeof(read_min_comb)/1000000)
+            # print("quality_values_database", asizeof.asizeof(quality_values_database)/1000000)
+            # print("already_computed", asizeof.asizeof(already_computed)/1000000)   
+            # print("minimizer_database", asizeof.asizeof(minimizer_database)/1000000)            
+            # print("minimizer_combinations_database", asizeof.asizeof(minimizer_combinations_database)/1000000)
+            # sleep(100)
+            # sys.exit()
 
             # sys.exit()
             if args.verbose:
@@ -1262,31 +979,34 @@ def main(args):
                 # eprint("Found nothing to correct")
                 corrected_seq = seq
             else:
-                all_intervals_sorted_by_finish = sorted(all_intervals, key = lambda x: x[1])
-                # print([(item[0],item[1]) for item in  all_intervals_sorted_by_finish])
-                # print(len(all_intervals_sorted_by_finish))
-                # sys.exit()
-                # opt_indicies = solve_WIS(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
-                opt_indicies = solve_WIS2(all_intervals_sorted_by_finish) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
+                all_intervals.sort(key = lambda x: x[1])
+                # print([www for (_, _,  www, _)  in all_intervals])
+                opt_indicies = solve_WIS(all_intervals) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
+                # print(opt_indicies)
                 # assert opt_indicies == opt_indicies2
                 # print(opt_indicies)
-                corrected_seq, other_reads_corrected_regions = correct_read(seq, opt_indicies[::-1], all_intervals_sorted_by_finish, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy, args.verbose)
+                intervals_to_correct = get_intervals_to_correct(opt_indicies[::-1], all_intervals)
+                del all_intervals
+                all_intervals = []
+                corrected_seq, other_reads_corrected_regions = correct_read(seq, reads, intervals_to_correct, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy, args.verbose)
+                del intervals_to_correct
                 for other_r_id, corrected_regions in other_reads_corrected_regions.items():
                     for corr_region in corrected_regions:
                         previously_corrected_regions[other_r_id].append(corr_region)
-                
-                # # clean database
-                # tmp_ = 0
-                # for other_r_id, corrected_regions in other_reads_corrected_regions.items():
-                #     for q_p1_k, q_p2, weight, _ in corrected_regions:
-                #         if q_p2 in interval_database[other_r_id][q_p1_k-k_size]:
-                #             rec_id = interval_database[other_r_id][q_p1_k-k_size][q_p2]
-                #             del interval_database[other_r_id][q_p1_k-k_size][q_p2]
-                #             tmp_ +=1
-                # del instance_hash_table[ rec_id ]
-                # print("removed", tmp_, "instances from prev_visited_intervals database.")
 
-            
+            # from pympler import asizeof
+            # print("reads", asizeof.asizeof(reads)/1000000)
+            # # print("read_min_comb", asizeof.asizeof(read_min_comb)/1000000)
+            # print("not_prev_corrected_spans", asizeof.asizeof(not_prev_corrected_spans)/1000000)
+            # print("other_reads_corrected_regions", asizeof.asizeof(other_reads_corrected_regions)/1000000)
+            # print("previously_corrected_regions", asizeof.asizeof(previously_corrected_regions)/1000000)
+            # print("all_intervals", asizeof.asizeof(all_intervals)/1000000)
+            # print("read_min_comb", asizeof.asizeof(read_min_comb)/1000000)
+            # print("quality_values_database", asizeof.asizeof(quality_values_database)/1000000)
+            # print("already_computed", asizeof.asizeof(already_computed)/1000000)   
+            # print("minimizer_database", asizeof.asizeof(minimizer_database)/1000000)            
+            # print("minimizer_combinations_database", asizeof.asizeof(minimizer_combinations_database)/1000000)
+
             corrected_reads[r_id] = (acc, corrected_seq, "+"*len(corrected_seq))
             if args.verbose:
                 print("@{0}\n{1}\n+\n{2}".format(acc, corrected_seq, "+"*len(corrected_seq) ))
@@ -1314,7 +1034,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo error correction of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.0.3')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.4')
 
     parser.add_argument('--fastq', type=str,  default=False, help='Path to input fastq file with reads')
     # parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
