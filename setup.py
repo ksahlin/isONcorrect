@@ -19,7 +19,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 setup(
 
     name='isONcorrect',  # Required
-    version='0.0.3',  # Required
+    version='0.0.4',  # Required
     description='De novo error-correction of long-read transcriptome reads.',  # Required
     long_description=long_description,  # Optional
     long_description_content_type='text/markdown',
