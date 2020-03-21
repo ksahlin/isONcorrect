@@ -38,7 +38,7 @@ Conda is the preferred way to install isONcorrect.
 
 ```
 conda create -n isoncorrect python=3 pip 
-source activate isoncorrect
+conda activate isoncorrect
 ```
 
 2. Install isONcorrect and its dependency `spoa`.
@@ -54,7 +54,7 @@ isONcorrect --help
 
 Upon start/login to your server/computer you need to activate the conda environment "isonclust" to run isONcorrect as:
 ```
-source activate isoncorrect
+conda activate isoncorrect
 ```
 
 ### Using pip 
