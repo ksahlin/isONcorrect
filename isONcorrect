@@ -438,26 +438,8 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
         reads_path.write(">{0}\n{1}\n".format(str(q_id)+str(pos1)+str(pos2), seq))
     reads_path.close()
     spoa_ref = create_augmented_reference.run_spoa(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
-    
 
-    ######### Adjust spoa sequence ###############
-    #################################################
-    #################################################
 
-    start_anchor = reads[curr_read_id][1][:k_size] # curr_best_seqs["curr_read"][0][:k_size]
-    stop_anchor = reads[curr_read_id][1][-k_size:]  # curr_best_seqs["curr_read"][0][-k_size:]
-    start_index = spoa_ref.find(start_anchor) 
-    stop_index = len(spoa_ref) - spoa_ref[::-1].find(stop_anchor[::-1]) 
-    # print(start_index, stop_index)
-    if start_index >=0 and stop_index <= len(spoa_ref):
-        spoa_ref_mod = spoa_ref[start_index: stop_index]
-        # if spoa_ref != spoa_ref_mod:
-        #     print(spoa_ref)
-        #     print(spoa_ref_mod)
-        # sys.exit()
-        spoa_ref = spoa_ref_mod
-    
-    
     partition = {"ref" : (0, spoa_ref, spoa_ref, 1)}
     for q_id, pos1, pos2 in  grouper(curr_best_seqs, 3):
         seq = reads[q_id][1][pos1: pos2 + k_size]
@@ -1034,7 +1016,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo error correction of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.0.4')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.5')
 
     parser.add_argument('--fastq', type=str,  default=False, help='Path to input fastq file with reads')
     # parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
