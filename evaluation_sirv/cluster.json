@@ -10,7 +10,7 @@
         "jobname" : "pipeline",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "c[4,6-7,8-16]"
+        "exclude" : "c[8-11,15-16]"
     },
 
     "evaluate" : 
@@ -22,7 +22,7 @@
         "runtime" : "14-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "c[4,6-7,8-16]"
+        "exclude" : "c[8-11,15-16]"
     },
 
     "isoncorrect" : 
@@ -34,7 +34,7 @@
         "runtime" : "14-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "c[4,6-7,8-16]"
+        "exclude" : "c[8-11,15-16]"
     },
 
     "subsample" : 
@@ -46,7 +46,7 @@
         "runtime" : "4-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "c[4,6-7,8-16]"
+        "exclude" : "c[8-11,15-16]"
     },
 
     "isONclust" : 
@@ -58,7 +58,7 @@
         "runtime" : "7-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "c[4,6-7,8-16]"
+        "exclude" : "c[8-11,15-16]"
     },
 
     "clusters_to_fastq": 
@@ -70,7 +70,7 @@
         "runtime" : "10:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "c[4,6-7,8-16]"
+        "exclude" : "c[8-11,15-16]"
     },
 
     "align_corrected_reads_minimap2": 
@@ -82,7 +82,7 @@
         "runtime" : "10:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "c[4,6-7,8-16]"
+        "exclude" : "c[8-11,15-16]"
     },
 
     "align_original_reads_minimap2": 
@@ -94,6 +94,6 @@
         "runtime" : "10:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "c[4,6-7,8-16]"
+        "exclude" : "c[8-11,15-16]"
     }
 }
