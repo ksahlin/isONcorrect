@@ -88,7 +88,7 @@ rule subsample:
         mkdir_p(config["ROOT_OUT"] + "/data/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads ) )
 
         if wildcards.nr_reads == "999":
-            shell("ln -s  {input.fastq} {output.subsampled_fastq} ")
+            shell("ln -sfn  {input.fastq} {output.subsampled_fastq} ")
         elif wildcards.dataset == "SIRV":
             shell("python {inbase}/scripts/subsample_fastq.py --fastq {input.fastq} --outfile {output.subsampled_fastq} --nr_reads 1000 --min_length 100")
         else:
