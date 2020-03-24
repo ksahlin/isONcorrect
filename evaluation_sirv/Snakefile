@@ -57,7 +57,7 @@ def mkdir_p(path):
             raise
 
 rule all:
-   input:  config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
+   input:  config["ROOT_OUT"] + "/sirv_subsampling.csv"
 
 
 rule sirv_subsample:
@@ -143,7 +143,7 @@ rule evaluate_sirv_subsample:
 
 rule sirv_summary:
     input: all_experiments = expand(rules.evaluate_sirv_subsample.output.csv_file, dataset=["SIRV_subsample"], nr_reads = list(range(1,101)), exp_id = list(range(1,11)) )
-    output: summary_table = config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
+    output: summary_table = config["ROOT_OUT"] + "/sirv_subsampling.csv"
     run:
         shell("> {output.summary_table}")
         outfile = open(output.summary_table ,"w")
