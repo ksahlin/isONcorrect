@@ -57,17 +57,17 @@ def mkdir_p(path):
             raise
 
 rule all:
-   input:  config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
+   input:  config["ROOT_OUT"] + "/sirv_iso_cov.csv"
 
 
 rule sirv_subsample:
     input:  fastq = config["ROOT_OUT"] + "/data/SIRV/all_fl_reads.fq",
-    output: subsampled_fastq =  config["ROOT_OUT"] + "/data/SIRV/{nr_reads}/{exp_id}.fq"
+    output: subsampled_fastq =  config["ROOT_OUT"] + "/data/SIRV_iso_cov/{nr_isoforms}/{nr_reads}/{exp_id}.fq"
     run:
 
         inbase= config["ROOT_IN"]
-        mkdir_p(config["ROOT_OUT"] + "/data/SIRV/{0}/{1}/".format(wildcards.nr_reads, wildcards.exp_id ) )
-        alignments = config["ROOT_OUT"] + "/evaluation_biological/SIRV/999/original_to_transcripts.sam"
+        mkdir_p(config["ROOT_OUT"] + "/data/SIRV_iso_cov/{0}/{1}/".format(wildcards.nr_reads, wildcards.exp_id ) )
+        alignments = config["ROOT_OUT"] + "/evaluation_biological/SIRV/999/original_to_transcripts.sam" # obtained from full experiments pipeline in "evaluation" folder
         # ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
         shell("python {inbase}/evaluation_sirv/sirv_subsample_depth.py {input.fastq} {alignments} {output.subsampled_fastq} {wildcards.nr_reads}")
 
@@ -142,8 +142,8 @@ rule evaluate_sirv_subsample:
                                                         {input.corrected_reads} {ref} {outfolder}")
 
 rule sirv_summary:
-    input: all_experiments = expand(rules.evaluate_sirv_subsample.output.csv_file, dataset=["SIRV"], nr_reads = list(range(1,101)), exp_id = list(range(1,11)) )
-    output: summary_table = config["ROOT_OUT"] + "/sirv_error_rate_eval_table.csv"
+    input: all_experiments = expand(rules.evaluate_sirv_subsample.output.csv_file, dataset=["SIRV_iso_cov"], nr_reads = list(range(1,101)), exp_id = list(range(1,11)) )
+    output: summary_table = config["ROOT_OUT"] + "/sirv_iso_cov.csv"
     run:
         shell("> {output.summary_table}")
         outfile = open(output.summary_table ,"w")
