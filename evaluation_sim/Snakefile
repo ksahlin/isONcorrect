@@ -183,9 +183,36 @@ rule overcorrection_analysis:
 
 
 
+rule plots_full:
+    input: sim_csv = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/999/{abundance}/results.csv"
+    output: plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_full.pdf"
+    run:
+        eval_dir = config["ROOT_IN"] + "/evaluation_sim/"
+        outfolder = config["ROOT_OUT"] + "/evaluation_simulated/"          
+        shell("python {eval_dir}/plots.py  {input.sim_csv}  {outfolder} sim")
 
 
+rule plots_subsampling:
+    input: abundance_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/1/{abundance}/abundance.csv",
+           error_rates_file = error_rates_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/1/{abundance}/results.csv"
+    output: error_rate_plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_subsample_error_rate.pdf",
+            abundance_plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_subsample_abundance.pdf"
 
+        eval_dir = config["ROOT_IN"] + "/evaluation_sim/"
+        shell("python {eval_dir}/plot_error_rates.py  {input.error_rates_file}  {output.error_rate_plot} ")
+        shell("python {eval_dir}/plot_abundance_diff.py  {input.abundance_file}  {output.abundance_plot} ")
+        # python full_transcriptome_exp/plot_error_rates.py  /Users/kxs624/Documents/workspace/isONcorrect/data/results/sim_exponential_results.csv  ~/tmp/ISONCORRECT/RESULTS_02_12_19/sim/err_rate 
+        # python full_transcriptome_exp/plot_abundance_diff.py    /Users/kxs624/Documents/workspace/isONcorrect/data/results/sim_depth_abundance.csv ~/tmp/ISONCORRECT/RESULTS_24_12_19/simulated/abundance_plot.pdf
+
+
+rule zip_plots:
+    input: plot1 = rules.full_plots.output.plot, 
+           plot2 = rules.plots_subsampling.output.abundance_plot,
+           plot3 = rules.plots_subsampling.output.error_rate_plot
+    output: plots_zip = config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz"
+    run:
+        plot_pattern = config["ROOT_OUT"] + "/evaluation_simulated/*.pdf"
+        shell("tar -cvzf {output.plots_zip} {plot_pattern}")
 
 # rule evaluate:
 #     input: original_reads = rules.subsample.output.subsampled_fastq,
