@@ -264,7 +264,7 @@ rule full_plots:
         eval_dir = config["ROOT_IN"] + "/evaluation/"
         outfolder = config["ROOT_OUT"] + "/evaluation_biological/"  
 
-        python scripts/plots.py /Users/kxs624/Documents/workspace/isONcorrect/data/results/drosophila_full.csv  ~/tmp/ISONCORRECT/RESULTS_08_12_19/drosophila_full.csv /sirv_full.csv 
+        #python scripts/plots.py /Users/kxs624/Documents/workspace/isONcorrect/data/results/drosophila_full.csv  ~/tmp/ISONCORRECT/RESULTS_08_12_19/drosophila_full.csv /sirv_full.csv 
         
         shell("python {eval_dir}/plots.py  {input.sirv_csv}  {outfolder} sirv")
         shell("python {eval_dir}/plots.py  {input.sirv_csv}  {outfolder} drosophila")
