@@ -57,7 +57,8 @@ def mkdir_p(path):
             raise
 
 rule all:
-   input:  config["ROOT_OUT"] + "/sirv_subsampling.csv"
+   input:  config["ROOT_OUT"] + "/sirv_subsampling.csv",
+            config["ROOT_OUT"] + "/evaluation_biological/sirv_subsample.tar.gz"
 
 
 rule sirv_subsample:
@@ -165,6 +166,21 @@ rule sirv_summary:
 
 
 
+rule plot:
+    input: sirv_csv = rules.sirv_summary.output.summary_table, 
+    output: subsample_plot = config["ROOT_OUT"] + "/evaluation_biological/SIRV/sirv_subsampling_error_rates.pdf"
+    run:
+        eval_dir = config["ROOT_IN"] + "/evaluation_sirv/"
+        outfolder = config["ROOT_OUT"] + "/evaluation_biological/"  
+        # python plots.py /Users/kxs624/Documents/workspace/isONcorrect/data/results/sirv_error_analysis_Dec_02.csv  ~/tmp/ISONCORRECT/RESULTS_02_12_19/sirv/
+        shell("python {eval_dir}/plots.py  {input.sirv_csv}  {outfolder}")
+
+rule zip_plots:
+    input: plots = rules.plot.output.subsample_plot
+    output: plots_zip = config["ROOT_OUT"] + "/evaluation_biological/sirv_subsample.tar.gz"
+    run:
+        plot_pattern = config["ROOT_OUT"] + "/evaluation_biological/SIRV/*.pdf"
+        shell("tar -cvzf {output.plots_zip} {plot_pattern}")
 
 
 
