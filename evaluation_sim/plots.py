@@ -1,0 +1,281 @@
+
+## Various plots from large table
+
+import sys
+import argparse
+import os
+import random
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+except (ImportError, RuntimeError):
+    print("COULD not import matplotlib")
+# import matplotlib.pyplot as plt
+# import matplotlib
+
+import numpy as np
+import seaborn as sns
+import pandas as pd
+from matplotlib import pyplot
+
+
+def label_transcript(row):
+   if row['fsm'] == 1 :
+      return 'FSM'
+   if row['nic'] == 1 :
+      return 'NIC'
+   if row['ism'] == 1:
+      return 'ISM'
+   if row['nnc']  == 1:
+      return 'NNC'
+   if row['no_splices']  == 1:
+      return 'NO_SPLICE'
+
+def splice_site_classification_plot(input_csv, outfolder):
+
+    indata = pd.read_csv(input_csv)
+    indata['transcript_type'] = indata.apply (lambda row: label_transcript(row), axis=1)
+    # print(len(df))
+    # indata = df.loc[df['q_acc'] == df['r_acc']]
+    # print(len(indata))
+
+    # g = sns.catplot(x="transcript_type", #col="Depth",
+    #             data=indata,  hue="read_type", hue_order= ["corrected", "original"],
+    #             order= ["FSM", "ISM", "NIC", "NNC", 'NO_SPLICE'], kind="count", aspect=1)
+
+    g = sns.catplot(x="transcript_type", #col="Depth",
+                data=indata,  hue="read_type", hue_order= ["corrected", "original"],
+                order= ["FSM", "ISM", "NIC", "NNC"], kind="count", aspect=1)
+    # g.set(ylim=(0,15))
+    g.set_ylabels("Count")
+    g.set_xlabels("Transcript type")
+
+    # ax = sns.boxplot(x="p", y=y, hue = "type", data=indata)
+    # ax.set_ylim(0,15)
+    # ax.set_ylabel("Error rate %")
+
+    plt.savefig(os.path.join(outfolder, "drosophila_splice_site_classification.eps"))
+    plt.savefig(os.path.join(outfolder, "drosophila_splice_site_classification.pdf"))
+    plt.close()
+
+def number_splices_fsm(input_csv, outfolder):
+
+    indata = pd.read_csv(input_csv)
+    indata['transcript_type'] = indata.apply (lambda row: label_transcript(row), axis=1)
+    indata = indata[indata['transcript_type']=='FSM']
+    g = sns.catplot(x="tot_splices", #col="Depth",
+                data=indata,  hue="read_type", hue_order= ["corrected", "original"], kind="count", aspect=1)
+    # axes = g.axes
+    g.set_ylabels("Count")
+    g.set_xlabels("Number of splice sites")
+    # axes.set_xticks(np.arange(0, 70, step=5) )
+    # axes.set_xlim(xlim=(0, 70))
+    # g.set_xlim(0,70)
+    # g.set_xticks(np.arange(0, 70, step=5))
+    # ax.set_ylabel("Error rate %")
+
+    plt.savefig(os.path.join(outfolder, "drosophila_nr_splices.eps"))
+    plt.savefig(os.path.join(outfolder, "drosophila_nr_splices.pdf"))
+    plt.close()
+
+
+from collections import defaultdict
+
+def transpose_count(dct):
+    d = defaultdict(int)
+    for key1, value in dct.items():
+        d[value]  += 1
+    return d
+
+def unique_fsm(input_csv, outfolder):
+
+    indata = pd.read_csv(input_csv)
+    orig = indata[indata['read_type']=='original']
+    corr = indata[indata['read_type']=='corrected']
+
+    # print('orig:', orig['transcript_fsm_id'].nunique())
+    # print('corr', corr['transcript_fsm_id'].nunique())
+    # print(set(orig['transcript_fsm_id'].unique()))
+    # print(set(corr['transcript_fsm_id'].unique()))
+
+    orig_reads = pd.Series(orig.transcript_fsm_id.values,index=orig.acc).to_dict()
+    corr_reads = pd.Series(corr.transcript_fsm_id.values,index=corr.acc).to_dict()
+
+    all_fsm_orig = set(orig['transcript_fsm_id'].unique())
+    all_fsm_corr = set(corr['transcript_fsm_id'].unique())
+    print('In orig but not in corr', len(all_fsm_orig - all_fsm_corr))
+    print('In corr but not in orig', len(all_fsm_corr - all_fsm_orig))
+
+    all_fsm_orig = {x for x in all_fsm_orig if x==x}
+    all_fsm_corr = {x for x in all_fsm_corr if x==x}
+    print('Total unique in orig', len(all_fsm_orig))
+    print('Total unique in corr', len(all_fsm_corr))
+
+    # Categories: (0. not present/aligned in Corr, 0'. not present/aligned in Orig)  1. Both nAn, 2. Both FSM same, 2. Both FSM different, 3. Corr_FSM, Orig nAn, 3. Orig_FSM, Corr nAn,
+    # print(orig_reads)
+    not_present_corr = set(orig_reads) - set(corr_reads) 
+    not_present_orig = set(corr_reads) - set(orig_reads) 
+    in_both = set(corr_reads) & set(orig_reads)
+    both_nan = [ acc for acc in in_both if orig_reads[acc] not in all_fsm_orig and corr_reads[acc] not in all_fsm_corr ]
+    both_fsm_same = [ acc for acc in in_both if orig_reads[acc] == corr_reads[acc] and  corr_reads[acc] in all_fsm_corr ]
+    both_fsm_different = [ acc for acc in in_both if orig_reads[acc] != corr_reads[acc] and  corr_reads[acc] in all_fsm_corr and  orig_reads[acc] in all_fsm_orig ]
+    corr_fsm_orig_nan = [ acc for acc in in_both if orig_reads[acc] != corr_reads[acc] and  corr_reads[acc] in all_fsm_corr and  orig_reads[acc] not in all_fsm_orig ]
+    orig_fsm_corr_nan = [ acc for acc in in_both if orig_reads[acc] != corr_reads[acc] and  corr_reads[acc] not in all_fsm_corr and  orig_reads[acc] in all_fsm_orig ]
+
+    print()
+    print('not_present_corr', len(not_present_corr))
+    print('not_present_orig', len(not_present_orig))
+    print('in_both', len(in_both))
+    print('both_nan', len(both_nan))
+    print('both_fsm_same', len(both_fsm_same))
+    print('both_fsm_different', len(both_fsm_different))
+    print('corr_fsm_orig_nan', len (corr_fsm_orig_nan))
+    print('orig_fsm_corr_nan', len(orig_fsm_corr_nan))
+    print()
+    reads_per_transcript_orig = transpose_count(orig_reads)
+    reads_per_transcript_corr = transpose_count(corr_reads)
+    print("transcript_id,FSM_orig,FSM_corr")
+    fsm_depth_orig = []
+    fsm_depth_corr = []
+    occurr_in_orig_read_depth = defaultdict(int)
+    for transcript_id in set(all_fsm_orig | all_fsm_corr):
+        if transcript_id not in reads_per_transcript_corr:
+            print(transcript_id, "not in corrected, depth:{0}.".format(reads_per_transcript_orig[transcript_id]))
+            occurr_in_orig_read_depth[reads_per_transcript_orig[transcript_id]] += 1
+        elif transcript_id not in reads_per_transcript_orig:
+            print(transcript_id, "not in ORIGINAL, depth in corr:{0}.".format(reads_per_transcript_corr[transcript_id]))
+        fsm_depth_orig.append( reads_per_transcript_orig[transcript_id] + 1 )
+        fsm_depth_corr.append( reads_per_transcript_corr[transcript_id] + 1 )
+            # print(transcript_id,reads_per_transcript_orig[transcript_id], reads_per_transcript_corr[transcript_id])
+    print(occurr_in_orig_read_depth)
+    d = {"fsm_orig" : fsm_depth_orig, "fsm_corr" : fsm_depth_corr}
+    df = pd.DataFrame(d)
+    # ax.set(xscale="log", yscale="log")
+    plt.xscale('log')
+    plt.yscale('log')
+    ax = sns.scatterplot(x='fsm_orig', y='fsm_corr', alpha= 0.5, data = df)
+    # ax.set_title("FSM before and after correction")
+    # ax.set_xlim(1,10)
+    # ax.set_ylim(1,10)
+    ax.set_ylabel("Read depth corrected (log(1+x) scale)")
+    ax.set_xlabel("Read depth original (log(1+x) scale)")
+    plt.savefig(os.path.join(outfolder, "drosophila_fsm_breakdown.eps"))
+    plt.savefig(os.path.join(outfolder, "drosophila_fsm_breakdown.pdf"))
+    plt.close()
+
+    print("sum",sum([reads_per_transcript_orig[tr_id] for tr_id in set(all_fsm_orig | all_fsm_corr)]), sum([reads_per_transcript_corr[tr_id] for tr_id in set(all_fsm_orig | all_fsm_corr)]) )
+
+
+
+def total_error_rate(input_csv, outfolder, dataset):
+
+    indata = pd.read_csv(input_csv)
+    # print(len(df))
+    # indata = df.loc[df['q_acc'] == df['r_acc']]
+    # print(len(indata))
+    data = indata[indata.read_type == 'original']
+    sns.distplot(data['error_rate'], norm_hist=False,  kde=False, label='Original', bins=100, hist_kws=dict(alpha=0.5))
+    data =indata[indata.read_type == 'corrected']
+    sns.distplot(data['error_rate'], norm_hist=False, kde=False, label='Corrected', bins=100, hist_kws=dict(alpha=0.5))
+
+    plt.xticks(np.arange(0, 10, step=1))
+    plt.xlim(0,10)
+    plt.xlabel("Error rate (%)")
+    # plt.xlabel("Difference to HG38 (%)")
+    plt.ylabel("Frequency")
+    plt.legend(prop={'size': 12})
+
+    orig = indata[indata['read_type']=='original']
+    print(orig.median(axis = 0))
+    print(orig.sum(axis = 0))
+
+    corr = indata[indata['read_type']=='corrected']
+    print(corr.median(axis = 0))
+    print(corr.sum(axis = 0))
+
+    plt.savefig(os.path.join(outfolder, dataset+ "_full.eps"))
+    plt.savefig(os.path.join(outfolder, dataset+ "_full.pdf"))
+    plt.close()
+
+
+
+def get_error_rates(input_csv, dataset, read_to_infer = "corrected"):
+    dels =[]
+    inses =[]
+    subses =[]
+    matcheses =[]
+    # aln_lengths =[]
+    read_lengths =[]
+    for line in open(input_csv, 'r'):
+        if dataset == 'sirv':
+            # if SIRV full        
+            acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,chr_id = line.split(',')
+        
+        if dataset == 'drosophila':
+            # if Drosophila
+            acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag = line.split(',')
+
+        
+        if dataset == 'sim':    
+            # if SIM
+            read,read_length,err,ins,del_,subs,matches,error_rate,read_type,transcript_cov,gene_cov,gene_fam_cov = line.split(',')
+
+        if read_type == read_to_infer:
+            # read_length =  (int(subs)+ int(ins) + int(del_))/ (float(err_rate)/100.0)
+            # matches = read_length - (int(subs)+ int(ins) + int(del_))
+            dels.append(int(del_))
+            inses.append(int(ins))
+            subses.append(int(subs))
+            matcheses.append(int(matches))
+            # aln_lengths.append(int(aligned_length))
+            read_lengths.append(int(read_length))
+
+    tot_bases = sum(read_lengths)
+    # err_rates1 = [ (dels[i] + inses[i] + subses[i])/ float(aln_lengths[i]) for i in range(len(matcheses))]
+    err_rates2 = [ (dels[i] + inses[i] + subses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
+    dels_rates = [ (dels[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
+    inses_rates = [ (inses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
+    subses_rates = [ (subses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
+    # print(sorted(err_rates1)[int(len(err_rates1)/2) ])
+    print(sorted(err_rates2)[int(len(err_rates2)/2) ])
+    print("median dels_rates", sorted(dels_rates)[int(len(dels_rates)/2) ])
+    print("median inses_rates",sorted(inses_rates)[int(len(inses_rates)/2) ])
+    print("median subses_rates", sorted(subses_rates)[int(len(subses_rates)/2) ])
+
+    errors = [sum(inses), sum(dels), sum(subses), sum(matcheses), tot_bases]
+    error_types = ["ins","del","subs","matches","tot_bases"]
+    for err, err_type in zip(errors, error_types) :
+        print("{0},{1},{2},{3},{4},{5}".format(dataset, read_to_infer, err_type, err)
+
+        # print("type,ins,del,subs,matches,tot_bases")
+    # print( "{0},{1},{2},{3},{4},{5}".format(read_to_infer,sum(inses),sum(dels), sum(subses), sum(matcheses), tot_bases))
+    # print(sorted(subses_rates))
+
+
+def main(args):
+    sns.set(style="whitegrid")
+    # sns.set()
+    # flatui = ["#2ecc71", "#e74c3c"] # https://chrisalbon.com/python/data_visualization/seaborn_color_palettes/
+    # sns.set_palette(flatui)    # total_error_rate(args.input_csv, args.outfolder)
+
+    get_error_rates(args.input_csv, args.dataset, read_to_infer = 'corrected')
+    get_error_rates(args.input_csv, args.dataset, read_to_infer = 'original')
+
+    total_error_rate(args.input_csv, args.outfolder, args.dataset)
+
+
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Evaluate full datasets.")
+    parser.add_argument('input_csv', type=str, help='Path to all stats file')
+    parser.add_argument('outfolder', type=str, help='Path to all stats file')
+    parser.add_argument('dataset', type=str, help='which dataset')
+    args = parser.parse_args()
+
+    outfolder = args.outfolder
+    if not os.path.exists(outfolder):
+        os.makedirs(outfolder)
+    main(args)
+
