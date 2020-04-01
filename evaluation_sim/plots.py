@@ -28,9 +28,9 @@ def total_error_rate(input_csv, outfolder, dataset):
     # print(len(df))
     # indata = df.loc[df['q_acc'] == df['r_acc']]
     # print(len(indata))
-    data = indata[indata.read_type == 'original']
+    data = indata[indata.type == 'original']
     sns.distplot(data['error_rate'], norm_hist=False,  kde=False, label='Original', bins=100, hist_kws=dict(alpha=0.5))
-    data =indata[indata.read_type == 'corrected']
+    data =indata[indata.type == 'corrected']
     sns.distplot(data['error_rate'], norm_hist=False, kde=False, label='Corrected', bins=100, hist_kws=dict(alpha=0.5))
 
     plt.xticks(np.arange(0, 10, step=1))
@@ -40,11 +40,11 @@ def total_error_rate(input_csv, outfolder, dataset):
     plt.ylabel("Frequency")
     plt.legend(prop={'size': 12})
 
-    orig = indata[indata['read_type']=='original']
+    orig = indata[indata['type']=='original']
     print(orig.median(axis = 0))
     print(orig.sum(axis = 0))
 
-    corr = indata[indata['read_type']=='corrected']
+    corr = indata[indata['type']=='corrected']
     print(corr.median(axis = 0))
     print(corr.sum(axis = 0))
 
