@@ -246,7 +246,7 @@ def get_error_rates(input_csv, dataset, read_to_infer = "corrected"):
     errors = [sum(inses), sum(dels), sum(subses), sum(matcheses), tot_bases]
     error_types = ["ins","del","subs","matches","tot_bases"]
     for err, err_type in zip(errors, error_types) :
-        print("{0},{1},{2},{3},{4},{5}".format(dataset, read_to_infer, err_type, err))
+        print("{0},{1},{2},{3}".format(dataset, read_to_infer, err_type, err/float(tot_bases)))
 
         # print("type,ins,del,subs,matches,tot_bases")
     # print( "{0},{1},{2},{3},{4},{5}".format(read_to_infer,sum(inses),sum(dels), sum(subses), sum(matcheses), tot_bases))
