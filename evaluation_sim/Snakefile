@@ -197,7 +197,7 @@ rule plots_subsampling:
            error_rates_file = error_rates_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/1/{abundance}/results.csv"
     output: error_rate_plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_subsample_error_rate.pdf",
             abundance_plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_subsample_abundance.pdf"
-
+    run:
         eval_dir = config["ROOT_IN"] + "/evaluation_sim/"
         shell("python {eval_dir}/plot_error_rates.py  {input.error_rates_file}  {output.error_rate_plot} ")
         shell("python {eval_dir}/plot_abundance_diff.py  {input.abundance_file}  {output.abundance_plot} ")
