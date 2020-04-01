@@ -60,12 +60,12 @@ rule all:
           config["ROOT_OUT"] + "/evaluation_simulated/chr6/3500000/uneven/abundance.csv",
           config["ROOT_OUT"] + "/evaluation_simulated/chr6/3500000/uneven/results.csv",
           config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/abundance.csv",
-          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/results.csv"
+          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/results.csv",
           #   config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/abundance.csv",
           # config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/results.csv",
           #config["ROOT_OUT"], "eval_sim_table.csv"),
           #config["ROOT_OUT"], "controlled.csv")
-
+          config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz"
 
 # rule simulation:
 #     input: config["ROOT_OUT"] + "/eval_sim_table.csv"
@@ -184,7 +184,7 @@ rule overcorrection_analysis:
 
 
 rule plots_full:
-    input: sim_csv = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/999/{abundance}/results.csv"
+    input: sim_csv = config["ROOT_OUT"] + "/evaluation_simulated/chr6/3500000/uneven/results.csv"
     output: plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_full.pdf"
     run:
         eval_dir = config["ROOT_IN"] + "/evaluation_sim/"
@@ -193,8 +193,8 @@ rule plots_full:
 
 
 rule plots_subsampling:
-    input: abundance_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/1/{abundance}/abundance.csv",
-           error_rates_file = error_rates_file = config["ROOT_OUT"] + "/evaluation_simulated/{dataset}/1/{abundance}/results.csv"
+    input: abundance_file = config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/abundance.csv",
+           error_rates_file = config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/results.csv"
     output: error_rate_plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_subsample_error_rate.pdf",
             abundance_plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_subsample_abundance.pdf"
     run:
@@ -206,7 +206,7 @@ rule plots_subsampling:
 
 
 rule zip_plots:
-    input: plot1 = rules.full_plots.output.plot, 
+    input: plot1 = rules.plots_full.output.plot, 
            plot2 = rules.plots_subsampling.output.abundance_plot,
            plot3 = rules.plots_subsampling.output.error_rate_plot
     output: plots_zip = config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz"
