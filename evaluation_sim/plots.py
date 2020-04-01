@@ -29,9 +29,9 @@ def total_error_rate(input_csv, outfolder, dataset):
     # indata = df.loc[df['q_acc'] == df['r_acc']]
     # print(len(indata))
     data = indata[indata.type == 'original']
-    sns.distplot(data['error_rate'], norm_hist=False,  kde=False, label='Original', bins=100, hist_kws=dict(alpha=0.5))
+    sns.distplot(data['err_rate'], norm_hist=False,  kde=False, label='Original', bins=100, hist_kws=dict(alpha=0.5))
     data =indata[indata.type == 'corrected']
-    sns.distplot(data['error_rate'], norm_hist=False, kde=False, label='Corrected', bins=100, hist_kws=dict(alpha=0.5))
+    sns.distplot(data['err_rate'], norm_hist=False, kde=False, label='Corrected', bins=100, hist_kws=dict(alpha=0.5))
 
     plt.xticks(np.arange(0, 10, step=1))
     plt.xlim(0,10)
