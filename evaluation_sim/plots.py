@@ -22,36 +22,74 @@ from matplotlib import pyplot
 
 
 
+# def total_error_rate(input_csv, outfolder, dataset):
+
+#     indata = pd.read_csv(input_csv)
+#     # print(len(df))
+#     # indata = df.loc[df['q_acc'] == df['r_acc']]
+#     # print(len(indata))
+#     data = indata[indata.type == 'original']
+#     sns.distplot(data['err_rate'], norm_hist=False,  kde=False, label='Original', bins=100, hist_kws=dict(alpha=0.5))
+#     data =indata[indata.type == 'corrected']
+#     sns.distplot(data['err_rate'], norm_hist=False, kde=False, label='Corrected', bins=100, hist_kws=dict(alpha=0.5))
+
+#     plt.xticks(np.arange(0, 10, step=1))
+#     plt.xlim(0,10)
+#     plt.xlabel("Error rate (%)")
+#     # plt.xlabel("Difference to HG38 (%)")
+#     plt.ylabel("Frequency")
+#     plt.legend(prop={'size': 12})
+
+#     # orig = indata[indata['type']=='original']
+#     # print(orig.median(axis = 0))
+#     # print(orig.sum(axis = 0))
+
+#     # corr = indata[indata['type']=='corrected']
+#     # print(corr.median(axis = 0))
+#     # print(corr.sum(axis = 0))
+
+#     plt.savefig(os.path.join(outfolder, dataset+ "_full.eps"))
+#     plt.savefig(os.path.join(outfolder, dataset+ "_full.pdf"))
+#     plt.close()
+
 def total_error_rate(input_csv, outfolder, dataset):
+    pd.set_option("display.precision", 8)
+    df = pd.read_csv(input_csv)
+    df_corr = df.loc[df['read_type'] == 'corrected']
+    
+    median_error =  df_corr['error_rate'].median()
+    df_corr['subs_rate'] = df_corr['subs']/df_corr['aligned_length']
+    df_corr['ins_rate'] = df_corr['ins']/df_corr['aligned_length']
+    df_corr['del_rate'] = df_corr['del']/df_corr['aligned_length']
 
-    indata = pd.read_csv(input_csv)
-    # print(len(df))
-    # indata = df.loc[df['q_acc'] == df['r_acc']]
-    # print(len(indata))
-    data = indata[indata.type == 'original']
-    sns.distplot(data['err_rate'], norm_hist=False,  kde=False, label='Original', bins=100, hist_kws=dict(alpha=0.5))
-    data =indata[indata.type == 'corrected']
-    sns.distplot(data['err_rate'], norm_hist=False, kde=False, label='Corrected', bins=100, hist_kws=dict(alpha=0.5))
+    print("median error rate/subs/ins/del corrected:", median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
+    # sys.exit()
+    
+    df_orig = df.loc[df['read_type'] == 'original']
 
-    plt.xticks(np.arange(0, 10, step=1))
-    plt.xlim(0,10)
-    plt.xlabel("Error rate (%)")
-    # plt.xlabel("Difference to HG38 (%)")
-    plt.ylabel("Frequency")
-    plt.legend(prop={'size': 12})
+    median_error =  df_orig['error_rate'].median()
+    df_orig['subs_rate'] = df_orig['subs']/df_orig['aligned_length']
+    df_orig['ins_rate'] = df_orig['ins']/df_orig['aligned_length']
+    df_orig['del_rate'] = df_orig['del']/df_orig['aligned_length']
+    # print(df_orig['del_rate'])
 
-    orig = indata[indata['type']=='original']
-    print(orig.median(axis = 0))
-    print(orig.sum(axis = 0))
+    print("median error rate/subs/ins/del original:",median_error, 100*df_orig['subs_rate'].median(), 100*df_orig['ins_rate'].median(), 100*df_orig['del_rate'].median())
 
-    corr = indata[indata['type']=='corrected']
-    print(corr.median(axis = 0))
-    print(corr.sum(axis = 0))
+    error_rate_orig = df_orig['error_rate'].tolist()
+    error_rate_corr = df_corr['error_rate'].tolist()
+    print("total number of original reads aligned:", len(error_rate_orig))
+    print("total number of corrected reads aligned:", len(error_rate_corr))
 
+    # bins = [0.1*i for i in range(300)]
+    pyplot.hist(error_rate_corr, 100, range=[0, 20], alpha=0.5, label='Corrected')
+    pyplot.hist(error_rate_orig, 100, range=[0, 20], alpha=0.5, label='Original')
+    pyplot.legend(loc='upper right')
+    # pyplot.xlabel("Difference to genome (%)")
+    pyplot.xlabel("Error rate (%)")
+    pyplot.ylabel("Read count")
     plt.savefig(os.path.join(outfolder, dataset+ "_full.eps"))
     plt.savefig(os.path.join(outfolder, dataset+ "_full.pdf"))
     plt.close()
-
 
 
 def get_error_rates(input_csv, dataset, read_to_infer = "corrected"):

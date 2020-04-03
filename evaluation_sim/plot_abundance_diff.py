@@ -5,7 +5,7 @@ import os
 import random
 try:
     import matplotlib
-    matplotlib.use('Agg')
+    matplotlib.use('TkAgg')
     import matplotlib.pyplot as plt
 except (ImportError, RuntimeError):
     print("COULD not import matplotlib")
@@ -59,7 +59,7 @@ for row in list_of_list:
         y.append(ed_read_to_true)
         overcorrection_amount.append(ed_read_to_true - ed_read_to_aligned)
         abundance.append(ab)
-
+        print(ab)
         if ed_read_to_true - ed_read_to_aligned > 15:
             overcorr_and_ab[16][ab] += 1
         else:
@@ -92,23 +92,7 @@ for acc in read_annot:
         wrong_in_both.append(ed_orig)
 
 print("over corrected:", len(overcorrection_amount) )
-# print(len(wrong_in_both), len(wrong_in_orig), len(wrong_in_corr))
 print(abundance)
-# # print(wrong_in_both)
-# print(wrong_in_orig)
-# # print(sum(wrong_in_both)/float(len(wrong_in_both)))
-# # print(sum(wrong_in_orig)/float(len(wrong_in_orig)))
-# # print(sum(wrong_in_corr)/float(len(wrong_in_corr)))
-# print(wrong_in_corr)
-# print(both_good, orig_good, corr_good, both_bad)
-# pyplot.hist(wrong_in_corr, 200, alpha=0.5, label='Corrected')
-# pyplot.hist(wrong_in_orig, 200, alpha=0.5, label='Original')
-# # plt.xscale('log')
-# pyplot.legend(loc='upper right')
-# pyplot.xlabel("Local edit distance to true ref")
-# pyplot.ylabel("Count")
-# plt.savefig(sys.argv[2] + '.eps')
-# plt.savefig(sys.argv[2])
 
 print(len([ed for ed in overcorrection_amount if ed <=15]))
 print(len([ed for ed in overcorrection_amount if ed <=5]))
@@ -125,13 +109,6 @@ plt.savefig(sys.argv[2] + '.eps')
 plt.savefig(sys.argv[2])
 
 print(overcorr_and_ab)
-
-# import numpy as np; np.random.seed(0)
-# uniform_data = np.random.rand(10, 12)
-# print(uniform_data)
-# flights = sns.load_dataset("flights")
-# print(flights)
-# d = {"overcorrection_amount" : overcorrection_amount, "abundance" : abundance}
 df = pd.DataFrame(overcorr_and_ab)
 df = df.reindex(sorted(df.columns), axis=1)
 df = df.reindex(sorted(df.index, reverse=True), axis=0)
@@ -145,20 +122,7 @@ ax.set_ylabel("Abundance")
 ax.set_xlabel("Overcorrection (edit distance)")
 
 plt.savefig(sys.argv[2]+ '_heatmap.pdf')
-# ax = sns.scatterplot(x="overcorrection_amount", y="abundance", data=df)
-# plt.savefig(sys.argv[2]+ '_scatter.pdf')
-# plt.savefig(sys.argv[2]+ '_scatter.eps')
+print("plotting", sys.argv[2]+ '_heatmap.pdf')
+plt.close()
 
-# d = {"ed_read_to_aligned" : x, "ed_read_to_true" : y}
-# df = pd.DataFrame(d)
-# ax = sns.scatterplot(x='ed_read_to_true', y='ed_read_to_aligned', alpha= 0.5, data = df)
-# plt.savefig(sys.argv[2] + '.eps')
-# plt.savefig(sys.argv[2])
-
-# ax = sns.lineplot(x="transcript_abundance", y="is_tp",  hue="read_type", 
-#                   ci = 'sd', data=indata)
-# ax.set_ylabel("Fraction correctly aligned back to true transcript")
-# ax.set_xlabel("True transcript abundance")
-# plt.savefig(sys.argv[2])
-# plt.close()
 
