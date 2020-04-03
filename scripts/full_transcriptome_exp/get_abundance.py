@@ -216,8 +216,8 @@ def get_abundance_aligned_reads(sam_file):
         transcript_id = read_acc.split("|")[2].split("_")[0]
         sim_read_nr = read_acc.split("|")[2].split("_")[1]
         if transcript_id not in transcript_cov_true or sim_read_nr >= transcript_cov_true[transcript_id]:
-            transcript_cov_true[transcript_id] = sim_read_nr +=1
-    
+            transcript_cov_true[transcript_id] = sim_read_nr + 1
+
         if read.flag == 0 or read.flag == 16:
             # print(read.is_reverse)
             # print(read.cigartuples)
