@@ -213,15 +213,17 @@ def get_abundance_aligned_reads(sam_file):
     optimal_cigar_str = {}
     edit_distance_to_aligned = {}
     for read in SAM_file.fetch(until_eof=True):
+        
+        read_acc = read.query_name
         transcript_id = read_acc.split("|")[2].split("_")[0]
         sim_read_nr = read_acc.split("|")[2].split("_")[1]
+        
         if transcript_id not in transcript_cov_true or sim_read_nr >= transcript_cov_true[transcript_id]:
             transcript_cov_true[transcript_id] = sim_read_nr + 1
 
         if read.flag == 0 or read.flag == 16:
             # print(read.is_reverse)
             # print(read.cigartuples)
-            read_acc = read.query_name
 
             optimal_cigar_str[read_acc] = read.cigarstring
             ins = sum([length for type_, length in read.cigartuples if type_ == 1])
