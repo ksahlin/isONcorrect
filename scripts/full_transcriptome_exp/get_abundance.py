@@ -216,7 +216,7 @@ def get_abundance_aligned_reads(sam_file):
         
         read_acc = read.query_name
         transcript_id = read_acc.split("|")[2].split("_")[0]
-        sim_read_nr = read_acc.split("|")[2].split("_")[1]
+        sim_read_nr = int(read_acc.split("|")[2].split("_")[1])
         
         if transcript_id not in transcript_cov_true or sim_read_nr >= transcript_cov_true[transcript_id]:
             transcript_cov_true[transcript_id] = sim_read_nr + 1
