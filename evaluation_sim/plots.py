@@ -92,7 +92,7 @@ def get_error_rates(input_csv, dataset, read_to_infer = "corrected"):
     inses_rates = [ (inses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
     subses_rates = [ (subses[i])/ (dels[i] + inses[i] + subses[i] + matcheses[i]) for i in range(len(matcheses))]
     # print(sorted(err_rates1)[int(len(err_rates1)/2) ])
-    print(sorted(err_rates2)[int(len(err_rates2)/2) ])
+    print("median error rate:", sorted(err_rates2)[int(len(err_rates2)/2) ])
     print("median dels_rates", sorted(dels_rates)[int(len(dels_rates)/2) ])
     print("median inses_rates",sorted(inses_rates)[int(len(inses_rates)/2) ])
     print("median subses_rates", sorted(subses_rates)[int(len(subses_rates)/2) ])
