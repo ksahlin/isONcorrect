@@ -55,28 +55,27 @@ from matplotlib import pyplot
 def total_error_rate(input_csv, outfolder, dataset):
     pd.set_option("display.precision", 8)
     df = pd.read_csv(input_csv)
-    df_corr = df.loc[df['read_type'] == 'corrected']
+    df_corr = df.loc[df['type'] == 'corrected']
     
-    median_error =  df_corr['error_rate'].median()
-    df_corr['subs_rate'] = df_corr['subs']/df_corr['aligned_length']
-    df_corr['ins_rate'] = df_corr['ins']/df_corr['aligned_length']
-    df_corr['del_rate'] = df_corr['del']/df_corr['aligned_length']
+    median_error =  df_corr['err_rate'].median()
+    # df_corr['subs_rate'] = df_corr['subs']/df_corr['aligned_length']
+    # df_corr['ins_rate'] = df_corr['ins']/df_corr['aligned_length']
+    # df_corr['del_rate'] = df_corr['del']/df_corr['aligned_length']
 
-    print("median error rate/subs/ins/del corrected:", median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
-    # sys.exit()
+    #print("median error rate/subs/ins/del corrected:", median_error, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
     
-    df_orig = df.loc[df['read_type'] == 'original']
+    df_orig = df.loc[df['type'] == 'original']
 
-    median_error =  df_orig['error_rate'].median()
-    df_orig['subs_rate'] = df_orig['subs']/df_orig['aligned_length']
-    df_orig['ins_rate'] = df_orig['ins']/df_orig['aligned_length']
-    df_orig['del_rate'] = df_orig['del']/df_orig['aligned_length']
+    median_error =  df_orig['err_rate'].median()
+    # df_orig['subs_rate'] = df_orig['subs']/df_orig['aligned_length']
+    # df_orig['ins_rate'] = df_orig['ins']/df_orig['aligned_length']
+    # df_orig['del_rate'] = df_orig['del']/df_orig['aligned_length']
     # print(df_orig['del_rate'])
 
-    print("median error rate/subs/ins/del original:",median_error, 100*df_orig['subs_rate'].median(), 100*df_orig['ins_rate'].median(), 100*df_orig['del_rate'].median())
+    #print("median error rate/subs/ins/del original:",median_error, 100*df_orig['subs_rate'].median(), 100*df_orig['ins_rate'].median(), 100*df_orig['del_rate'].median())
 
-    error_rate_orig = df_orig['error_rate'].tolist()
-    error_rate_corr = df_corr['error_rate'].tolist()
+    error_rate_orig = df_orig['err_rate'].tolist()
+    error_rate_corr = df_corr['err_rate'].tolist()
     print("total number of original reads aligned:", len(error_rate_orig))
     print("total number of corrected reads aligned:", len(error_rate_corr))
 
