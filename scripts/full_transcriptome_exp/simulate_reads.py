@@ -103,17 +103,17 @@ def main(args):
         for i, acc in enumerate(sequence_transcripts):
             transcript = sequence_transcripts[acc]
             abundance = random.choice(abundance_vector)
-            print(abundance)
+            # print(abundance)
             for a in range(abundance):
                 read_acc, read, qual, del_, ins, subs  = simulate_read(a, acc, transcript, error_lvls)
-                tot_err = (del_ + ins + subs)/float(len(transcript))
+                tot_err = (del_ + ins + subs)/float(len(transcript)+ ins)
                 ont_reads[read_acc] = (read, qual)
                 args.logfile.write("del:{0}, ins:{1}, subs:{2}, tot_err:{3}\n".format(del_, ins, subs, tot_err))
                 tot_del_ += del_
                 tot_ins += ins
                 tot_subs += subs
                 tot_len += len(transcript)
-                read_errors.append( (del_ + ins +subs)/float(len(transcript))  )
+                read_errors.append( (del_ + ins +subs)/float(len(transcript) + ins)  )
             if i % 500 == 0:
                 print(i, "transcripts simulated from.")                
 
@@ -137,7 +137,7 @@ def main(args):
             tot_ins += ins
             tot_subs += subs
             tot_len += len(transcript)
-            read_errors.append( (del_ + ins +subs)/float(len(transcript))  )
+            read_errors.append( (del_ + ins +subs)/float(len(transcript) + ins)  )
             if i % 5000 == 0:
                 print(i, "reads simulated.")
     else:
