@@ -308,6 +308,10 @@ def main(args):
             ed_btw_transcripts = "-" 
             ed_read_to_true = edit_distance_to_aligned[read_acc]
             ed_read_to_aligned = edit_distance_to_aligned[read_acc]
+        elif aligned_to == 'unaligned':
+            res = edlib.align(reads[read_acc], refs[true_transcript], mode="NW")
+            print(args.type, true_transcript_abundance, "ed:", res, read_acc)
+            continue
         else:
             res1 = edlib.align(refs[aligned_to], refs[true_transcript], mode="HW")
             res2 = edlib.align(refs[true_transcript], refs[aligned_to],  mode="HW")
