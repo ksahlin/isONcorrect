@@ -137,7 +137,7 @@ run_isoncorrect [--t cores]  --fastq_folder outfolder/clustering/fastq_files  --
 
 # OPTIONAL BELOW TO MERGE ALL CORRECTED READS INTO ONE FILE
 touch all_corrected_reads.fq
-for f in in outfolder/clustering/fastq_files/*/corrected_reads.fastq; 
+for f in in /outfolder/correction/*/corrected_reads.fastq; 
 do 
   cat {f} >> all_corrected_reads.fq
 done
