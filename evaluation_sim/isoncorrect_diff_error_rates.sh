@@ -12,8 +12,8 @@
 ROOT_IN="/galaxy/home/ksahlin/prefix/source/isONcorrect/"
 BASE_OUT="/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/"
 plot_script_dir="/galaxy/home/ksahlin/prefix/source/isONcorrect/evaluation/"
-experiment_dir=$eval_dir/full_transcriptome_exp/
 eval_dir="/galaxy/home/ksahlin/prefix/source/isONcorrect/scripts/"
+experiment_dir=$eval_dir/full_transcriptome_exp/
 ref="/galaxy/home/ksahlin/prefix/source/isONcorrect/test_data/chr6_nonredundant.fa"
 
 
