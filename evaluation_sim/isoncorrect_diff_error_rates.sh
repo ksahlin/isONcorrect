@@ -19,18 +19,19 @@ ref="/galaxy/home/ksahlin/prefix/source/isONcorrect/test_data/chr6_nonredundant.
 
 # SIM CONTROLLED READS 12% ERROR
 sim_reads=$BASE_OUT"/data/chr6/1/uneven/reads_12.fq"
-python $experiment_dir/simulate_reads.py $ref $sim_reads 1 --uneven --subsampling_experiment --error_level 12
+#python $experiment_dir/simulate_reads.py $ref $sim_reads 1 --uneven --subsampling_experiment --error_level 12
 
 outfolder="/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_sim_error_rates/12"
 isonclust="/galaxy/home/ksahlin/prefix/source/isONclust/"
-python $isonclust/isONclust --t 50 --k 13 --w 20  --q 4.0 --fastq $sim_reads  --outfolder $outfolder"/isonclust/"
+python $isonclust/isONclust --t 50 --k 11 --w 20  --q 4.0 --fastq $sim_reads  --outfolder $outfolder"/isonclust/"
 python $isonclust/isONclust write_fastq --clusters $outfolder"/isonclust/final_clusters.tsv" --fastq $sim_reads --outfolder $outfolder"/isonclust/fastq/" --N 1
-python $ROOT_IN/run_isoncorrect  --fastq_folder $outfolder"/isonclust/fastq/"  --outfolder $outfolder"/isoncorrect/" --set_w_dynamically --t 62
+python $ROOT_IN/run_isoncorrect --k 8 --fastq_folder $outfolder"/isonclust/fastq/"  --outfolder $outfolder"/isoncorrect/" --set_w_dynamically --t 62
 corrected_reads=$outfolder"/isoncorrect/isONcorrect.fq"
 touch $corrected_reads
-for f in in $outfolder/isoncorrect/*/corrected_reads.fastq; 
+FILES=$outfolder/isoncorrect/*/corrected_reads.fastq
+for f in $FILES 
 do 
-  cat {f} >> $outfolder"/isoncorrect/isONcorrect.fq"
+  cat $f >> $outfolder"/isoncorrect/isONcorrect.fq"
 done
 
 # ERROR RATE ANALYSIS
@@ -55,7 +56,7 @@ python $experiment_dir/get_abundance.py $original_reads_aligned $ref $original_r
 
 
 
-# SIM CONTROLLED READS 12% ERROR
+# SIM CONTROLLED READS 4% ERROR
 
 sim_reads=$BASE_OUT"/data/chr6/1/uneven/reads_4.fq"
 python $experiment_dir/simulate_reads.py $ref $sim_reads 1 --uneven --subsampling_experiment --error_level 4
@@ -67,9 +68,10 @@ python $isonclust/isONclust write_fastq --clusters $outfolder"/isonclust/final_c
 python $ROOT_IN/run_isoncorrect  --fastq_folder $outfolder"/isonclust/fastq/"  --outfolder $outfolder"/isoncorrect/" --set_w_dynamically --t 62
 corrected_reads=$outfolder"/isoncorrect/isONcorrect.fq"
 touch $corrected_reads
-for f in in $outfolder/isoncorrect/*/corrected_reads.fastq; 
+FILES=$outfolder/isoncorrect/*/corrected_reads.fastq
+for f in $FILES 
 do 
-  cat {f} >> $outfolder"/isoncorrect/isONcorrect.fq"
+  cat $f >> $outfolder"/isoncorrect/isONcorrect.fq"
 done
 
 # ERROR RATE ANALYSIS
