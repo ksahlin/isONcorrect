@@ -29,7 +29,7 @@ df = pd.read_csv(data)
 print(df)
 
 # y=sys.argv[3]
-g = sns.catplot(x="dataset", y='fraction', col="type",
+g = sns.catplot(x="dataset", y='fraction', col="type", col_order=["original", "corrected"],
             data=df, hue="error_type", hue_order= ["subs", "ins", "del"],
             kind="bar",  aspect=1)
 
