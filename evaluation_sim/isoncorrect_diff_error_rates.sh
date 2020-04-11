@@ -59,7 +59,7 @@ python $experiment_dir/get_abundance.py $original_reads_aligned $ref $original_r
 # SIM CONTROLLED READS 4% ERROR
 
 sim_reads=$BASE_OUT"/data/chr6/1/uneven/reads_4.fq"
-python $experiment_dir/simulate_reads.py $ref $sim_reads 1 --uneven --subsampling_experiment --error_level 4
+#python $experiment_dir/simulate_reads.py $ref $sim_reads 1 --uneven --subsampling_experiment --error_level 4
 
 outfolder="/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_sim_error_rates/4"
 isonclust="/galaxy/home/ksahlin/prefix/source/isONclust/"
