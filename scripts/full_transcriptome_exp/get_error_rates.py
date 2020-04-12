@@ -104,8 +104,8 @@ def get_error_profile(corr_seq, true_seq):
     # indels =  insertions + deletions
     subs = len([1 for n1, n2 in zip(read_alignment, ref_alignment) if n1 != n2 and n1 != "-" and n2 != "-"] )
     matches = len([1 for n1, n2 in zip(read_alignment, ref_alignment) if n1 == n2 and n1 != "-" and n2 != "-"] )
-    err_rate = round(100 * float(subs + insertions + deletions) / len(true_seq + insertions), 2)
-    read_length = true_seq
+    err_rate = round(100 * float(subs + insertions + deletions) / (len(true_seq) + insertions), 2)
+    read_length = len(true_seq)
     return tot, insertions, deletions, subs, matches, err_rate
 
 
