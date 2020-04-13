@@ -59,7 +59,7 @@ for row in list_of_list:
         y.append(ed_read_to_true)
         overcorrection_amount.append(ed_read_to_true - ed_read_to_aligned)
         abundance.append(ab)
-        print(ab)
+        # print(ab)
         if ed_read_to_true - ed_read_to_aligned > 15:
             overcorr_and_ab[16][ab] += 1
         else:
@@ -108,21 +108,23 @@ pyplot.ylabel("Count")
 plt.savefig(sys.argv[2] + '.eps')
 plt.savefig(sys.argv[2])
 
-print(overcorr_and_ab)
+# print(overcorr_and_ab)
 df = pd.DataFrame(overcorr_and_ab)
 df = df.reindex(sorted(df.columns), axis=1)
 df = df.reindex(sorted(df.index, reverse=True), axis=0)
 # df.sort_index(level=1, ascending=True, inplace=True)
 
-print(df)
+# print(df)
 plt.clf()
 xticks= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,">15"]
-ax = sns.heatmap(df, cmap='coolwarm', annot=True, xticklabels = xticks)
+#yticks= [1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100][::-1]
+plt.figure(figsize = (8,5))
+ax = sns.heatmap(df, cmap='coolwarm', annot=True, xticklabels = xticks, vmin=0, vmax=10,fmt='g', linewidths=.7)
 ax.set_ylabel("Abundance")
 ax.set_xlabel("Overcorrection (edit distance)")
 
 plt.savefig(sys.argv[2]+ '_heatmap.pdf')
-print("plotting", sys.argv[2]+ '_heatmap.pdf')
+# print("plotting", sys.argv[2]+ '_heatmap.pdf')
 plt.close()
 
 
