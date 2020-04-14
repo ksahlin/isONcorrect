@@ -82,7 +82,7 @@ rule isONclust:
         outfolder = config["ROOT_OUT"] + "/clustering/SIRV_iso_cov/{0}/{1}/{2}/".format(wildcards.nr_isoforms, wildcards.nr_reads, wildcards.exp_id)
         mkdir_p(outfolder)
         # shell("source activate py36")
-        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust --k 13 --w 20  --q 4.0 --fastq {input.fastq}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
+        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust --t 1 --k 13 --w 20  --q 4.0 --fastq {input.fastq}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
     
 
 rule clusters_to_fastq:
@@ -142,7 +142,7 @@ rule evaluate_sirv_subsample:
                                                         {input.corrected_reads} {ref} {outfolder}")
 
 rule sirv_summary:
-    input: all_experiments = expand(rules.evaluate_sirv_subsample.output.csv_file, nr_isoforms=[1,4,8], nr_reads = list(range(1,21)), exp_id = list(range(1,11)) )
+    input: all_experiments = expand(rules.evaluate_sirv_subsample.output.csv_file, nr_isoforms=[1,4,8], nr_reads = list(range(1,2)), exp_id = list(range(1,2)) )
     output: summary_table = config["ROOT_OUT"] + "/sirv_iso_cov.csv"
     run:
         shell("> {output.summary_table}")
