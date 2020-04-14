@@ -69,7 +69,7 @@ rule sirv_subsample:
         mkdir_p(config["ROOT_OUT"] + "/data/SIRV_iso_cov/{0}/{1}/".format(wildcards.nr_reads, wildcards.exp_id ) )
         alignments = config["ROOT_OUT"] + "/evaluation_biological/SIRV/999/original_to_transcripts.sam" # obtained from full experiments pipeline in "evaluation" folder
         # ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
-        shell("python {inbase}/evaluation_sirv/sirv_subsample_depth.py {input.fastq} {alignments} {output.subsampled_fastq} {wildcards.nr_reads}")
+        shell("python {inbase}/evaluation_sirv_iso_cov/sirv_subsample_isoforms.py {input.fastq} {alignments} {output.subsampled_fastq} {wildcards.nr_reads} {wildcards.nr_isoforms}")
 
 
 rule isONclust:

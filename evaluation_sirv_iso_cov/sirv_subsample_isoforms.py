@@ -8,7 +8,6 @@ import pysam
 from collections import defaultdict
 
 
-
 '''
     Below code taken from https://github.com/lh3/readfq/blob/master/readfq.py
 '''
@@ -45,48 +44,50 @@ def readfq(fp): # this is a generator function
                 break
 
 
-def get_subsamples(transcript_cov, depth):
+def get_subsamples(transcript_cov, depth, nr_isoforms):
     subsamples = {}
     already_ampled = set()
-    for tr_acc in transcript_cov:
-        print(tr_acc, len(transcript_cov[tr_acc]))
-        subset = random.sample(transcript_cov[tr_acc], depth) # this is without replacement
+    for gene_id in transcript_cov:
+        trancripts = random.sample(transcript_cov[gene_id], nr_isoforms)
+        for tr_acc in trancripts:
+            # print(tr_acc, len(transcript_cov[tr_acc]))
+            subset = random.sample(transcript_cov[gene_id][tr_acc], depth) # this is without replacement
         subsamples[tr_acc] = subset
     return subsamples
 
-    # for subsample_size in [3,5,10,20]: #,50,100,200,500]:
-    #     large_enough_cov = [tr_id for tr_id in transcript_cov.keys() if len(transcript_cov[tr_id]) >= subsample_size]
-    #     sampled_tr_id = random.choice(large_enough_cov)
-    #     while sampled_tr_id in already_ampled:
-    #         sampled_tr_id = random.choice(large_enough_cov)
-
-    #     subset = random.sample(transcript_cov[sampled_tr_id], subsample_size)
-    #     subsamples[subsample_size] = (sampled_tr_id, subset)
-    #     already_ampled.add(sampled_tr_id)
+    # subsamples = {}
+    # already_ampled = set()
+    # for tr_acc in transcript_cov:
+    #     print(tr_acc, len(transcript_cov[tr_acc]))
+    #     subset = random.sample(transcript_cov[tr_acc], depth) # this is without replacement
+    #     subsamples[tr_acc] = subset
+    # return subsamples
 
 
 
 def get_abundance_aligned_reads(sam_file):
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     references = SAM_file.references
-    
-    transcript_cov = defaultdict(set)
-    amgiguous_primary = defaultdict(set)
+    valid_genes = = set(["SIRV3", "SIRV5", "SIRV6"])
+    transcript_cov = defaultdict(lambda: defaultdict(set))
+    # amgiguous_primary = defaultdict(set)
     for read in SAM_file.fetch(until_eof=True):
         if (read.flag == 0 or read.flag == 16):
             transcript_id = read.reference_name
-            transcript_cov[transcript_id].add(read.query_name)
+            if transcript_id[:5] in valid_genes:
+                gene_id = transcript_id[4]
+                transcript_cov[gene_id][transcript_id].add(read.query_name)
 
         # elif (read.flag == 0 or read.flag == 16) and read.mapping_quality == 0:
         #     transcript_id = read.reference_name
         #     amgiguous_primary[transcript_id].add(read.query_name)
 
-    return transcript_cov, amgiguous_primary
+    return transcript_cov
 
 def main(args):
-    transcript_cov, amgiguous_primary = get_abundance_aligned_reads(args.alignments)
+    transcript_cov = get_abundance_aligned_reads(args.alignments)
     print(len(transcript_cov))
-    subsamples = get_subsamples(transcript_cov, args.depth_per_transcript)
+    subsamples = get_subsamples(transcript_cov, args.depth_per_transcript, args.nr_isoforms)
     fastq = { acc : (seq,qual) for acc, (seq,qual) in readfq(open(args.fastq, 'r'))}
 
     outfile = open(args.outfile, "w")
@@ -106,6 +107,7 @@ if __name__ == '__main__':
     parser.add_argument('alignments', type=str, help='fastq file. ')
     parser.add_argument('outfile', type=str, help='Fastq file. ')
     parser.add_argument('depth_per_transcript', type=int, help='Depth per transcript.')
+    parser.add_argument('nr_isoforms', type=int, help='Number of nr_isoforms.')
 
     args = parser.parse_args()
 
