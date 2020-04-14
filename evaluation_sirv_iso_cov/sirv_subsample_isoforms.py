@@ -4,7 +4,7 @@ import argparse
 import sys, os
 import random
 import pysam
-
+import errno
 from collections import defaultdict
 
 
@@ -48,11 +48,13 @@ def get_subsamples(transcript_cov, depth, nr_isoforms):
     subsamples = {}
     already_ampled = set()
     for gene_id in transcript_cov:
-        trancripts = random.sample(transcript_cov[gene_id], nr_isoforms)
+        trancripts = random.sample(list(transcript_cov[gene_id]), nr_isoforms)
         for tr_acc in trancripts:
             # print(tr_acc, len(transcript_cov[tr_acc]))
             subset = random.sample(transcript_cov[gene_id][tr_acc], depth) # this is without replacement
-        subsamples[tr_acc] = subset
+            subsamples[tr_acc] = subset
+            # print(len(subsamples[tr_acc]))
+    # print(len(subsamples))
     return subsamples
 
     # subsamples = {}
@@ -68,15 +70,20 @@ def get_subsamples(transcript_cov, depth, nr_isoforms):
 def get_abundance_aligned_reads(sam_file):
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     references = SAM_file.references
-    valid_genes = = set(["SIRV3", "SIRV5", "SIRV6"])
+    valid_genes = set(["SIRV3", "SIRV5", "SIRV6"])
     transcript_cov = defaultdict(lambda: defaultdict(set))
     # amgiguous_primary = defaultdict(set)
+
     for read in SAM_file.fetch(until_eof=True):
         if (read.flag == 0 or read.flag == 16):
             transcript_id = read.reference_name
             if transcript_id[:5] in valid_genes:
                 gene_id = transcript_id[4]
                 transcript_cov[gene_id][transcript_id].add(read.query_name)
+    # except:
+    #     pass
+
+    # print(transcript_cov)
 
         # elif (read.flag == 0 or read.flag == 16) and read.mapping_quality == 0:
         #     transcript_id = read.reference_name
@@ -84,9 +91,20 @@ def get_abundance_aligned_reads(sam_file):
 
     return transcript_cov
 
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+        print("creating", path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
 def main(args):
     transcript_cov = get_abundance_aligned_reads(args.alignments)
-    print(len(transcript_cov))
+    print(len(transcript_cov), [len(transcript_cov[g]) for g in transcript_cov])
     subsamples = get_subsamples(transcript_cov, args.depth_per_transcript, args.nr_isoforms)
     fastq = { acc : (seq,qual) for acc, (seq,qual) in readfq(open(args.fastq, 'r'))}
 
@@ -110,6 +128,8 @@ if __name__ == '__main__':
     parser.add_argument('nr_isoforms', type=int, help='Number of nr_isoforms.')
 
     args = parser.parse_args()
-
+    dirname=os.path.dirname(args.outfile)
+    mkdir_p(dirname)
+    print(dirname)
     main(args)
 
