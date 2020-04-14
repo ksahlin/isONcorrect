@@ -162,7 +162,7 @@ rule sirv_summary:
                 if j == 0:
                     continue
                 
-                outfile.write("{0},{1},{2}\n".format(exp_id, nr_reads, nr_isoforms, ','.join(n for n in line.strip().split(',')) ))
+                outfile.write("{0},{1},{2},{3}\n".format(exp_id, nr_reads, nr_isoforms, ','.join(n for n in line.strip().split(',')) ))
 
 
 
