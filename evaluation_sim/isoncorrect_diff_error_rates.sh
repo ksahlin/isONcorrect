@@ -37,7 +37,7 @@ FILES=$outfolder/isoncorrect/*/corrected_reads.fastq
 # ERROR RATE ANALYSIS
 
 error_rates_file=$outfolder/results.csv
-#python $experiment_dir/get_error_rates.py $ref $sim_reads  $corrected_reads  > $error_rates_file
+python $experiment_dir/get_error_rates.py $ref $sim_reads  $corrected_reads  > $error_rates_file
 
 # OVERCORRECTION ANALYSIS
 
@@ -47,9 +47,9 @@ corrected_reads_aligned=$outfolder"/all_reads_after_correction_aligned.sam"
 sim_reads_aligned=$outfolder"/sim_reads_aligned.sam" #$BASE_OUT"/data/chr6/1/uneven/reads.sam"
 #/usr/bin/time -v  minimap2 --eqx -t 8 -a -k9 -w1 -f 0.000001  $ref $sim_reads >  $sim_reads_aligned
 abundance_file=$outfolder/"abundance.csv" 
-echo   "read_acc","aligned_to","transcript_abundance","is_tp","read_type","ed_btw_transcripts","ed_read_to_true","ed_read_to_aligned" > $abundance_file
-python $experiment_dir/get_abundance.py $corrected_reads_aligned $ref $corrected_reads   'corrected' >> $abundance_file
-python $experiment_dir/get_abundance.py $sim_reads_aligned $ref $sim_reads   'original' >> $abundance_file
+#echo   "read_acc","aligned_to","transcript_abundance","is_tp","read_type","ed_btw_transcripts","ed_read_to_true","ed_read_to_aligned" > $abundance_file
+#python $experiment_dir/get_abundance.py $corrected_reads_aligned $ref $corrected_reads   'corrected' >> $abundance_file
+#python $experiment_dir/get_abundance.py $sim_reads_aligned $ref $sim_reads   'original' >> $abundance_file
 
 
 
@@ -76,7 +76,7 @@ FILES=$outfolder/isoncorrect/*/corrected_reads.fastq
 # ERROR RATE ANALYSIS
 
 error_rates_file=$outfolder/results.csv
-#python $experiment_dir/get_error_rates.py $ref $sim_reads  $corrected_reads  > $error_rates_file
+python $experiment_dir/get_error_rates.py $ref $sim_reads  $corrected_reads  > $error_rates_file
 
 # OVERCORRECTION ANALYSIS
 
@@ -86,7 +86,7 @@ corrected_reads_aligned=$outfolder"/all_reads_after_correction_aligned.sam"
 sim_reads_aligned=$outfolder"/sim_reads_aligned.sam" #$BASE_OUT"/data/chr6/1/uneven/reads.sam"
 #/usr/bin/time -v  minimap2 --eqx -t 8 -a -k9 -w1 -f 0.000001  $ref $sim_reads >  $sim_reads_aligned
 abundance_file=$outfolder/"abundance.csv" 
-echo   "read_acc","aligned_to","transcript_abundance","is_tp","read_type","ed_btw_transcripts","ed_read_to_true","ed_read_to_aligned" > $abundance_file
-python $experiment_dir/get_abundance.py $corrected_reads_aligned $ref $corrected_reads   'corrected' >> $abundance_file
-python $experiment_dir/get_abundance.py $sim_reads_aligned $ref $sim_reads   'original' >> $abundance_file
+#echo   "read_acc","aligned_to","transcript_abundance","is_tp","read_type","ed_btw_transcripts","ed_read_to_true","ed_read_to_aligned" > $abundance_file
+#python $experiment_dir/get_abundance.py $corrected_reads_aligned $ref $corrected_reads   'corrected' >> $abundance_file
+#python $experiment_dir/get_abundance.py $sim_reads_aligned $ref $sim_reads   'original' >> $abundance_file
 
