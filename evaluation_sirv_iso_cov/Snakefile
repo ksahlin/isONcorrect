@@ -142,7 +142,7 @@ rule evaluate_sirv_subsample:
                                                         {input.corrected_reads} {ref} {outfolder}")
 
 rule sirv_summary:
-    input: all_experiments = expand(rules.evaluate_sirv_subsample.output.csv_file, nr_isoforms=[1,4,8], nr_reads = list(range(1,2)), exp_id = list(range(1,2)) )
+    input: all_experiments = expand(rules.evaluate_sirv_subsample.output.csv_file, nr_isoforms=[1,4,8], nr_reads = list(range(1,21)), exp_id = list(range(1,11)) )
     output: summary_table = config["ROOT_OUT"] + "/sirv_iso_cov.csv"
     run:
         shell("> {output.summary_table}")
