@@ -151,17 +151,18 @@ rule sirv_summary:
             
             #write header
             if i == 0:
-                outfile.write("experiment_id,nr_reads,acc,read_type,ins,del,subs,matches,error_rate,read_length,aligned_length,chr_id\n")
+                outfile.write("experiment_id,nr_reads,nr_isoforms,acc,read_type,ins,del,subs,matches,error_rate,read_length,aligned_length,chr_id\n")
                 # outfile.write("{0},{1},{2}\n".format(nr_reads, dataset, ','.join(n for n in line.strip().split(',')) ))
 
             exp_id = f.split('/')[-2]
             nr_reads = f.split('/')[-3]
+            nr_isoforms = f.split('/')[-4]
             for j, line in enumerate(open(f, 'r')):
                 # ignore header
                 if j == 0:
                     continue
                 
-                outfile.write("{0},{1},{2}\n".format(exp_id, nr_reads, ','.join(n for n in line.strip().split(',')) ))
+                outfile.write("{0},{1},{2}\n".format(exp_id, nr_reads, nr_isoforms, ','.join(n for n in line.strip().split(',')) ))
 
 
 

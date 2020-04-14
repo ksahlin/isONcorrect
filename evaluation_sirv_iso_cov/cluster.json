@@ -10,5 +10,41 @@
         "jobname" : "pipeline",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL"
+    },
+    "isoncorrect" : 
+    {
+        "jobname" : "isoncorrect",
+        "cpus-per-task" : "2",
+        "Nodes" : 1,
+        "mem" : "8G",
+        "runtime" : "14-00:00:00",
+        "mail" : "ksahlin@kth.se",
+        "mail_type" : "FAIL",
+        "exclude" : "c[8-11,15-16]"
+    },
+
+    "sirv_subsample" : 
+    {
+        "jobname" : "subsample",
+        "cpus-per-task" : "1",
+        "Nodes" : 1,
+        "mem" : "8G",
+        "runtime" : "4-00:00:00",
+        "mail" : "ksahlin@kth.se",
+        "mail_type" : "FAIL",
+        "exclude" : "c[8-11,15-16]"
+    },
+
+    "isONclust" : 
+    {
+        "jobname" : "isONclust",
+        "cpus-per-task" : "1",
+        "Nodes" : 1,
+        "mem" : "8G",
+        "runtime" : "7-00:00:00",
+        "mail" : "ksahlin@kth.se",
+        "mail_type" : "FAIL",
+        "exclude" : "c[8-11,15-16]"
     }
+
 }
