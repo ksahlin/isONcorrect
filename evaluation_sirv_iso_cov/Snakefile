@@ -66,14 +66,14 @@ rule sirv_subsample:
     run:
 
         inbase= config["ROOT_IN"]
-        mkdir_p(config["ROOT_OUT"] + "/data/SIRV_iso_cov/{0}/{1}/".format(wildcards.nr_reads, wildcards.exp_id ) )
+        mkdir_p(config["ROOT_OUT"] + "/data/SIRV_iso_cov/{0}/{1}/".format(wildcards.nr_isoforms, wildcards.nr_reads) )
         alignments = config["ROOT_OUT"] + "/evaluation_biological/SIRV/999/original_to_transcripts.sam" # obtained from full experiments pipeline in "evaluation" folder
         # ref = config["SIRV_TRANSCRIPTOME_DISTINCT"]
         shell("python {inbase}/evaluation_sirv_iso_cov/sirv_subsample_isoforms.py {input.fastq} {alignments} {output.subsampled_fastq} {wildcards.nr_reads} {wildcards.nr_isoforms}")
 
 
 rule isONclust:
-    input:  fastq = rules.sirv_subsample.output,
+    input:  fastq = rules.sirv_subsample.output.subsampled_fastq,
     output: time_and_mem =  config["ROOT_OUT"] + "/time_and_mem/SIRV_iso_cov/{nr_isoforms}/{nr_reads}/{exp_id}/time_and_mem.txt",
             clusters = config["ROOT_OUT"] + "/clustering/SIRV_iso_cov/{nr_isoforms}/{nr_reads}/{exp_id}/final_clusters.tsv" 
     run:
