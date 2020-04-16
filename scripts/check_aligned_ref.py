@@ -19,6 +19,7 @@ def check_same_region(corr_positions,orig_positions):
             pass
         else:
             cnt_diff += 1
+            print(c_id,o_id, read_id)
     return cnt_diff, cnt_unaligned
 
 def check_err_rate(corr_positions,orig_positions):
@@ -62,6 +63,13 @@ def main(args):
                 chr_id = "known"
                 ref_start = 0
                 ref_stop = 0
+            if args.sirv_iso_cov:
+                read_id = ",".join(row[:4])
+                read_type = row[4]
+                err_rate = float(row[9])
+                chr_id = row[12]
+                ref_start = 0
+                ref_stop = 0
             # print(chr_id,ref_start, ref_stop)
             if read_type == 'corrected':
                 corr_positions[read_id] = (chr_id, ref_start, ref_stop, err_rate)
@@ -73,6 +81,9 @@ def main(args):
     print("Total reads change location:", cnt_diff)
     print("Total reads aligned in origina format but unaligned after correction:", cnt_unaligned)
     print("Total reads higher error rate after:", cnt_broken)
+    print("Total reads original:", len(orig_positions))
+    print("Total reads corrected:", len(corr_positions))
+
 
     print("Total aligned orig:", len(orig_positions) )
     print("Total aligned corr:", len(corr_positions) )
@@ -88,6 +99,7 @@ if __name__ == '__main__':
     parser.add_argument('csv', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
     parser.add_argument('--dros', action="store_true", help='Dros.')
     parser.add_argument('--sirv', action="store_true", help='sirv.')
+    parser.add_argument('--sirv_iso_cov', action="store_true", help='sirv.')
     parser.add_argument('--sim', action="store_true", help='sim.')
     
     args = parser.parse_args()
