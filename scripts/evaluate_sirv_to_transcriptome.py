@@ -549,6 +549,7 @@ def main(args):
         if r_acc in orig and r_acc not in corr:
             corr[r_acc] = orig[r_acc]
             corr_reads[r_acc] = reads[r_acc]
+            corr_ref_locations[r_acc] = orig_ref_locations[r_acc]
 
     bug_if_not_empty = set(corr_reads.keys()) - set(reads.keys())
     reads_unaligned_in_original = set(reads.keys()) - set(orig_primary_locations.keys())
