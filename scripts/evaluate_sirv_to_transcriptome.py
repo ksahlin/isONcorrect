@@ -389,7 +389,7 @@ def print_detailed_values_to_file(alignments_dict, reads, all_ref_locations,  ou
         read_length = len(reads[acc])
         aligned_length = int( ins + del_ + subs + matches )
         is_unaligned_in_other_method = 1 if acc in reads_unaligned_in_other_method else 0
-        all_refs = ":".join([ s for s in reads_ref_locations[acc]])
+        all_refs = ":".join([ s for s in all_ref_locations[acc]])
         # is_missing_from_clustering_or_correction = 1 if acc in reads_missing_from_clustering_correction_output else 0
 
         info_tuple = (acc, read_type, ins, del_, subs, matches, error_rate, read_length, aligned_length, all_refs) # 'tot_splices', 'read_sm_junctions', 'read_nic_junctions', 'fsm', 'nic', 'ism', 'nnc', 'no_splices'  )
