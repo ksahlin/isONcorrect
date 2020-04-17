@@ -12,20 +12,20 @@ FILE_BASE="/Users/kxs624/tmp/ISONCORRECT/RESULTS_2020_04_03/"
 
 
 # Fig 2a
-#python $EVAL_BASE/evaluation_sim/plot_error_rates.py  $FILE_BASE/isONcorrect_sim_error_rate.csv  $FILE_BASE/plots/figure_2a.pdf 
+python $EVAL_BASE/evaluation_sim/plot_error_rates.py  $FILE_BASE/isONcorrect_sim_error_rate.csv  $FILE_BASE/plots/figure_2a.pdf 
 
 # Fig 2b
 #python $EVAL_BASE/evaluation_sirv/plots.py  $FILE_BASE/isONcorrect_sirv_subsampling.csv  $FILE_BASE/plots/ 
 
 # Fig 4
-python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/isONcorrect_sim_overcorrection.csv  $FILE_BASE/plots/figure_4.pdf 
+#python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/isONcorrect_sim_overcorrection.csv  $FILE_BASE/plots/figure_4.pdf 
 
 # Fig Sx
 # python $EVAL_BASE/evaluation_sim/plots.py  $FILE_BASE/isONcorrect_sim_full.csv  $FILE_BASE/plots/ sim
 
 
 # Fig Sy
-python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/comp_sim_overcorrection.csv  $FILE_BASE/plots/figure_Sy.pdf 
+#python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/comp_sim_overcorrection.csv  $FILE_BASE/plots/figure_Sy.pdf 
 # Fig Sz
 #python $EVAL_BASE/evaluation_sim/plot_error_rates.py  $FILE_BASE/comp_sim_error_rate.csv  $FILE_BASE/plots/figure_Sz.pdf 
 
@@ -36,8 +36,8 @@ python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/comp_sim_ove
 
 # Fig sim 4%
 python $EVAL_BASE/evaluation_sim/plot_error_rates.py  $FILE_BASE/4_results.csv  $FILE_BASE/plots/sim/figure_4_percent.pdf 
-python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/4_abundance.csv  $FILE_BASE/plots/sim/figure_4_percent_overcorr.pdf 
+#python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/4_abundance.csv  $FILE_BASE/plots/sim/figure_4_percent_overcorr.pdf 
 # Fig sim 12%
 python $EVAL_BASE/evaluation_sim/plot_error_rates.py  $FILE_BASE/12_results.csv  $FILE_BASE/plots/sim/figure_12_percent.pdf 
-python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/12_abundance.csv  $FILE_BASE/plots/sim/figure_12_percent_overcorr.pdf 
+#python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/12_abundance.csv  $FILE_BASE/plots/sim/figure_12_percent_overcorr.pdf 
 
