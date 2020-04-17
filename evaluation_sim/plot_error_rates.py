@@ -31,6 +31,10 @@ median_error =  df_corr['err_rate'].median()
 
 print("median error rate/subs/ins/del corrected:", median_error) #, 100*df_corr['subs_rate'].median(), 100*df_corr['ins_rate'].median(), 100*df_corr['del_rate'].median())
 # sys.exit()
+ab = 50
+df_corr_ab = df_corr.loc[df_corr['transcript_cov'] == ab ]
+median_error_ab =  df_corr_ab['err_rate'].median()
+print("median error rate for ab:", ab, median_error_ab)
     
 
 df_orig = indata.loc[indata['type'] == 'original']
@@ -42,6 +46,7 @@ median_error =  df_orig['err_rate'].median()
 # print(df_orig['del_rate'])
 
 print("median error rate/subs/ins/del original:",median_error) #, 100*df_orig['subs_rate'].median(), 100*df_orig['ins_rate'].median(), 100*df_orig['del_rate'].median())
+
 
 # g = sns.catplot(x="abundance_original", y="abundance_corrected", col="Depth", col_wrap=3,
 #             data=indata, kind="point", aspect=1)

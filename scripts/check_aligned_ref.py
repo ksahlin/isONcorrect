@@ -5,8 +5,12 @@ import csv
 import argparse
 # from collections import deque
 
-def check_same_region(corr_positions,orig_positions):
+def check_same_region(corr_positions,orig_positions, args):
     cnt_diff, cnt_unaligned = 0, 0
+    cnt_sirv_5 = 0
+    nr_reads = {1:0, 4:0, 8:0}
+    nr_isoform_switches = {1:0, 4:0, 8:0}
+
     for read_id in orig_positions:
         (o_id, o_start,o_stop, _) = orig_positions[read_id]
         if read_id in corr_positions:
@@ -15,11 +19,30 @@ def check_same_region(corr_positions,orig_positions):
             cnt_unaligned += 1
             continue
         # print(c_start, c_stop)
-        if c_id == o_id and ( o_start <= c_stop <= o_stop  or o_start <= c_start <= o_stop ): # intercecting
+        on_same_ref = False
+        if args.sirv_iso_cov:
+            n_isoforms = int(read_id.split(",")[2])
+            c_all_id =set( c_id.split(":"))
+            o_all_id =set( o_id.split(":"))
+            on_same_ref = True if len(c_all_id & o_all_id) > 0 else False
+            if not on_same_ref:
+                if "SIRV506" in (c_all_id | o_all_id) and "SIRV511" in (c_all_id | o_all_id):
+                    cnt_sirv_5 +=1
+                nr_isoform_switches[n_isoforms] += 1
+            nr_reads[n_isoforms] += 1
+
+        else:
+            on_same_ref = (c_id == o_id)
+
+        if on_same_ref and ( o_start <= c_stop <= o_stop  or o_start <= c_start <= o_stop ): # intercecting
             pass
         else:
             cnt_diff += 1
-            print(c_id,o_id, read_id)
+            # print(c_id,o_id, read_id)
+    
+    print("SIRV506 - SIRV511", cnt_sirv_5)
+    print("Switching isoforms. Number of observations per experiment (1,4,8 isoforms): ", nr_isoform_switches)
+    print("Number of reads per experiment (1,4,8 isoforms): ", nr_reads)
     return cnt_diff, cnt_unaligned
 
 def check_err_rate(corr_positions,orig_positions):
@@ -64,10 +87,10 @@ def main(args):
                 ref_start = 0
                 ref_stop = 0
             if args.sirv_iso_cov:
-                read_id = ",".join(row[:4])
+                read_id = ",".join(row[:4]) #  row[3] 
                 read_type = row[4]
                 err_rate = float(row[9])
-                chr_id = row[12]
+                chr_id = row[12] # "".join(sorted( [s for s in row[12].split(":")]))
                 ref_start = 0
                 ref_stop = 0
             # print(chr_id,ref_start, ref_stop)
@@ -76,7 +99,7 @@ def main(args):
             else:
                 orig_positions[read_id] = (chr_id, ref_start, ref_stop, err_rate)
 
-    cnt_diff, cnt_unaligned = check_same_region(corr_positions,orig_positions)
+    cnt_diff, cnt_unaligned = check_same_region(corr_positions,orig_positions, args)
     cnt_broken = check_err_rate(corr_positions,orig_positions)
     print("Total reads change location:", cnt_diff)
     print("Total reads aligned in origina format but unaligned after correction:", cnt_unaligned)
