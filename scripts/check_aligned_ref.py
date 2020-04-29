@@ -3,13 +3,16 @@ import sys
 
 import csv
 import argparse
-# from collections import deque
+from collections import defaultdict
 
 def check_same_region(corr_positions,orig_positions, args):
+    if args.sirv_iso_cov:
+        outfile = open(args.outfile_csv, "w")
+        outfile.write("nr_reads,nr_isoforms,is_overcorrected\n")
     cnt_diff, cnt_unaligned = 0, 0
     cnt_sirv_5 = 0
-    nr_reads = {1:0, 4:0, 8:0}
-    nr_isoform_switches = {1:0, 4:0, 8:0}
+    nr_reads = defaultdict(lambda: defaultdict(int)) #{1:0, 4:0, 8:0}
+    nr_isoform_switches = defaultdict(lambda: defaultdict(int)) #{1:0, 4:0, 8:0}
 
     for read_id in orig_positions:
         (o_id, o_start,o_stop, _) = orig_positions[read_id]
@@ -22,14 +25,17 @@ def check_same_region(corr_positions,orig_positions, args):
         on_same_ref = False
         if args.sirv_iso_cov:
             n_isoforms = int(read_id.split(",")[2])
+            read_depth = int(read_id.split(",")[1])
             c_all_id =set( c_id.split(":"))
             o_all_id =set( o_id.split(":"))
             on_same_ref = True if len(c_all_id & o_all_id) > 0 else False
             if not on_same_ref:
+                nr_isoform_switches[read_depth][n_isoforms] += 1
                 if "SIRV506" in (c_all_id | o_all_id) and "SIRV511" in (c_all_id | o_all_id):
                     cnt_sirv_5 +=1
-                nr_isoform_switches[n_isoforms] += 1
-            nr_reads[n_isoforms] += 1
+            nr_reads[read_depth][n_isoforms] += 1
+
+            outfile.write("{0},{1},{2}\n".format(read_depth, n_isoforms, 0 if on_same_ref else 1))
 
         else:
             on_same_ref = (c_id == o_id)
@@ -40,9 +46,21 @@ def check_same_region(corr_positions,orig_positions, args):
             cnt_diff += 1
             # print(c_id,o_id, read_id)
     
-    print("SIRV506 - SIRV511", cnt_sirv_5)
-    print("Switching isoforms. Number of observations per experiment (1,4,8 isoforms): ", nr_isoform_switches)
-    print("Number of reads per experiment (1,4,8 isoforms): ", nr_reads)
+    if args.sirv_iso_cov:
+        outfile.close()
+        print("Depth,1,4,8")
+        for cov in nr_reads:
+            perc_overcorr_per_depth = []
+            for n_iso in [1,4,8]:
+                nr_overcorr = nr_isoform_switches[cov][n_iso] if nr_isoform_switches[cov][n_iso] else 0
+                n_reads_in_batch = nr_reads[cov][n_iso]
+                perc_overcorr_per_depth.append(round(100*nr_overcorr/n_reads_in_batch,1))
+            print("{0},{1}".format(cov, ",".join([str(p) for p in perc_overcorr_per_depth]) ))
+
+        print("SIRV506 - SIRV511", cnt_sirv_5)
+        print("Switching isoforms. Number of observations per experiment (1,4,8 isoforms): ", nr_isoform_switches)
+        print("Number of reads per experiment (1,4,8 isoforms): ", nr_reads)
+
     return cnt_diff, cnt_unaligned
 
 def check_err_rate(corr_positions,orig_positions):
@@ -119,11 +137,12 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Plot p-minimizers shared.")
-    parser.add_argument('csv', type=str, help='Path to fasta file with a nucleotide sequence (e.g., gene locus) to simulate isoforms from.')
+    parser.add_argument('csv', type=str, help='Path to CSV input.')
     parser.add_argument('--dros', action="store_true", help='Dros.')
     parser.add_argument('--sirv', action="store_true", help='sirv.')
     parser.add_argument('--sirv_iso_cov', action="store_true", help='sirv.')
     parser.add_argument('--sim', action="store_true", help='sim.')
+    parser.add_argument('--outfile_csv', type=str, help='Path to CSV output.')
     
     args = parser.parse_args()
 

@@ -29,7 +29,7 @@ def sirv_error_rate_per_transcript(input_csv, outfolder):
 
     # new controlled experiment:
     g = sns.FacetGrid(indata, col="nr_isoforms", hue="read_type", col_wrap=3)
-    g.map(sns.lineplot, "nr_reads","error_rate",ci = 'sd', estimator= 'median')
+    g.map(sns.lineplot, "nr_reads","error_rate",ci = 'sd', estimator= 'median').add_legend()
     g.set(ylim=(0, 12))
     ticks = [1,2,3,4,5,10,20]
     labels = ["1","","","","5","10","20"]
