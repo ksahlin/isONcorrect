@@ -41,3 +41,7 @@ python $EVAL_BASE/evaluation_sim/plot_error_rates.py  $FILE_BASE/4_results.csv  
 python $EVAL_BASE/evaluation_sim/plot_error_rates.py  $FILE_BASE/12_results.csv  $FILE_BASE/plots/sim/figure_12_percent.pdf 
 #python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/12_abundance.csv  $FILE_BASE/plots/sim/figure_12_percent_overcorr.pdf 
 
+# Fig SIRV iso_cov plots
+python $EVAL_BASE/evaluation_sirv_iso_cov/plot.py ../data/isONcorrect_sirv_iso_cov.csv $FILE_BASE/plots/sim/
+
+python $EVAL_BASE/plot_overcorrected_isoforms.py ~/tmp/ISONCORRECT/RESULTS_2020_04_03/overcorrected_isoforms.csv $FILE_BASE/plots/sim/
