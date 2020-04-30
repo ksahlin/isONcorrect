@@ -106,7 +106,7 @@ rule isONclust:
         outfolder = config["ROOT_OUT"] + "/clustering/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)
         mkdir_p(outfolder)
         # shell("source activate py36")
-        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust --t 50 --k 13 --w 20  --q 4.0 --fastq {input.fastq}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
+        shell("{time} python /galaxy/home/ksahlin/prefix/source/isONclust/isONclust --d 100000 --t 64 --k 13 --w 20  --q 4.0 --fastq {input.fastq}  --outfolder {outfolder}  2>&1 | tee {output.time_and_mem}")
     
 
 rule clusters_to_fastq:
