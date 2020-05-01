@@ -55,7 +55,7 @@ rule get_accuracies:
 
 
 rule full_plots:
-    input: input_tsvs = rules.get_accuracies.output.tsv_file, 
+    input: input_tsvs = expand(config["DATA"] + "/{dataset}.accuracies.tsv", dataset = config["DATASETS"])
     output: histograms = expand(config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/{dataset}.accuracies.tsv.pdf", dataset = config["DATASETS"]) 
     run:
         eval_dir = config["ROOT_IN"] + "/ont_error_rates/"
