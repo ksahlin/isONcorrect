@@ -50,7 +50,7 @@ rule get_accuracies:
     run:
         eval_dir = config["ROOT_IN"] + "/ont_error_rates/"
         database_path= "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/evaluation_biological/NA12878/"
-        shell("python {eval_dir}/get_read_accuracies.py  {input.reads_aligned}  {database_path} {tsv_file} ")
+        shell("python {eval_dir}/get_read_accuracies.py  {input.reads_aligned}  {database_path} {output.tsv_file} ")
 
 
 
