@@ -46,7 +46,7 @@ rule align_reads_minimap2:
 
 rule get_accuracies:
     input: reads_aligned =  rules.align_reads_minimap2.output.reads_aligned,
-    output: tsv_file = config["DATA"] + "/{dataset}.accuracies.tsv"
+    output: tsv_file = config["DATA"] + "{dataset}.accuracies.tsv"
     run:
         eval_dir = config["ROOT_IN"] + "/ont_error_rates/"
         database_path= "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/evaluation_biological/NA12878/"
@@ -55,7 +55,7 @@ rule get_accuracies:
 
 
 rule full_plots:
-    input: input_tsvs = expand(config["DATA"] + "/{dataset}.accuracies.tsv", dataset = config["DATASETS"])
+    input: input_tsvs = expand(config["DATA"] + "{dataset}.accuracies.tsv", dataset = config["DATASETS"])
     output: histograms = expand(config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/{dataset}.accuracies.tsv.pdf", dataset = config["DATASETS"]) 
     run:
         eval_dir = config["ROOT_IN"] + "/ont_error_rates/"
