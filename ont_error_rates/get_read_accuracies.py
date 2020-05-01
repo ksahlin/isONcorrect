@@ -110,12 +110,13 @@ def main(args):
     annotated_splice_coordinates_pairs = pickle_load(os.path.join( args.database_path, 'annotated_splice_coordinates_pairs.pickle') )
     minimum_annotated_intron = pickle_load(os.path.join( args.database_path, 'minimum_annotated_intron.pickle') )
 
-    read_accuracies = get_error_rates(args.orig_sam, annotated_splice_coordinates_pairs, args)
+    read_accuracies = get_error_rates(args.samfile, annotated_splice_coordinates_pairs, args)
 
     # orig, orig_detailed = get_error_rate_stats_per_read(orig_primary_locations, reads, annotated_splice_coordinates_pairs, args)
 
     outfile = open(args.outfile, "w")
-    for i, (read_is, accuracy) in enumerate(read_accuracies):
+    outfile.write("Read\tAcc")
+    for i, (read_id, accuracy) in enumerate(read_accuracies.items()):
         outfile.write("{0}\t{1}\n".format(i, accuracy))
 
     outfile.close()    
