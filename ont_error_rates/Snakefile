@@ -34,7 +34,7 @@ shell.prefix("set -o pipefail; ")
 # configfile: "experiments.json"
 
 wildcard_constraints:
-    nr_reads="[\d]+",
+    datasets="*fq_noprimer_fl.fq",
 
 ####################################################
 ########## standard python functions ###############
