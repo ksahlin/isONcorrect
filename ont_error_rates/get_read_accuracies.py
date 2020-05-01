@@ -115,7 +115,7 @@ def main(args):
     # orig, orig_detailed = get_error_rate_stats_per_read(orig_primary_locations, reads, annotated_splice_coordinates_pairs, args)
 
     outfile = open(args.outfile, "w")
-    outfile.write("Read\tAcc")
+    outfile.write("Read\tAcc\n")
     for i, (read_id, accuracy) in enumerate(read_accuracies.items()):
         outfile.write("{0}\t{1}\n".format(i, accuracy))
 
