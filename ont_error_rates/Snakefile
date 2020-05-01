@@ -70,7 +70,7 @@ rule align_reads_minimap2:
 
 
 rule get_accuracies:
-    input: reads_aligned =  rules.align_original_reads_minimap2.output.reads_aligned,
+    input: reads_aligned =  rules.align_reads_minimap2.output.reads_aligned,
     output: tsv_file = config["DATA"] + "/{dataset}.accuracies.tsv"
     run:
         eval_dir = config["ROOT_IN"] + "/ont_error_rates/"
