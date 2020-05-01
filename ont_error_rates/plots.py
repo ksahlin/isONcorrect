@@ -75,7 +75,7 @@ def main(args):
     dfs = {}
     for i, file in enumerate(args.input_csvs):
         basename = os.path.basename(file)
-        # run_id = basename.split("-")[0]
+        run_id = basename.split("_")[2]
         mean, median, mode, accuracies, q1, q3 = plot_histogram(file, basename, args)
         dfs[run_id] = accuracies 
         print(q1, median, q3, mean, mode, basename)
