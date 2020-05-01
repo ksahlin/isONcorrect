@@ -131,8 +131,5 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    outfolder = args.outfolder
-    if not os.path.exists(outfolder):
-        os.makedirs(outfolder)
     main(args)
 
