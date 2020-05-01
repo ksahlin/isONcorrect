@@ -8,7 +8,7 @@ shell.prefix("set -o pipefail; ")
 # configfile: "experiments.json"
 
 wildcard_constraints:
-    datasets="*fq_noprimer_fl.fq",
+    datasets="20200423_1719*fq_noprimer_fl.fq",
 
 ####################################################
 ########## standard python functions ###############
