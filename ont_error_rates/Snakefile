@@ -37,8 +37,8 @@ rule all:
 
 
 rule align_reads_minimap2:
-    input: reads = config["DATA"] + "/{dataset}"
-    output: reads_aligned =  config["DATA"] + "/{dataset}.sam"
+    input: reads = config["DATA"] + "{dataset}"
+    output: reads_aligned =  config["DATA"] + "{dataset}.sam"
     run:
         ref = config["HG38"]
         shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k13 -w4 {ref} {input.reads} >  {output.reads_aligned} ")
