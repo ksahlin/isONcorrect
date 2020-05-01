@@ -1,0 +1,107 @@
+"""
+    snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} --mem {cluster.mem} -c {cluster.cpus-per-task} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiments.json --latency-wait 100 --verbose -n
+
+    
+    # BIOLOGICAL
+
+    # Subsample reads from original data
+
+
+    # running isONclust/isONclust2
+    1. going from original reads to clusters
+    2. from cluster file to fastq files
+
+
+    ### Running isONcorrect
+    1. From cluster fasta to corrected reads
+    2. Merge all corrected read clusters
+
+    ### Run evaluation looking for read error rate againse reference (and eventually splice site classification)
+
+    # SIMULATED
+
+    ### simulation evalautions
+    4. Basing exon correction plot with error rate
+
+    5. Join everything to table
+
+
+    # target rules:
+
+"""
+
+shell.prefix("set -o pipefail; ")
+# configfile: "experiments.json"
+
+wildcard_constraints:
+    nr_reads="[\d]+",
+
+####################################################
+########## standard python functions ###############
+####################################################
+
+import re
+import os
+import errno
+import shutil
+import glob
+
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+rule all:
+   input:  config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/accuracies.tar.gz"
+
+
+
+rule align_reads_minimap2:
+    input: original_reads = rules.split_accessions_orig.output.original_reads_split_accessions
+    output: original_reads_aligned =  config["DATA"] + "/{dataset}.sam"
+    run:
+
+        ref = config["HG38"]
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k13 -w4 {ref} {input.original_reads} >  {output.original_reads_aligned} ")
+
+
+rule get_accuracies:
+    input: original_reads_aligned =  rules.align_original_reads_minimap2.output.original_reads_aligned,
+    output: tsv_file = config["DATA"] + "/{dataset}.accuracies.tsv"
+    run:
+        eval_dir = config["ROOT_IN"] + "/ont_error_rates/"
+        database_path= "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/evaluation_biological/NA12878/"
+        shell("python {eval_dir}/get_read_accuracies.py  {input.original_reads_aligned}  {database_path} {tsv_file} ")
+
+
+
+rule full_plots:
+    input: input_tsvs = rules.get_accuracies.output.tsv_file, 
+    output: histograms = expand(config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/{dataset}.accuracies.tsv.pdf", dataset = config["DATASETS"]) 
+    run:
+        eval_dir = config["ROOT_IN"] + "/ont_error_rates/"
+        outfolder = config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies"  
+
+        #python scripts/plots.py /Users/kxs624/Documents/workspace/isONcorrect/data/results/drosophila_full.csv  ~/tmp/ISONCORRECT/RESULTS_08_12_19/drosophila_full.csv /sirv_full.csv 
+        
+        shell("python {eval_dir}/plots.py  {input.input_tsvs} {outfolder}")
+
+
+rule zip_plots:
+    input: plots = rules.full_plots.output.histograms
+    output: plots_zip = config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/accuracies.tar.gz"
+    run:
+        plot_pattern = config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/*.pdf"
+        shell("tar -cvzf {output.plots_zip} {plot_pattern}")
+
+
+
+
+
+
+
