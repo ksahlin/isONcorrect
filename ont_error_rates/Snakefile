@@ -1,32 +1,6 @@
 """
     snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} --mem {cluster.mem} -c {cluster.cpus-per-task} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiments.json --latency-wait 100 --verbose -n
 
-    
-    # BIOLOGICAL
-
-    # Subsample reads from original data
-
-
-    # running isONclust/isONclust2
-    1. going from original reads to clusters
-    2. from cluster file to fastq files
-
-
-    ### Running isONcorrect
-    1. From cluster fasta to corrected reads
-    2. Merge all corrected read clusters
-
-    ### Run evaluation looking for read error rate againse reference (and eventually splice site classification)
-
-    # SIMULATED
-
-    ### simulation evalautions
-    4. Basing exon correction plot with error rate
-
-    5. Join everything to table
-
-
-    # target rules:
 
 """
 
@@ -57,7 +31,8 @@ def mkdir_p(path):
             raise
 
 rule all:
-   input:  config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/accuracies.tar.gz"
+   input:  config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/accuracies.tar.gz",
+           expand(config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/{dataset}.accuracies.tsv.pdf", dataset = config["DATASETS"]) 
 
 
 
