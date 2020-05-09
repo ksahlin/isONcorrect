@@ -1,6 +1,6 @@
 {
 
-    "DATASETS" : ["SIRV", "drosophila", "NA12878"],
+    "DATASETS" : ["SIRV", "drosophila"],
     "SIMULATED_DATASETS" : ["chr6"],
 
     "NR_READS" : ["999"],
