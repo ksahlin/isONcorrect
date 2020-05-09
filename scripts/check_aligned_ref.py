@@ -49,16 +49,28 @@ def check_same_region(corr_positions,orig_positions, args):
     if args.sirv_iso_cov:
         outfile.close()
         print("Depth,1,4,8")
+        tot_1, tot_4, tot_8 = 0,0,0
+        switch_1, switch_4, switch_8 = 0,0,0
         for cov in nr_reads:
             perc_overcorr_per_depth = []
             for n_iso in [1,4,8]:
                 nr_overcorr = nr_isoform_switches[cov][n_iso] if nr_isoform_switches[cov][n_iso] else 0
                 n_reads_in_batch = nr_reads[cov][n_iso]
                 perc_overcorr_per_depth.append(round(100*nr_overcorr/n_reads_in_batch,1))
+                if n_iso == 1:
+                    switch_1 += nr_overcorr
+                    tot_1 += n_reads_in_batch
+                elif n_iso == 4:
+                    switch_4 += nr_overcorr
+                    tot_4 += n_reads_in_batch
+                elif n_iso == 8:
+                    switch_8 += nr_overcorr
+                    tot_8 += n_reads_in_batch
+
             print("{0},{1}".format(cov, ",".join([str(p) for p in perc_overcorr_per_depth]) ))
 
         print("SIRV506 - SIRV511", cnt_sirv_5)
-        print("Switching isoforms. Number of observations per experiment (1,4,8 isoforms): ", nr_isoform_switches)
+        print("Switching isoforms. Frac overcorrected per n_iso (1,4,8 isoforms): ", round(100*switch_1/float(tot_1), 2), round(100*switch_4/float(tot_4), 2), round(100*switch_8/float(tot_8), 2) )
         print("Number of reads per experiment (1,4,8 isoforms): ", nr_reads)
 
     return cnt_diff, cnt_unaligned

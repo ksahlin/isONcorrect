@@ -25,14 +25,15 @@ outfolder="/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_sim_error_rates/
 isonclust="/galaxy/home/ksahlin/prefix/source/isONclust/"
 #python $isonclust/isONclust --t 50 --k 11 --w 20  --q 4.0 --fastq $sim_reads  --outfolder $outfolder"/isonclust/"
 #python $isonclust/isONclust write_fastq --clusters $outfolder"/isonclust/final_clusters.tsv" --fastq $sim_reads --outfolder $outfolder"/isonclust/fastq/" --N 1
-#python $ROOT_IN/run_isoncorrect --k 8 --fastq_folder $outfolder"/isonclust/fastq/"  --outfolder $outfolder"/isoncorrect/" --set_w_dynamically --t 62
+python $ROOT_IN/run_isoncorrect --k 8 --fastq_folder $outfolder"/isonclust/fastq/"  --outfolder $outfolder"/isoncorrect/" --set_w_dynamically --t 62
 corrected_reads=$outfolder"/isoncorrect/isONcorrect.fq"
-#touch $corrected_reads
+> $corrected_reads
+touch $corrected_reads
 FILES=$outfolder/isoncorrect/*/corrected_reads.fastq
-# for f in $FILES 
-# do 
-#   cat $f >> $outfolder"/isoncorrect/isONcorrect.fq"
-# done
+for f in $FILES 
+do 
+  cat $f >> $outfolder"/isoncorrect/isONcorrect.fq"
+done
 
 # ERROR RATE ANALYSIS
 
@@ -42,14 +43,14 @@ python $experiment_dir/get_error_rates.py $ref $sim_reads  $corrected_reads  > $
 # OVERCORRECTION ANALYSIS
 
 corrected_reads_aligned=$outfolder"/all_reads_after_correction_aligned.sam"
-#/usr/bin/time -v  minimap2 --eqx -t 8 -a -k9 -w1 -f 0.000001  $ref $corrected_reads >  $corrected_reads_aligned
+/usr/bin/time -v  minimap2 --eqx -t 8 -a -k9 -w1 -f 0.000001  $ref $corrected_reads >  $corrected_reads_aligned
 
 sim_reads_aligned=$outfolder"/sim_reads_aligned.sam" #$BASE_OUT"/data/chr6/1/uneven/reads.sam"
 #/usr/bin/time -v  minimap2 --eqx -t 8 -a -k9 -w1 -f 0.000001  $ref $sim_reads >  $sim_reads_aligned
 abundance_file=$outfolder/"abundance.csv" 
-#echo   "read_acc","aligned_to","transcript_abundance","is_tp","read_type","ed_btw_transcripts","ed_read_to_true","ed_read_to_aligned" > $abundance_file
-#python $experiment_dir/get_abundance.py $corrected_reads_aligned $ref $corrected_reads   'corrected' >> $abundance_file
-#python $experiment_dir/get_abundance.py $sim_reads_aligned $ref $sim_reads   'original' >> $abundance_file
+echo   "read_acc","aligned_to","transcript_abundance","is_tp","read_type","ed_btw_transcripts","ed_read_to_true","ed_read_to_aligned" > $abundance_file
+python $experiment_dir/get_abundance.py $corrected_reads_aligned $ref $corrected_reads   'corrected' >> $abundance_file
+python $experiment_dir/get_abundance.py $sim_reads_aligned $ref $sim_reads   'original' >> $abundance_file
 
 
 
@@ -64,14 +65,15 @@ outfolder="/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_sim_error_rates/
 isonclust="/galaxy/home/ksahlin/prefix/source/isONclust/"
 #python $isonclust/isONclust --t 50 --k 13 --w 20  --q 4.0 --fastq $sim_reads  --outfolder $outfolder"/isonclust/"
 #python $isonclust/isONclust write_fastq --clusters $outfolder"/isonclust/final_clusters.tsv" --fastq $sim_reads --outfolder $outfolder"/isonclust/fastq/" --N 1
-#python $ROOT_IN/run_isoncorrect  --fastq_folder $outfolder"/isonclust/fastq/"  --outfolder $outfolder"/isoncorrect/" --set_w_dynamically --t 62
+python $ROOT_IN/run_isoncorrect  --fastq_folder $outfolder"/isonclust/fastq/"  --outfolder $outfolder"/isoncorrect/" --set_w_dynamically --t 62
 corrected_reads=$outfolder"/isoncorrect/isONcorrect.fq"
-#touch $corrected_reads
+> $corrected_reads
+touch $corrected_reads
 FILES=$outfolder/isoncorrect/*/corrected_reads.fastq
-# for f in $FILES 
-# do 
-#  cat $f >> $outfolder"/isoncorrect/isONcorrect.fq"
-# done
+for f in $FILES 
+do 
+ cat $f >> $outfolder"/isoncorrect/isONcorrect.fq"
+done
 
 # ERROR RATE ANALYSIS
 
@@ -81,12 +83,12 @@ python $experiment_dir/get_error_rates.py $ref $sim_reads  $corrected_reads  > $
 # OVERCORRECTION ANALYSIS
 
 corrected_reads_aligned=$outfolder"/all_reads_after_correction_aligned.sam"
-#/usr/bin/time -v  minimap2 --eqx -t 8 -a -k9 -w1 -f 0.000001  $ref $corrected_reads >  $corrected_reads_aligned
+/usr/bin/time -v  minimap2 --eqx -t 8 -a -k9 -w1 -f 0.000001  $ref $corrected_reads >  $corrected_reads_aligned
 
 sim_reads_aligned=$outfolder"/sim_reads_aligned.sam" #$BASE_OUT"/data/chr6/1/uneven/reads.sam"
 #/usr/bin/time -v  minimap2 --eqx -t 8 -a -k9 -w1 -f 0.000001  $ref $sim_reads >  $sim_reads_aligned
 abundance_file=$outfolder/"abundance.csv" 
-#echo   "read_acc","aligned_to","transcript_abundance","is_tp","read_type","ed_btw_transcripts","ed_read_to_true","ed_read_to_aligned" > $abundance_file
-#python $experiment_dir/get_abundance.py $corrected_reads_aligned $ref $corrected_reads   'corrected' >> $abundance_file
-#python $experiment_dir/get_abundance.py $sim_reads_aligned $ref $sim_reads   'original' >> $abundance_file
+echo   "read_acc","aligned_to","transcript_abundance","is_tp","read_type","ed_btw_transcripts","ed_read_to_true","ed_read_to_aligned" > $abundance_file
+python $experiment_dir/get_abundance.py $corrected_reads_aligned $ref $corrected_reads   'corrected' >> $abundance_file
+python $experiment_dir/get_abundance.py $sim_reads_aligned $ref $sim_reads   'original' >> $abundance_file
 

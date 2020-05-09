@@ -34,7 +34,7 @@ def sirv_overcorrected_isoforms(input_csv, outfolder):
     ax.set_xticks( [1,2,3,4,5,10,20]) #([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19])
     x_labels = ["1","","","","5","10","20"]
     ax.set_xticklabels(x_labels)
-    ax.set_ylabel("Overcorrection (%)")
+    ax.set_ylabel("Fraction overcorreced reads")
     ax.set_xlabel("Reads per transcript")
 
     plt.savefig(os.path.join(outfolder, "sirv_iso_overcorrected.eps"))
