@@ -154,7 +154,7 @@ rule align_corrected_reads_minimap2:
             ref = rules.remove_redundant.output.non_redundant_database
     output: corrected_reads_aligned = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/{abundance}/isONcorrect.sam"
     run:
-        shell("/usr/bin/time -v  minimap2 --eqx -a -t 8 -k9 -w1 -f 0.000001 {input.ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -a -t 8  -k13 -w4 {input.ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
 
 
 rule align_original_reads_minimap2:
@@ -162,7 +162,7 @@ rule align_original_reads_minimap2:
             ref = rules.remove_redundant.output.non_redundant_database
     output: original_reads_aligned =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}/{abundance}/reads.sam"
     run:
-        shell("/usr/bin/time -v  minimap2 --eqx -a -t 8 -k9 -w1 -f 0.000001 {input.ref} {input.original_reads} >  {output.original_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -a -t 8  -k13 -w4 {input.ref} {input.original_reads} >  {output.original_reads_aligned} ")
 
 
 rule overcorrection_analysis:
