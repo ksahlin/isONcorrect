@@ -461,8 +461,8 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
     other_corrections = defaultdict(list)
 
     # TODO: potentially add context around substitutions here
-    variant_threshold = max(3, weight * v_depth_ratio_threshold)
-    context_threshold = max(3, weight * v_depth_ratio_threshold) # max(5, len(curr_best_seqs) * context_depth_ratio_threshold)
+    variant_threshold = max(5, weight * v_depth_ratio_threshold)
+    context_threshold = max(5, weight * v_depth_ratio_threshold) # max(5, len(curr_best_seqs) * context_depth_ratio_threshold)
     # print(variant_threshold, context_threshold, len(curr_best_seqs), spoa_ref)
 
     contexts_per_pos = get_contexts(alignment_matrix, int(k_size/2))
