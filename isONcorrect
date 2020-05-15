@@ -197,7 +197,7 @@ def get_context_offset(vector, k):
         if n != '-':
             nuc_obs += 1
 
-        if nuc_obs >= k:
+        if nuc_obs > k:
             break
     return offset
 
@@ -348,6 +348,8 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
     for j in range(len(FCM)):
         # eligible_contexts2 = [ (variant, tuple([c for c in cn]) , dep) for (variant,cn), dep in FCM[j].items() if dep > max(context_threshold/10, 5)] # remove very low abundant noise before calculation
         eligible_contexts = FCM[j]
+
+        # print(eligible_contexts)
         # if len(eligible_contexts2) != len(eligible_contexts):
         #     print(eligible_contexts)
         #     print(eligible_contexts2)
@@ -377,6 +379,17 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
         #     alternative_contexts[j].add(eligible_contexts[0])
         else:
             eligible_contexts_hcomp = {}
+            context_start, context_stop = contexts_per_pos[j][0], contexts_per_pos[j][1]
+            consensus_context = ''.join( [ c for c in ref_aln[context_start :context_stop] if c != '-'] )
+            consensus_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(consensus_context))
+            eligible_contexts_hcomp[consensus_hpol_comp] = set()
+            eligible_contexts_hcomp[consensus_context] = set()
+            # for variant, aln_seq, depth in eligible_contexts:
+            #     print(variant, aln_seq, depth, j)
+            # if j ==199:
+            #     for acc_z, aln_list_z in alignment_matrix.items():
+            #         print(aln_list_z[context_start-15:context_stop+15])
+            #     print(ref_aln[context_start-15:context_stop+15], "consensus")
             for variant, aln_seq, depth in sorted(eligible_contexts, key = lambda x: x[2], reverse=True): # highest depth first
                 seq = "".join([c for c in aln_seq if c != '-'])
                 seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
@@ -384,29 +397,44 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
                     continue
                 else:
                     min_ed = 1000
-                    for prev_h_comp in eligible_contexts_hcomp:
-                        # seq_tmp = eligible_contexts_hcomp[prev_h_comp][4]
-                        ed = edlib_alignment( prev_h_comp, seq_hpol_comp, 1000)
+                    new_alt_ref  = ''
+                    for prev_seq in eligible_contexts_hcomp:
+                        ed = edlib_alignment( prev_seq, seq, 1000)
+                        # print(ed)
                         if ed < min_ed:
                             min_ed = ed
+                            new_alt_ref = seq
+                        ed = edlib_alignment( prev_seq, seq_hpol_comp, 1000)
+                        # print(ed)
+                        if ed < min_ed:
+                            min_ed = ed
+                            new_alt_ref = seq_hpol_comp
+
                     threshold = context_threshold/max(1.0, min_ed)
                     if depth >= threshold:
-                        eligible_contexts_hcomp[seq_hpol_comp] = (variant, depth, aln_seq, threshold, seq)
+                        # print(depth, context_threshold, threshold, min_ed)
+                        eligible_contexts_hcomp[new_alt_ref] = (variant, depth, aln_seq, threshold, seq)
 
-                # # print(variant,seq, seq_hpol_comp, depth)
+                # print(variant,seq, seq_hpol_comp, depth)
                 # if seq_hpol_comp not in eligible_contexts_hcomp:
                 #     # if not is_substring(seq_hpol_comp,eligible_contexts_hcomp):
                 #     eligible_contexts_hcomp[seq_hpol_comp] = (variant, depth, aln_seq)
                 # elif depth > eligible_contexts_hcomp[seq_hpol_comp][1]:
                 #     eligible_contexts_hcomp[seq_hpol_comp] = (variant, depth, aln_seq)
             # print(j, eligible_contexts_hcomp)
+            del eligible_contexts_hcomp[consensus_hpol_comp]
+            if consensus_hpol_comp != consensus_context:
+                del eligible_contexts_hcomp[consensus_context]
 
-            if len(eligible_contexts_hcomp) > 1:
+            if len(eligible_contexts_hcomp) > 0:
                 for seq_tmp_hcomp, (variant, depth, aln_seq, threshold, seq) in eligible_contexts_hcomp.items():
                     alternative_contexts[j].add( (variant, aln_seq, depth, threshold) )
 
-            # if len( {v for (v, ref_tmp, dep, thresh_) in alternative_contexts[j]}) > 1:
-            #     print("MAAAAAAAAAADE IT", [(variant,depth,threshold, "".join([c for c in aln_seq if c != '-']))  for (variant, aln_seq, depth, threshold)  in alternative_contexts[j]] )
+            # if len( {v for (v, ref_tmp, dep, thresh_) in alternative_contexts[j]}) > 0:
+            #     print("MAAAAAAAAAADE IT", j, len(alignment_matrix), context_threshold, [(variant,depth,threshold, "".join([c for c in aln_seq if c != '-']))  for (variant, aln_seq, depth, threshold)  in alternative_contexts[j]] )
+            #     print(consensus_context)
+                # if j ==199:
+                #     sys.exit()
         # BUUUG no alternative refs
     # print([ ("".join([c for c in cn if c != '-']) , dep) for cn, dep in FCM[50].items() if ])
     # sys.exit()
@@ -414,6 +442,7 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
     #     depths_per_pos[i_tmp] = defaultdict(int)
     #     for 
     return alternative_contexts
+
 
 def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio_threshold = 0.1, max_seqs_to_spoa = 200, disable_numpy=False):
     """
@@ -438,7 +467,12 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
         reads_path.write(">{0}\n{1}\n".format(str(q_id)+str(pos1)+str(pos2), seq))
     reads_path.close()
     spoa_ref = create_augmented_reference.run_spoa(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
-
+    # spoa_ref_m = create_augmented_reference.run_spoa_m(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
+    # spoa_ref_m2 = create_augmented_reference.run_spoa_m2(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
+    # if len(spoa_ref) > 70:
+    #     racon_ref = create_augmented_reference.run_racon(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), work_dir, 1, 1)  #run_spoa_m2(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
+    # else:
+    #     racon_ref = ''
 
     partition = {"ref" : (0, spoa_ref, spoa_ref, 1)}
     for q_id, pos1, pos2 in  grouper(curr_best_seqs, 3):
@@ -450,6 +484,18 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
         partition[(q_id, pos1, pos2)] = (res["editDistance"], ref_alignment, read_alignment, 1)
 
     alignment_matrix = correct_seqs.create_multialignment_matrix(partition)
+
+    # if spoa_ref != spoa_ref_m or spoa_ref != spoa_ref_m2:
+    #     print(weight)
+    #     print(spoa_ref)
+    #     print(spoa_ref_m)
+    #     print(spoa_ref_m2)
+    #     # print(racon_ref)
+    #     # for acc_z, aln_list_z in alignment_matrix.items():
+    #     #     print("".join([c for c in aln_list_z]) )
+    #     # print("".join([c for c in alignment_matrix["ref"]]), "consensus")      
+    #     print()
+
     nr_columns = len(alignment_matrix["ref"])
     PFM = [{"A": 0, "C": 0, "G": 0, "T": 0, "U" : 0, "-": 0, "N": 0} for j in range(nr_columns)]
     for r_tmp, aln_list in alignment_matrix.items():
@@ -461,8 +507,8 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
     other_corrections = defaultdict(list)
 
     # TODO: potentially add context around substitutions here
-    variant_threshold = max(5, weight * v_depth_ratio_threshold)
-    context_threshold = max(5, weight * v_depth_ratio_threshold) # max(5, len(curr_best_seqs) * context_depth_ratio_threshold)
+    variant_threshold = max(3, weight * v_depth_ratio_threshold)
+    context_threshold = max(3, weight * v_depth_ratio_threshold) # max(5, len(curr_best_seqs) * context_depth_ratio_threshold)
     # print(variant_threshold, context_threshold, len(curr_best_seqs), spoa_ref)
 
     contexts_per_pos = get_contexts(alignment_matrix, int(k_size/2))
