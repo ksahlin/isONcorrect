@@ -206,6 +206,57 @@ def run_spoa(reads, spoa_out_file, spoa_path):
     del l
     return consensus
 
+def run_spoa_m(reads, spoa_out_file, spoa_path):
+    with open(spoa_out_file, "w") as output_file:
+        # print('Running spoa...', end=' ')
+        stdout.flush()
+        null = open("/dev/null", "w")
+        subprocess.check_call([ spoa_path, reads, "-l", "0", "-r", "0", "-g", "-4"], stdout=output_file, stderr=null)
+        # print('Done.')
+        stdout.flush()
+    # output_file.close()
+    l = open(spoa_out_file, "r").readlines()
+    consensus = l[1].strip()
+    del l
+    return consensus
+
+def run_spoa_m2(reads, spoa_out_file, spoa_path):
+    with open(spoa_out_file, "w") as output_file:
+        # print('Running spoa...', end=' ')
+        stdout.flush()
+        null = open("/dev/null", "w")
+        subprocess.check_call([ spoa_path, reads, "-l", "0", "-r", "0", "-g", "-8"], stdout=output_file, stderr=null)
+        # print('Done.')
+        stdout.flush()
+    # output_file.close()
+    l = open(spoa_out_file, "r").readlines()
+    consensus = l[1].strip()
+    del l
+    return consensus
+
+def run_racon(reads_to_center, read_alignments_paf, center_file, outfolder, cores, racon_iter):
+    racon_stdout = os.path.join(outfolder, "racon_stdout.txt")
+
+
+    with open(racon_stdout, "w") as output_file:
+        # print('Running medaka...', end=' ')
+        stdout.flush()
+        for i in range(racon_iter):
+            # read_alignments = open(os.path.join(outfolder, "read_alignments_it_{0}.paf".format(i)), 'w')
+            # mm2_stderr = open(os.path.join(outfolder, "mm2_stderr_it_{0}.txt".format(i)), "w")
+            racon_stderr = open(os.path.join(outfolder, "racon_stderr_it_{0}.txt".format(i)), "w")
+            racon_polished = open(os.path.join(outfolder, "racon_polished_it_{0}.fasta".format(i)), 'w')
+
+            # subprocess.check_call(['minimap2', '-k 9', '-w 1', '-f 0.00001', '-n 2', '-m 10', center_file, reads_to_center], stdout=read_alignments, stderr=mm2_stderr)
+            subprocess.check_call(['racon', reads_to_center, read_alignments_paf, center_file], stdout=racon_polished, stderr=racon_stderr)
+            center_file = racon_polished.name
+    l = open(center_file, "r").readlines()
+    if len(l) == 2:
+        consensus = l[1].strip()
+    else:
+        consensus = ''
+    del l
+    return consensus
 
 # For eventual De Bruijn graph approach
 import itertools
