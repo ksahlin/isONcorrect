@@ -124,17 +124,44 @@ def splitfile(indir, outdir, fname, chunksize):
                 break
             i += 1
 
+import os, errno
+
+def symlink_force(target, link_name):
+    try:
+        os.symlink(target, link_name)
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            os.remove(link_name)
+            os.symlink(target, link_name)
+        else:
+            raise e
+
 def split_cluster_in_batches(indir, outdir, max_seqs):
     # create a modified indir
     outdir = os.path.join(outdir, 'split_in_batches')
     # print(indir)
     mkdir_p(outdir)
+    smaller_than_max_seqs = False
+    # print(sorted(os.listdir(indir), key=lambda x: int(x.split('.')[0])) )
+    # sys.exit()
     # add split fiels to this indir
-    for file_ in os.listdir(indir):
+    for file_ in sorted(os.listdir(indir), key=lambda x: int(x.split('.')[0])):
         fastq_file = os.fsdecode(file_)
         if fastq_file.endswith(".fastq"): 
             # print(indir, outdir, fastq_file)
-            splitfile(indir, outdir, fastq_file, 4*max_seqs) # is fastq file
+            if not smaller_than_max_seqs:
+                num_lines = sum(1 for line in open(os.path.join(indir, fastq_file)))
+                print(fastq_file, num_lines)
+                smaller_than_max_seqs = False if num_lines > 4*max_seqs else True
+            else:
+                smaller_than_max_seqs = True
+
+            if not smaller_than_max_seqs:
+                splitfile(indir, outdir, fastq_file, 4*max_seqs) # is fastq file
+            else:
+                cl_id, ext = fastq_file.rsplit('.',1)
+                print(fastq_file, "symlinking instead")
+                symlink_force(os.path.join( indir, fastq_file), os.path.join(outdir, '{0}_{1}.{2}'.format(cl_id, 0, ext) ))
             # cl_id = read_fastq_file.split(".")[0]
             # outfolder = os.path.join(args.outfolder, cl_id)
     return outdir
