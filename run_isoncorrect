@@ -7,9 +7,11 @@ from sys import stdout
 import shutil
 import subprocess
 import glob
-
+import tempfile 
 import errno
 from time import time
+
+
 import itertools
 
 import signal
@@ -39,12 +41,12 @@ def wccount(filename):
     return int(out.split()[0])
 
 def isoncorrect(data):
-    isoncorrect_location, read_fastq_file, outfolder, cl_id, isoncorrect_algorithm_params = data[0],data[1],data[2], data[3], data[4]
+    isoncorrect_location, read_fastq_file, outfolder, batch_id, isoncorrect_algorithm_params = data[0],data[1],data[2], data[3], data[4]
     mkdir_p(outfolder)
     isoncorrect_exec = os.path.join(isoncorrect_location, "isONcorrect")
     isoncorrect_error_file = os.path.join(outfolder, "stderr.txt")
     with open(isoncorrect_error_file, "w") as error_file:
-        print('Running isoncorrect cl_id:{0}...'.format(cl_id), end=' ')
+        print('Running isoncorrect batch_id:{0}...'.format(batch_id), end=' ')
         stdout.flush()
 
         dyn_flag = "--set_w_dynamically" if isoncorrect_algorithm_params["set_w_dynamically"] else ''
@@ -96,25 +98,25 @@ def isoncorrect(data):
                                     "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
                                     "--T",  str(isoncorrect_algorithm_params["T"]) ], stderr=error_file, stdout=isoncorrect_out_file)
 
-        print('Done with cl_id:{0}.'.format(cl_id))
+        print('Done with batch_id:{0}.'.format(batch_id))
         stdout.flush()
     error_file.close()
     isoncorrect_out_file.close()
-    return cl_id
+    return batch_id
 
-def splitfile(indir, outdir, fname, chunksize): 
+def splitfile(indir, tmp_outdir, fname, chunksize): 
     # from https://stackoverflow.com/a/27641636/2060202
     # fpath, fname = os.path.split(infilepath)
     cl_id, ext = fname.rsplit('.',1)
     infilepath = os.path.join(indir, fname)
     # print(fpath, cl_id, ext)
-    # print(indir, outdir, cl_id, ext)
+    # print(indir, tmp_outdir, cl_id, ext)
 
     i = 0
     written = False
     with open(infilepath) as infile:
         while True:
-            outfilepath = os.path.join(outdir, '{0}_{1}.{2}'.format(cl_id, i, ext) ) #"{}_{}.{}".format(foutpath, fname, i, ext)
+            outfilepath = os.path.join(tmp_outdir, '{0}_{1}.{2}'.format(cl_id, i, ext) ) #"{}_{}.{}".format(foutpath, fname, i, ext)
             print(outfilepath)
             with open(outfilepath, 'w') as outfile:
                 for line in (infile.readline() for _ in range(chunksize)):
@@ -136,11 +138,11 @@ def symlink_force(target, link_name):
         else:
             raise e
 
-def split_cluster_in_batches(indir, outdir, max_seqs):
+def split_cluster_in_batches(indir, outdir, tmp_work_dir, max_seqs):
     # create a modified indir
-    outdir = os.path.join(outdir, 'split_in_batches')
+    tmp_work_dir = os.path.join(tmp_work_dir, 'split_in_batches')
     # print(indir)
-    mkdir_p(outdir)
+    mkdir_p(tmp_work_dir)
     smaller_than_max_seqs = False
     # print(sorted(os.listdir(indir), key=lambda x: int(x.split('.')[0])) )
     # sys.exit()
@@ -148,7 +150,6 @@ def split_cluster_in_batches(indir, outdir, max_seqs):
     for file_ in sorted(os.listdir(indir), key=lambda x: int(x.split('.')[0])):
         fastq_file = os.fsdecode(file_)
         if fastq_file.endswith(".fastq"): 
-            # print(indir, outdir, fastq_file)
             if not smaller_than_max_seqs:
                 num_lines = sum(1 for line in open(os.path.join(indir, fastq_file)))
                 print(fastq_file, num_lines)
@@ -157,68 +158,75 @@ def split_cluster_in_batches(indir, outdir, max_seqs):
                 smaller_than_max_seqs = True
 
             if not smaller_than_max_seqs:
-                splitfile(indir, outdir, fastq_file, 4*max_seqs) # is fastq file
+                splitfile(indir, tmp_work_dir, fastq_file, 4*max_seqs) # is fastq file
             else:
                 cl_id, ext = fastq_file.rsplit('.',1)
                 print(fastq_file, "symlinking instead")
-                symlink_force(os.path.join( indir, fastq_file), os.path.join(outdir, '{0}_{1}.{2}'.format(cl_id, 0, ext) ))
+                symlink_force(os.path.join( indir, fastq_file), os.path.join(tmp_work_dir, '{0}_{1}.{2}'.format(cl_id, 0, ext) ))
             # cl_id = read_fastq_file.split(".")[0]
             # outfolder = os.path.join(args.outfolder, cl_id)
-    return outdir
+    return tmp_work_dir
 
 
-def join_back_corrected_batches_into_cluster(outdir):
-    print(outdir)
+def join_back_corrected_batches_into_cluster(tmp_work_dir, outdir, split_mod, residual):
+    print(outdir, tmp_work_dir)
     unique_cl_ids = set()
-    for file in os.listdir(outdir):
-        print(file)
+    for file in os.listdir(tmp_work_dir):
+        file = os.fsdecode(file)
+        # print(file)
         fname =  file.split('_')
         if len(fname) == 2:
-            cl_id, batch_id = file.split('_')
+            cl_id, batch_id = fname[0], fname[1] #file.split('_')
+
+            if int(cl_id) % split_mod != residual:
+                # print('skipping {0} because args.split_mod:{1} and args.residual:{2} set.'.format(cl_id, args.split_mod, args.residual))
+                continue
             unique_cl_ids.add(cl_id)
 
     for cl_id in unique_cl_ids:
-        pattern = os.path.join(outdir, cl_id)
-        print("joining all", pattern)
-        mkdir_p(pattern)
+        out_pattern = os.path.join(outdir, cl_id)
+        # print(type(tmp_work_dir), type(cl_id))
+        batches_pattern = os.path.join(os.fsdecode(outdir), cl_id+'_*')
+        # print("joining all", out_pattern, "from", batches_pattern)
+        mkdir_p(out_pattern)
 
-        error_file = open(os.path.join(pattern, 'cat.stderr'), 'w')
-        outfilename = os.path.join(pattern, 'corrected_reads.fastq')
-        print("into outfile", outfilename)
-        batches_pattern = pattern+'_*'
+        error_file = open(os.path.join(out_pattern, 'cat.stderr'), 'w')
+        outfilename = os.path.join(out_pattern, 'corrected_reads.fastq')
+        # print("into outfile", outfilename)
 
         with open(outfilename, 'wb') as outfile:
             for batch_id in sorted(glob.glob(batches_pattern)):
+                # print(batch_id)
                 filename = os.path.join(batch_id, 'corrected_reads.fastq')
                 if filename == outfilename:
                     # don't want to copy the output into the output
                     continue
                 with open(filename, 'rb') as readfile:
                     shutil.copyfileobj(readfile, outfile)
-                print('Removing', batch_id)
+                # print('Removing', batch_id)
                 shutil.rmtree(batch_id)
-        # print( " ".join( [s for s in sorted(glob.glob(batches_pattern))] ))
-        # conc_f = " ".join( [s for s in sorted(glob.glob(batches_pattern))] )
-        # subprocess.check_call([ "cat", conc_f  ], stderr=error_file, stdout=out_file, shell = True)
-        # subprocess.check_call([ "rm", conc_f ])
+
 
 
 def main(args):
     directory = args.fastq_folder #os.fsencode(args.fastq_folder)
     isoncorrect_location = os.path.dirname(os.path.realpath(__file__))
-    split_tmp_directory = split_cluster_in_batches(directory, args.outfolder, args.max_seqs)
+    tmp_work_dir = tempfile.mkdtemp()
+    print("Temporary workdirektory:", tmp_work_dir)
+    split_tmp_directory = split_cluster_in_batches(directory, args.outfolder, tmp_work_dir, args.max_seqs)
     split_directory = os.fsencode(split_tmp_directory)
     print(isoncorrect_location)
     instances = []
     for file_ in os.listdir(split_directory):
         read_fastq_file = os.fsdecode(file_)
         if read_fastq_file.endswith(".fastq"): 
-            cl_id = read_fastq_file.split(".")[0]
-            outfolder = os.path.join(args.outfolder, cl_id)
+            batch_id = read_fastq_file.split(".")[0]
+            cl_id = batch_id.split("_")[0]
+            outfolder = os.path.join(args.outfolder, batch_id)
             if int(cl_id) % args.split_mod != args.residual:
-                print('skipping {0} because args.split_mod:{1} and args.residual:{2} set.'.format(cl_id, args.split_mod, args.residual))
+                print('skipping {0} because args.split_mod:{1} and args.residual:{2} set.'.format(batch_id, args.split_mod, args.residual))
                 continue
-            # print(cl_id, outfolder, read_fastq_file, split_directory)
+            # print(batch_id, outfolder, read_fastq_file, split_directory)
             fastq_file_path = os.path.join(os.fsdecode(split_directory), read_fastq_file)
             # print(fastq_file_path)
             compute = True
@@ -226,16 +234,16 @@ def main(args):
                 candidate_corrected_file = os.path.join(outfolder, "corrected_reads.fastq")
                 if os.path.isfile(candidate_corrected_file): 
                     if wccount(candidate_corrected_file) == wccount(fastq_file_path):
-                        print("already computed cluster and complete file", cl_id)
+                        print("already computed cluster and complete file", batch_id)
                         compute = False
 
             if compute:
                 isoncorrect_algorithm_params = {  "set_w_dynamically" : args.set_w_dynamically, "exact_instance_limit" : args.exact_instance_limit, 
                                                     "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T, "max_seqs" : args.max_seqs,  "use_racon" : args.use_racon  }
-                instances.append((isoncorrect_location, fastq_file_path, outfolder, cl_id, isoncorrect_algorithm_params) )
+                instances.append((isoncorrect_location, fastq_file_path, outfolder, batch_id, isoncorrect_algorithm_params) )
             # else:
             #     isoncorrect_algorithm_params = {  "set_w_dynamically" : args.set_w_dynamically, "exact_instance_limit" : args.exact_instance_limit, "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T }
-            #     instances.append((isoncorrect_location, fastq_file_path, outfolder, int(cl_id), isoncorrect_algorithm_params) )
+            #     instances.append((isoncorrect_location, fastq_file_path, outfolder, int(batch_id), isoncorrect_algorithm_params) )
             # print(os.path.join(split_directory, read_fastq_file))
             # continue
         else:
@@ -270,7 +278,7 @@ def main(args):
     print("Time elapesd multiprocessing:", time() - start_multi)
 
     file_handling = time()
-    join_back_corrected_batches_into_cluster(args.outfolder)
+    join_back_corrected_batches_into_cluster(split_directory, args.outfolder, args.split_mod, args.residual)
     shutil.rmtree(split_directory)
     print("Joined back batched files in:", time() - file_handling)
 
