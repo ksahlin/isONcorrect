@@ -214,10 +214,14 @@ def join_back_corrected_batches_into_cluster(tmp_work_dir, outdir, split_mod, re
 def main(args):
     directory = args.fastq_folder #os.fsencode(args.fastq_folder)
     isoncorrect_location = os.path.dirname(os.path.realpath(__file__))
-    tmp_work_dir = tempfile.mkdtemp()
-    print("Temporary workdirektory:", tmp_work_dir)
-    split_tmp_directory = split_cluster_in_batches(directory, args.outfolder, tmp_work_dir, args.max_seqs)
-    split_directory = os.fsencode(split_tmp_directory)
+    if args.split_wrt_batches:
+        tmp_work_dir = tempfile.mkdtemp()
+        print("Temporary workdirektory:", tmp_work_dir)
+        split_tmp_directory = split_cluster_in_batches(directory, args.outfolder, tmp_work_dir, args.max_seqs)
+        split_directory = os.fsencode(split_tmp_directory)
+    else:
+        split_directory = os.fsencode(directory)
+
     print(isoncorrect_location)
     instances = []
     for file_ in os.listdir(split_directory):
@@ -280,10 +284,11 @@ def main(args):
 
     print("Time elapesd multiprocessing:", time() - start_multi)
 
-    file_handling = time()
-    join_back_corrected_batches_into_cluster(split_directory, args.outfolder, args.split_mod, args.residual)
-    shutil.rmtree(split_directory)
-    print("Joined back batched files in:", time() - file_handling)
+    if args.split_wrt_batches:
+        file_handling = time()
+        join_back_corrected_batches_into_cluster(split_directory, args.outfolder, args.split_mod, args.residual)
+        shutil.rmtree(split_directory)
+        print("Joined back batched files in:", time() - file_handling)
 
     return
 
@@ -311,6 +316,8 @@ if __name__ == '__main__':
 
     # parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
     #                                                              not to be used for clusters with over ~500 reads)')
+
+    parser.add_argument('--split_wrt_batches', action="store_true", help='Process reads per batch (of max_seqs sequences) instead of per cluster. Significantly decrease runtime when few very large clusters are less than the number of cores used.')
   
     parser.add_argument('--outfolder', type=str,  default=None, help='Outfolder with all corrected reads.')
     args = parser.parse_args()
