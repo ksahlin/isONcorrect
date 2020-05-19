@@ -122,6 +122,9 @@ def splitfile(indir, tmp_outdir, fname, chunksize):
                 for line in (infile.readline() for _ in range(chunksize)):
                     outfile.write(line)
                 written = bool(line)
+            # print(os.stat(outfilepath).st_size == 0)
+            if os.stat(outfilepath).st_size == 0: # Corner case: Original file is even multiple of max_seqs, hence the last file becomes empty. Remove this
+                os.remove(outfilepath)
             if not written:
                 break
             i += 1
