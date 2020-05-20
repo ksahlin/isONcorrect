@@ -171,7 +171,7 @@ rule plot:
     output: subsample_plot = config["ROOT_OUT"] + "/evaluation_biological/SIRV/sirv_subsampling_error_rates.pdf"
     run:
         eval_dir = config["ROOT_IN"] + "/evaluation_sirv/"
-        outfolder = config["ROOT_OUT"] + "/evaluation_biological/"  
+        outfolder = config["ROOT_OUT"] + "/evaluation_biological/SIRV/"  
         # python plots.py /Users/kxs624/Documents/workspace/isONcorrect/data/results/sirv_error_analysis_Dec_02.csv  ~/tmp/ISONCORRECT/RESULTS_02_12_19/sirv/
         shell("python {eval_dir}/plots.py  {input.sirv_csv}  {outfolder}")
 
