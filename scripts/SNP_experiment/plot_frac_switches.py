@@ -29,11 +29,13 @@ heatmap_data = df.groupby(['Depth', 'p']).sum().reset_index()
 heatmap_data = heatmap_data[['Depth','p', 'mut_retained']]
 heatmap_data = heatmap_data.pivot("Depth", "p", "mut_retained")
 heatmap_data = heatmap_data.sort_values('Depth', ascending=False)
+heatmap_data = 10*heatmap_data
 print(heatmap_data)
+
 plt.clf()
 # xticks= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,">15"]
 plt.figure(figsize = (8,5))
-ax = sns.heatmap(heatmap_data, cmap='coolwarm_r', annot=True, vmin=0, vmax=10,fmt='g', linewidths=.7)
+ax = sns.heatmap(heatmap_data, cmap='coolwarm_r', annot=True, vmin=0, vmax=100,fmt='g', linewidths=.7, cbar_kws={'format': '%.0f%%'})
 ax.set_ylabel("Read depth")
 ax.set_xlabel("SNP Frequency")
 

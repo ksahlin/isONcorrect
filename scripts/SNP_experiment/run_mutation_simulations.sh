@@ -41,7 +41,7 @@ do
     # sim random mutation
     python $experiment_dir/simulate_reads.py --sim_mutation --ref $RTN4IP1 --outfolder $outbase/$id/  > /dev/null
 
-    for depth in 20 40 60 80 100 #20 60 100 200 #100 #60 100 #500 #20 60 100
+    for depth in 10 20 40 60 80 100
     do
         for p in  0.1 0.2 0.3 0.4 0.5  #0.05 0.1 0.2 # 0.3 0.4 0.5    # $(seq 0.1 0.1 0.4) 
         do
