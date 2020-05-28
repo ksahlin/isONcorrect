@@ -121,11 +121,11 @@ Below shows specific pipeline script to go from raw reads `raw_reads.fq` to corr
 ```
 #!/bin/bash
 
-# isonano pipeline to get high quality full length reads from transcriots
+# isonano pipeline to get high quality full length reads from transcripts
 
 cdna_classifier.py  raw_reads.fq outfolder/reads_full_length.fq \
-                      [-t cores]  [-w outfolder/rescued.fq  \
-                      -u outfolder/unclassified.fq  -S outfolder/stats.txt] 
+                      [-t cores]  [-w outfolder/rescued.fq]  \
+                      [-u outfolder/unclassified.fq]  [-S outfolder/stats.txt] 
 
 isONclust  [--t cores]  --ont --fastq outfolder/reads_full_length.fq \
              --outfolder outfolder/clustering
