@@ -1,0 +1,20 @@
+{
+
+    "DATASETS" : [ "20200423_1719_X1_FAN34454_6bdd6a85.fq_noprimer_fl.fq",
+                    "20200423_1719_X2_FAN33304_d706ed0.fq_noprimer_fl.fq",
+                   "20200423_1719_X3_FAN33328_49202635.fq_noprimer_fl.fq",
+                   "20200423_1719_X4_FAN34374_395bb44b.fq_noprimer_fl.fq",
+                   "20200423_1719_X5_FAN34510_5ce1deb6.fq_noprimer_fl.fq"],
+
+    "ROOT_OUT" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval",
+    "ROOT_IN" : "/galaxy/home/ksahlin/prefix/source/isONcorrect",
+    "ANNOTATION" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/gtf_annotations",
+
+    "DATA" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/data/PCS109_ACC_NA12878/",
+    "HG38_MMI" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/data/hg38/hg38.mmi",
+    "HG38" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/data/HG38/hg38.fa",
+    "ENSEMBL" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/data/",
+    "GNUTIME" : "/usr/bin/time -v",
+    "SCRIPT_FOLDER" : "/galaxy/home/ksahlin/prefix/source/isONcorrect/scripts/",
+    "EXPERIMENT_ID" : "test"
+}

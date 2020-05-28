@@ -84,9 +84,9 @@ def main(args):
     tot_del_, tot_ins, tot_subs, tot_len = 0, 0, 0, 0
     read_errors = []
     if args.error_level == 4:
-        error_lvls = [0.9, 0.94, 0.96, 0.98, 0.99, 0.995]
-    elif  args.error_level == 14:
-        error_lvls = [0.7,0.8, 0.85, 0.875, 0.92, 0.96, 0.98]        
+        error_lvls = [0.9, 0.95, 0.96, 0.98, 0.99, 0.995]
+    elif  args.error_level == 12:
+        error_lvls = [0.75, 0.85, 0.875, 0.91, 0.95, 0.98]        
     else:
         error_lvls = [0.85, 0.875, 0.9, 0.92, 0.96, 0.98, 0.99, 0.995]
 
@@ -103,17 +103,17 @@ def main(args):
         for i, acc in enumerate(sequence_transcripts):
             transcript = sequence_transcripts[acc]
             abundance = random.choice(abundance_vector)
-            print(abundance)
+            # print(abundance)
             for a in range(abundance):
                 read_acc, read, qual, del_, ins, subs  = simulate_read(a, acc, transcript, error_lvls)
-                tot_err = (del_ + ins + subs)/float(len(transcript))
+                tot_err = (del_ + ins + subs)/float(len(transcript)+ ins)
                 ont_reads[read_acc] = (read, qual)
                 args.logfile.write("del:{0}, ins:{1}, subs:{2}, tot_err:{3}\n".format(del_, ins, subs, tot_err))
                 tot_del_ += del_
                 tot_ins += ins
                 tot_subs += subs
                 tot_len += len(transcript)
-                read_errors.append( (del_ + ins +subs)/float(len(transcript))  )
+                read_errors.append( (del_ + ins +subs)/float(len(transcript) + ins)  )
             if i % 500 == 0:
                 print(i, "transcripts simulated from.")                
 
@@ -137,7 +137,7 @@ def main(args):
             tot_ins += ins
             tot_subs += subs
             tot_len += len(transcript)
-            read_errors.append( (del_ + ins +subs)/float(len(transcript))  )
+            read_errors.append( (del_ + ins +subs)/float(len(transcript) + ins)  )
             if i % 5000 == 0:
                 print(i, "reads simulated.")
     else:
@@ -185,7 +185,7 @@ if __name__ == '__main__':
     parser.add_argument('read_count', type=int, help='Number of reads to simulate.')
     parser.add_argument('--uneven', action="store_true", help='Transcripts gets relative abundance transcript_weightss from 1,2,..,10,20,...,100.')
     parser.add_argument('--subsampling_experiment', action="store_true", help='Each transcript is sampled with abundance 1,2,..,10,20,...,100')
-    parser.add_argument('--error_level', type=int, default = 7, help='Set error level to 4%, 7%, or 14%')
+    parser.add_argument('--error_level', type=int, default = 7, help='Set error level to 4%, 7%, or 12%')
 
 
     args = parser.parse_args()

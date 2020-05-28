@@ -52,9 +52,9 @@
     "isONclust" : 
     {
         "jobname" : "isONclust",
-        "cpus-per-task" : "1",
+        "cpus-per-task" : "64",
         "Nodes" : 1,
-        "mem" : "8G",
+        "mem" : "500G",
         "runtime" : "7-00:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",

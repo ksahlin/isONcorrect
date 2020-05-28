@@ -1,0 +1,81 @@
+"""
+    snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} --mem {cluster.mem} -c {cluster.cpus-per-task} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiments.json --latency-wait 100 --verbose -n
+
+
+"""
+
+shell.prefix("set -o pipefail; ")
+# configfile: "experiments.json"
+
+# wildcard_constraints:
+#     datasets="20200423_1719*fq_noprimer_fl.fq",
+
+####################################################
+########## standard python functions ###############
+####################################################
+
+import re
+import os
+import errno
+import shutil
+import glob
+
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+rule all:
+   input:  config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/accuracies.tar.gz",
+           expand(config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/{dataset}.accuracies.tsv.pdf", dataset = config["DATASETS"]) 
+
+
+
+rule align_reads_minimap2:
+    input: reads = config["DATA"] + "{dataset}"
+    output: reads_aligned =  config["DATA"] + "{dataset}.sam"
+    run:
+        ref = config["HG38"]
+        shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k13 -w4 {ref} {input.reads} >  {output.reads_aligned} ")
+
+
+rule get_accuracies:
+    input: reads_aligned =  rules.align_reads_minimap2.output.reads_aligned,
+    output: tsv_file = config["DATA"] + "{dataset}.accuracies.tsv"
+    run:
+        eval_dir = config["ROOT_IN"] + "/ont_error_rates/"
+        database_path= "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/evaluation_biological/NA12878/"
+        shell("python {eval_dir}/get_read_accuracies.py  {input.reads_aligned}  {database_path} {output.tsv_file} ")
+
+
+
+rule full_plots:
+    input: input_tsvs = expand(config["DATA"] + "{dataset}.accuracies.tsv", dataset = config["DATASETS"])
+    output: histograms = expand(config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/{dataset}.accuracies.tsv.pdf", dataset = config["DATASETS"]) 
+    run:
+        eval_dir = config["ROOT_IN"] + "/ont_error_rates/"
+        outfolder = config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies"  
+
+        #python scripts/plots.py /Users/kxs624/Documents/workspace/isONcorrect/data/results/drosophila_full.csv  ~/tmp/ISONCORRECT/RESULTS_08_12_19/drosophila_full.csv /sirv_full.csv 
+        
+        shell("python {eval_dir}/plots.py  {input.input_tsvs} {outfolder}")
+
+
+rule zip_plots:
+    input: plots = rules.full_plots.output.histograms
+    output: plots_zip = config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/accuracies.tar.gz"
+    run:
+        plot_pattern = config["ROOT_OUT"] + "/evaluation_biological/minion_accuracies/*.pdf"
+        shell("tar -cvzf {output.plots_zip} {plot_pattern}")
+
+
+
+
+
+
+
