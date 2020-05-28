@@ -60,12 +60,12 @@ rule all:
           config["ROOT_OUT"] + "/evaluation_simulated/chr6/3500000/uneven/abundance.csv",
           config["ROOT_OUT"] + "/evaluation_simulated/chr6/3500000/uneven/results.csv",
           config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/abundance.csv",
-          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/results.csv"
+          config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/results.csv",
           #   config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/abundance.csv",
           # config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/results.csv",
           #config["ROOT_OUT"], "eval_sim_table.csv"),
           #config["ROOT_OUT"], "controlled.csv")
-
+          config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz"
 
 # rule simulation:
 #     input: config["ROOT_OUT"] + "/eval_sim_table.csv"
@@ -154,7 +154,7 @@ rule align_corrected_reads_minimap2:
             ref = rules.remove_redundant.output.non_redundant_database
     output: corrected_reads_aligned = config["ROOT_OUT"] + "/correction/{dataset}/{nr_reads}/{abundance}/isONcorrect.sam"
     run:
-        shell("/usr/bin/time -v  minimap2 --eqx -a -t 8 -k13 -w4 {input.ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -a -t 8  -k13 -w4 {input.ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
 
 
 rule align_original_reads_minimap2:
@@ -162,7 +162,7 @@ rule align_original_reads_minimap2:
             ref = rules.remove_redundant.output.non_redundant_database
     output: original_reads_aligned =  config["ROOT_OUT"] + "/data/{dataset}/{nr_reads}/{abundance}/reads.sam"
     run:
-        shell("/usr/bin/time -v  minimap2 --eqx -a -t 8 -k13 -w4 {input.ref} {input.original_reads} >  {output.original_reads_aligned} ")
+        shell("/usr/bin/time -v  minimap2 --eqx -a -t 8  -k13 -w4 {input.ref} {input.original_reads} >  {output.original_reads_aligned} ")
 
 
 rule overcorrection_analysis:
@@ -183,9 +183,36 @@ rule overcorrection_analysis:
 
 
 
+rule plots_full:
+    input: sim_csv = config["ROOT_OUT"] + "/evaluation_simulated/chr6/3500000/uneven/results.csv"
+    output: plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_full.pdf"
+    run:
+        eval_dir = config["ROOT_IN"] + "/evaluation_sim/"
+        outfolder = config["ROOT_OUT"] + "/evaluation_simulated/"          
+        shell("python {eval_dir}/plots.py  {input.sim_csv}  {outfolder} sim")
 
 
+rule plots_subsampling:
+    input: abundance_file = config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/abundance.csv",
+           error_rates_file = config["ROOT_OUT"] + "/evaluation_simulated/chr6/1/uneven/results.csv"
+    output: error_rate_plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_subsample_error_rate.pdf",
+            abundance_plot = config["ROOT_OUT"] + "/evaluation_simulated/sim_subsample_abundance.pdf"
+    run:
+        eval_dir = config["ROOT_IN"] + "/evaluation_sim/"
+        shell("python {eval_dir}/plot_error_rates.py  {input.error_rates_file}  {output.error_rate_plot} ")
+        shell("python {eval_dir}/plot_abundance_diff.py  {input.abundance_file}  {output.abundance_plot} ")
+        # python full_transcriptome_exp/plot_error_rates.py  /Users/kxs624/Documents/workspace/isONcorrect/data/results/sim_exponential_results.csv  ~/tmp/ISONCORRECT/RESULTS_02_12_19/sim/err_rate 
+        # python full_transcriptome_exp/plot_abundance_diff.py    /Users/kxs624/Documents/workspace/isONcorrect/data/results/sim_depth_abundance.csv ~/tmp/ISONCORRECT/RESULTS_24_12_19/simulated/abundance_plot.pdf
 
+
+rule zip_plots:
+    input: plot1 = rules.plots_full.output.plot, 
+           plot2 = rules.plots_subsampling.output.abundance_plot,
+           plot3 = rules.plots_subsampling.output.error_rate_plot
+    output: plots_zip = config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz"
+    run:
+        plot_pattern = config["ROOT_OUT"] + "/evaluation_simulated/*.pdf"
+        shell("tar -cvzf {output.plots_zip} {plot_pattern}")
 
 # rule evaluate:
 #     input: original_reads = rules.subsample.output.subsampled_fastq,
