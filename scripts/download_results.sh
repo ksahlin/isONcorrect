@@ -27,3 +27,20 @@ tar -cvjf $OUT/isoncorrect_eval_files.tar.bz2 $OUT/isONcorrect*
 split -b 49M $OUT/isoncorrect_eval_files.tar.bz2 $OUT/isoncorrect_eval_files.tar.bz2.part
 
 # https://www.tecmint.com/split-large-tar-into-multiple-files-of-certain-size/
+
+# cat isoncorrect_eval_files.tar.bz2.part* > isoncorrect_eval_files.tar.bz2.joined
+
+# RATTLE
+
+BASE="/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/"
+OUT="/galaxy/home/ksahlin/prefix/source/isONcorrect/data"
+
+# full
+
+cp $BASE/rattle_sirv_full/results_per_read_to_transcriptome.csv $OUT/rattle_sirv_full.csv
+cp $BASE/rattle_drosophila_full/results_per_read.csv $OUT/rattle_dros_full.csv
+
+# sim subsample isoncorrect
+
+cp $BASE/rattle_sim_controlled/results.csv $OUT/rattle_sim_error_rate.csv
+cp $BASE/rattle_sim_controlled/abundance.csv $OUT/rattle_sim_overcorrection.csv
