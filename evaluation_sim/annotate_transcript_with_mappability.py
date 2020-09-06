@@ -57,7 +57,7 @@ def kmer_counter(genome, k_size, target_kmers = {}):
 			# seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
 			# read_kmers = deque([seq[i:i+k_size] for i in range(len(seq) - k_size )])
 			for i in range(0, len(seq) - k_size +1):
-				kmer = seq[i:i+k_size]
+				kmer = seq[i:i+k_size].upper()
 				if i % 10000000 == 0 and i > 1:
 					print(i, chr_id)
 				if len(target_kmers) == 0 or kmer in target_kmers:
