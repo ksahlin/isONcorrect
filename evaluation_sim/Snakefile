@@ -65,7 +65,8 @@ rule all:
           # config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/results.csv",
           #config["ROOT_OUT"], "eval_sim_table.csv"),
           #config["ROOT_OUT"], "controlled.csv")
-          config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz"
+          config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz",
+          config["ROOT_OUT"] + "/evaluation_simulated/sim_error_rate_per_mappability.pdf"
 
 # rule simulation:
 #     input: config["ROOT_OUT"] + "/eval_sim_table.csv"
