@@ -161,7 +161,7 @@ rule annotate_mappability:
 
 rule plot_error_rate_by_mappability:
     input: error_rates_file = config["ROOT_OUT"] + "/evaluation_simulated/chr6/3500000/uneven/results.csv",
-            mappability_file = annotate_mappability.output.mappability_file
+            mappability_file = rules.annotate_mappability.output.mappability_file
     output: mappability_error_rates = config["ROOT_OUT"] + "/evaluation_simulated/sim_error_rate_per_mappability.pdf"
     run: 
         eval_dir = config["ROOT_IN"] + "/evaluation_sim/"
