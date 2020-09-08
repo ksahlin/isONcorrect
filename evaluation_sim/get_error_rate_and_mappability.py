@@ -42,7 +42,7 @@ def plot_err_per_mappability(file, args):
     plt.rc('ytick', labelsize=10)
     fig, ax = plt.subplots()
     ax = sns.boxplot(x="mappability_bins", y="err_rate", data=data, showfliers=False)
-    plt.xlabel('Median k-mer copy number in transcript (binned)', fontsize=11)
+    plt.xlabel('Average k-mer copy number in transcript (binned)', fontsize=11)
     plt.ylabel('Error rate after correction',fontsize=14)
     plt.setp(ax.get_xticklabels(), rotation=45)
     plt.tight_layout()
