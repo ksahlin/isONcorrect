@@ -252,7 +252,7 @@ def get_error_rates(input_csv, dataset, read_to_infer = "corrected"):
             # if SIRV full        
             acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,chr_id = line.split(',')
         
-        if dataset == 'drosophila':
+        if dataset == 'drosophila' or dataset == 'ont_human':
             # if Drosophila
             acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag = line.split(',')
 
@@ -304,7 +304,7 @@ def main(args):
 
     total_error_rate(args.input_csv, args.outfolder, args.dataset)
 
-    if args.dataset == 'drosophila':
+    if args.dataset == 'drosophila' or args.dataset == 'ont_human' :
         splice_site_classification_plot(args.input_csv, args.outfolder)
         unique_fsm(args.input_csv, args.outfolder)
 
