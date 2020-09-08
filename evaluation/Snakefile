@@ -169,7 +169,7 @@ rule align_corrected_reads_minimap2:
         if wildcards.dataset == "SIRV":
             ref = config["SIRV"]
             shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf --splice-flank=no -k13 -w4 {ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")          
-        elif wildcards.dataset == "NA12878":
+        elif wildcards.dataset == "ont_human":
             ref = config["HG38"]
             shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k13 -w4 {ref} {input.corrected_reads} >  {output.corrected_reads_aligned} ")
         elif wildcards.dataset == "drosophila":
@@ -193,7 +193,7 @@ rule align_original_reads_minimap2:
         if wildcards.dataset == "SIRV":
             ref = config["SIRV"]
             shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf --splice-flank=no -k13 -w4 {ref} {input.original_reads} >  {output.original_reads_aligned} ")
-        elif wildcards.dataset == "NA12878":
+        elif wildcards.dataset == "ont_human":
             ref = config["HG38"]
             shell("/usr/bin/time -v  minimap2 --eqx -t 8 -ax splice -uf -k13 -w4 {ref} {input.original_reads} >  {output.original_reads_aligned} ")
         elif wildcards.dataset == "drosophila":
@@ -212,7 +212,7 @@ rule evaluate:
     run:
         if wildcards.dataset == "SIRV":
             ref = config["SIRV"]
-        elif wildcards.dataset == "NA12878":
+        elif wildcards.dataset == "ont_human":
             ref = config["HG38"]
         elif wildcards.dataset == "drosophila":
             ref =  config["drosophila97"]
@@ -220,7 +220,7 @@ rule evaluate:
         eval_dir = config["ROOT_IN"] + "/scripts/"
         outfolder = config["ROOT_OUT"] + "/evaluation_biological/{0}/{1}/".format(wildcards.dataset, wildcards.nr_reads)  
         mkdir_p(outfolder) 
-        if wildcards.dataset == "NA12878":
+        if wildcards.dataset == "ont_human":
             shell("python {eval_dir}/evaluate_real_reads_to_genome.py  {input.original_reads_aligned}  {input.corrected_reads_aligned} {input.original_reads}  \
                                                         {input.corrected_reads} {ref} {input.clusters_tsv} {input.gtf_annotation} {outfolder} --load_database")
         elif wildcards.dataset == "drosophila":
@@ -253,7 +253,8 @@ rule evaluate_sirv_full:
 
 rule full_plots:
     input: sirv_csv = rules.evaluate_sirv_full.output.csv_file, 
-            drosophila_csv = config["ROOT_OUT"] + "/evaluation_biological/drosophila/999/results_per_read.csv"
+            drosophila_csv = config["ROOT_OUT"] + "/evaluation_biological/drosophila/999/results_per_read.csv",
+            ont_human_csv = config["ROOT_OUT"] + "/evaluation_biological/ont_human/999/results_per_read.csv"
     output: plots = expand(config["ROOT_OUT"] + "/evaluation_biological/{plot}", plot = ["sirv_full.pdf", "drosophila_full.pdf", "drosophila_splice_site_classification.pdf", "drosophila_fsm_breakdown.pdf"]) 
     run:
         eval_dir = config["ROOT_IN"] + "/evaluation/"
@@ -263,6 +264,7 @@ rule full_plots:
         
         shell("python {eval_dir}/plots.py  {input.sirv_csv}  {outfolder} sirv")
         shell("python {eval_dir}/plots.py  {input.drosophila_csv}  {outfolder} drosophila")
+        shell("python {eval_dir}/plots.py  {input.drosophila_csv}  {outfolder} ont_human")
 
 rule zip_plots:
     input: plots = rules.full_plots.output.plots

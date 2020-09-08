@@ -1,6 +1,6 @@
 {
 
-    "DATASETS" : ["SIRV", "drosophila"],
+    "DATASETS" : ["SIRV", "drosophila", "ont_human"],
     "SIMULATED_DATASETS" : ["chr6"],
 
     "NR_READS" : ["999"],
@@ -11,7 +11,7 @@
 
     "DATA" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/data/",
     "HG38_MMI" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/data/hg38/hg38.mmi",
-    "HG38" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/data/HG38/hg38.fa",
+    "HG38" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/data/HG38/Homo_sapiens.GRCh38.dna.primary_assembly_modified_headers.fa",
     "SIRV" : "/nfs/brubeck.bx.psu.edu/scratch4/ksahlin/isoncorrect_eval/data/SIRV/SIRV_Set1_Lot00141_Sequences_170612a/SIRV_isoforms_multi-fasta_170612a.fasta",
     "SIRV_TRANSCRIPTOME" : "/galaxy/home/ksahlin/prefix/source/isONcorrect/test_data/sirv_transcriptome.fasta",
     "SIRV_TRANSCRIPTOME_DISTINCT" : "/galaxy/home/ksahlin/prefix/source/isONcorrect/test_data/sirv_transcriptome_flat_non_redundant.fasta",
