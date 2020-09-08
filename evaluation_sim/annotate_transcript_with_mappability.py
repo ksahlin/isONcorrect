@@ -10,7 +10,7 @@ from sys import stdout
 
 import itertools
 from collections import defaultdict, deque
-
+import statistics
 
 def readfq(fp): # this is a generator function
     last = None # this is a buffer keeping the last unprocessed line
@@ -69,13 +69,19 @@ def annotate_transcript_with_mean_mappability(transcripts, kmer_counts, k_size):
 	ann_transcripts = {}
 	for acc, seq in transcripts.items():
 		sum_mappability = 0
+		pos_mappabilities = []
 		for i in range(0, len(seq) - k_size + 1):
 			kmer = seq[i:i+k_size]
 			count = kmer_counts[kmer] if kmer in kmer_counts else 1
 			sum_mappability += count
+			pos_mappabilities.append(count)
 
 		avg_mappability = sum_mappability / (len(seq) - k_size + 1)
-		ann_transcripts[acc] = avg_mappability
+		median_mappability = statistics.median(pos_mappabilities)
+		
+		# ann_transcripts[acc] = avg_mappability
+		ann_transcripts[acc] = median_mappability
+		
 	return ann_transcripts
 
 

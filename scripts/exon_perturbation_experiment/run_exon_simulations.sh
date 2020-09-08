@@ -39,7 +39,7 @@ RTN4IP1="ATGCTATTGGTCTTCGAATGCCGGAGTGGGAGCTGTTGAACGGTTCTAAGTAGGAGAGTGAAAGACCAGCA
 for id in $(seq 1 1 10) #  $(seq 1 1 10)
 do 
     # sim random mutation
-    python $experiment_dir/simulate_reads.py --sim_exon_removal --exon_length 5 --ref $RTN4IP1 --outfolder $outbase/$id/  > /dev/null
+    python $experiment_dir/simulate_reads.py --sim_exon_removal --exon_length 20 --ref $RTN4IP1 --outfolder $outbase/$id/  > /dev/null
 
     for depth in 10 20 40 60 80 100
     do
