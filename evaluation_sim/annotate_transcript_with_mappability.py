@@ -79,8 +79,8 @@ def annotate_transcript_with_mean_mappability(transcripts, kmer_counts, k_size):
 		avg_mappability = sum_mappability / (len(seq) - k_size + 1)
 		median_mappability = statistics.median(pos_mappabilities)
 		
-		# ann_transcripts[acc] = avg_mappability
-		ann_transcripts[acc] = median_mappability
+		ann_transcripts[acc] = avg_mappability
+		# ann_transcripts[acc] = median_mappability
 		
 	return ann_transcripts
 
