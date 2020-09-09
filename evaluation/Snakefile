@@ -264,7 +264,7 @@ rule full_plots:
         
         shell("python {eval_dir}/plots.py  {input.sirv_csv}  {outfolder} sirv")
         shell("python {eval_dir}/plots.py  {input.drosophila_csv}  {outfolder} drosophila")
-        shell("python {eval_dir}/plots.py  {input.drosophila_csv}  {outfolder} ont_human")
+        shell("python {eval_dir}/plots.py  {input.ont_human_csv}  {outfolder} ont_human")
 
 rule zip_plots:
     input: plots = rules.full_plots.output.plots
