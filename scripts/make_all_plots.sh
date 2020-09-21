@@ -1,7 +1,7 @@
 
 
 EVAL_BASE="/Users/kxs624/Documents/workspace/isONcorrect/"
-FILE_BASE="/Users/kxs624/tmp/ISONCORRECT/RESULTS_2020_05_17/"
+FILE_BASE="/Users/kxs624/Documents/workspace/isONcorrect/data/results/"
 
 
 # Fig 1a, 3a,3b
@@ -30,6 +30,12 @@ FILE_BASE="/Users/kxs624/tmp/ISONCORRECT/RESULTS_2020_05_17/"
 #python $EVAL_BASE/evaluation_sim/plot_error_rates.py  $FILE_BASE/comp_sim_error_rate.csv  $FILE_BASE/plots/figure_Sz.pdf 
 
 
+# CANU 
+# Fig 
+python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/canu_sim_ca_abundance.csv  $FILE_BASE/plots/figure_Sy.pdf 
+# Fig 
+python $EVAL_BASE/evaluation_sim/plot_error_rates.py  $FILE_BASE/canu_sim_ca_results.csv $FILE_BASE/plots/figure_Sz.pdf 
+
 # Fig S_dros
 # python $EVAL_BASE/evaluation/plots.py  $FILE_BASE/comp_dros_full.csv  $FILE_BASE/plots_comp/ drosophila
 
@@ -43,5 +49,5 @@ FILE_BASE="/Users/kxs624/tmp/ISONCORRECT/RESULTS_2020_05_17/"
 # python $EVAL_BASE/evaluation_sim/plot_abundance_diff.py  $FILE_BASE/12_abundance.csv  $FILE_BASE/plots/sim/figure_12_percent_overcorr.pdf 
 
 # Fig SIRV iso_cov plots
-python $EVAL_BASE/evaluation_sirv_iso_cov/plot.py $FILE_BASE/isONcorrect_sirv_iso_cov.csv $FILE_BASE/plots/sim/
-python $EVAL_BASE/evaluation_sirv_iso_cov/plot_overcorrected_isoforms.py $FILE_BASE/overcorrected_isoforms.csv $FILE_BASE/plots/sim/
+# python $EVAL_BASE/evaluation_sirv_iso_cov/plot.py $FILE_BASE/isONcorrect_sirv_iso_cov.csv $FILE_BASE/plots/sim/
+# python $EVAL_BASE/evaluation_sirv_iso_cov/plot_overcorrected_isoforms.py $FILE_BASE/overcorrected_isoforms.csv $FILE_BASE/plots/sim/

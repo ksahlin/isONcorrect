@@ -38,10 +38,12 @@ overcorrection_amount = []
 abundance = []
 overcorr_and_ab = defaultdict(lambda: defaultdict(int))
 # overcorr_and_ab = []
-# for i in range(17):
-#     overcorr_and_ab.append([])
-#     for j in range(19):
-#         overcorr_and_ab[-1].append(0)
+for i in range(1,17):
+    # overcorr_and_ab.append([])
+    for j in list(range(1,10)) + list(range(10,101,10)): #range(19):
+        overcorr_and_ab[i][j] = 0
+
+
 for row in list_of_list:
     acc, annot, ab, is_corr, read_type, ed_btw_transcripts, ed_read_to_true, ed_read_to_aligned = row
     if acc not in read_annot:
@@ -119,7 +121,10 @@ plt.clf()
 xticks= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,">15"]
 #yticks= [1,2,3,4,5,6,7,8,9,10,20,30,40,50,60,70,80,90,100][::-1]
 plt.figure(figsize = (8,5))
-ax = sns.heatmap(df, cmap='coolwarm', annot=True, xticklabels = xticks, vmin=0, vmax=10,fmt='g', linewidths=.7)
+# mask = np.zeros_like(df)
+mask = df == 0
+ax = sns.heatmap(df, mask=mask, cmap='coolwarm', annot=True, xticklabels = xticks, vmin=0, vmax=10,fmt='g', linewidths=.7)
+
 ax.set_ylabel("Abundance")
 ax.set_xlabel("Overcorrection (edit distance)")
 
