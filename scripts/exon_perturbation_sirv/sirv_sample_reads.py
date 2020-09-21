@@ -67,29 +67,20 @@ def get_subsamples(transcript_cov, depth, nr_isoforms):
 
 
 
-def get_abundance_aligned_reads(sam_file):
+def get_aligned_reads(sam_file, isoforms ):
     SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     references = SAM_file.references
-    valid_genes = set(["SIRV3", "SIRV5", "SIRV6"])
-    transcript_cov = defaultdict(lambda: defaultdict(set))
-    # amgiguous_primary = defaultdict(set)
+    isoform_reads = {} # defaultdict(lambda: defaultdict(set))
+
+    for acc in isoforms:
+        isoform_reads[acc] = set()
 
     for read in SAM_file.fetch(until_eof=True):
-        if (read.flag == 0 or read.flag == 16):
-            transcript_id = read.reference_name
-            if transcript_id[:5] in valid_genes:
-                gene_id = transcript_id[4]
-                transcript_cov[gene_id][transcript_id].add(read.query_name)
-    # except:
-    #     pass
+        assert read.flag == 0
+        # transcript_id = read.reference_name
+        isoform_reads[read.reference_name].add((read.query_name +"|"+ read.reference_name, read.query_sequence))
 
-    # print(transcript_cov)
-
-        # elif (read.flag == 0 or read.flag == 16) and read.mapping_quality == 0:
-        #     transcript_id = read.reference_name
-        #     amgiguous_primary[transcript_id].add(read.query_name)
-
-    return transcript_cov
+    return isoform_reads
 
 def mkdir_p(path):
     try:
@@ -103,29 +94,32 @@ def mkdir_p(path):
 
 
 def main(args):
-    transcript_cov = get_abundance_aligned_reads(args.alignments)
-    print(len(transcript_cov), [len(transcript_cov[g]) for g in transcript_cov])
-    subsamples = get_subsamples(transcript_cov, args.depth_per_transcript, args.nr_isoforms)
-    fastq = { acc : (seq,qual) for acc, (seq,qual) in readfq(open(args.fastq, 'r'))}
+    nr_reads_minor = int(p*d) 
+    nr_reads_major = int((1-p)*d) 
+    isoforms = { acc : seq for acc, (seq, _ ) in readfq(open(args.isoforms, 'r'))}
+
+    isoform_reads = get_aligned_reads(args.alignments, args.isoforms)
+
+    minor_isoform, major_isoform = random.shuffle(list(isoforms.keys()))
+    reads_minor = random.sample(isoform_reads[minor_isoform], nr_reads_minor)
+    reads_major = random.sample(isoform_reads[major_isoform], nr_reads_major)
+
+    all_reads = random.shuffle(reads_minor + reads_major)
 
     outfile = open(args.outfile, "w")
-    for tr_id, set_of_reads in subsamples.items():
-        for read_acc in set_of_reads:
-            seq, qual  = fastq[read_acc]
-            outfile.write("@{0}\n{1}\n+\n{2}\n".format(read_acc, seq, qual))
-
+    for acc, seq in all_reads.items():
+        outfile.write(">{0}\n{1}\n".format(acc, seq))
     outfile.close()
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser("Parses alignments and subsamples a fastq file based on alignments.")
-    parser.add_argument('fastq', type=str, help='fastq file. ')
-    # parser.add_argument('ref_fastq', type=str, help='fastq file. ')
-    parser.add_argument('alignments', type=str, help='fastq file. ')
+    parser.add_argument('isoforms', type=str, help='fasta file. ')
+    parser.add_argument('alignments', type=str, help='Sam file. ')
+    parser.add_argument('p', type=float, help='fraction minor.')
+    parser.add_argument('d', type=int, help='Depth per transcript.')
     parser.add_argument('outfile', type=str, help='Fastq file. ')
-    parser.add_argument('depth_per_transcript', type=int, help='Depth per transcript.')
-    parser.add_argument('nr_isoforms', type=int, help='Number of nr_isoforms.')
 
     args = parser.parse_args()
     dirname=os.path.dirname(args.outfile)
