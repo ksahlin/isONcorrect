@@ -68,17 +68,20 @@ def get_subsamples(transcript_cov, depth, nr_isoforms):
 
 
 def get_aligned_reads(sam_file, isoforms ):
-    SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
-    references = SAM_file.references
     isoform_reads = {} # defaultdict(lambda: defaultdict(set))
-
     for acc in isoforms:
+        print(acc)
         isoform_reads[acc] = set()
+    
 
-    for read in SAM_file.fetch(until_eof=True):
-        assert read.flag == 0
-        # transcript_id = read.reference_name
-        isoform_reads[read.reference_name].add((read.query_name +"|"+ read.reference_name, read.query_sequence))
+    for line in open(sam_file, "r"):
+        vals = line.split()
+        isoform_reads[vals[2]].add((vals[0] +"|"+ vals[2], vals[9]))
+
+    # SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
+    # for read in SAM_file.fetch(until_eof=True):
+    #     assert read.flag == 0
+    #     isoform_reads[read.reference_name].add((read.query_name +"|"+ read.reference_name, read.query_sequence))
 
     return isoform_reads
 
@@ -98,7 +101,7 @@ def main(args):
     nr_reads_major = int((1-args.p)*args.d) 
     isoforms = { acc : seq for acc, (seq, _ ) in readfq(open(args.isoforms, 'r'))}
 
-    isoform_reads = get_aligned_reads(args.alignments, args.isoforms)
+    isoform_reads = get_aligned_reads(args.alignments, isoforms)
 
     minor_isoform, major_isoform = random.shuffle(list(isoforms.keys()))
     reads_minor = random.sample(isoform_reads[minor_isoform], nr_reads_minor)
