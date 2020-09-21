@@ -94,8 +94,8 @@ def mkdir_p(path):
 
 
 def main(args):
-    nr_reads_minor = int(p*d) 
-    nr_reads_major = int((1-p)*d) 
+    nr_reads_minor = int(args.p*args.d) 
+    nr_reads_major = int((1-args.p)*args.d) 
     isoforms = { acc : seq for acc, (seq, _ ) in readfq(open(args.isoforms, 'r'))}
 
     isoform_reads = get_aligned_reads(args.alignments, args.isoforms)
