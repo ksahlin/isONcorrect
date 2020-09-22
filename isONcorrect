@@ -467,6 +467,7 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
     reads_path.close()
 
     spoa_ref = create_augmented_reference.run_spoa(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
+    # print(spoa_ref)
     # spoa_ref_m = create_augmented_reference.run_spoa_m(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
     # spoa_ref_m2 = create_augmented_reference.run_spoa_m2(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
     if use_racon and weight > 2:
@@ -506,9 +507,10 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
     #     print(spoa_ref_m)
     #     print(spoa_ref_m2)
     #     # print(racon_ref)
-    #     # for acc_z, aln_list_z in alignment_matrix.items():
-    #     #     print("".join([c for c in aln_list_z]) )
-    #     # print("".join([c for c in alignment_matrix["ref"]]), "consensus")      
+    # if spoa_ref == "GGTCGGCGACCGGAGTCACAGCGCGACCAACGGGCAAAGGCCCATAGGCTTTTCCATCGGCA":
+    #     for acc_z, aln_list_z in alignment_matrix.items():
+    #         print("".join([c for c in aln_list_z]) )
+    #     print("".join([c for c in alignment_matrix["ref"]]), "consensus")      
     #     print()
 
     nr_columns = len(alignment_matrix["ref"])
@@ -529,10 +531,15 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
     contexts_per_pos = get_contexts(alignment_matrix, int(k_size/2))
     alternative_refs = get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_threshold, disable_numpy)
     ref_aln = alignment_matrix["ref"]
+    # if spoa_ref == "GGTCGGCGACCGGAGTCACAGCGCGACCAACGGGCAAAGGCCCATAGGCTTTTCCATCGGCA":
+    #     for zz, r in enumerate(alternative_refs):
+    #         print(zz, r)
 
     for i, d in enumerate(PFM):
         # calculate reference context here the first thing we do from ref_aln
-        if len(alternative_refs[i]) > 1 and len( {v for (v, ref_tmp, dep, thresh_) in alternative_refs[i]}) > 1:
+        if len(alternative_refs[i]) >= 1 and len( {v for (v, ref_tmp, dep, thresh_) in alternative_refs[i]}) >= 1:
+            # if spoa_ref == "GGTCGGCGACCGGAGTCACAGCGCGACCAACGGGCAAAGGCCCATAGGCTTTTCCATCGGCA":
+            #     print(alternative_refs[i])
             for q_id_tuple in alignment_matrix:    
                 if q_id_tuple == "ref":
                     continue
