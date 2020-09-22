@@ -90,7 +90,7 @@ plot_data = plot_data.reset_index()
 plot_data = plot_data[['Depth','p', 'is_minor_after_corr']]
 plot_data = plot_data.pivot( "p","Depth", "is_minor_after_corr")
 print(plot_data)
-ax = plot_data.plot(xticks=[0.1,0.2,0.3,0.4,0.5], yticks=[0.1,0.2,0.3,0.4,0.5], xlim=[0.05,0.55], ylim=[0.05,0.55], xlabel= "Minor isoform fraction (before correction)", ylabel= "Minor isoform fraction (after correction)") 
+ax = plot_data.plot(xticks=[0.1,0.2,0.3,0.4,0.5], yticks=[0.1,0.2,0.3,0.4,0.5], xlim=[0.0,0.6], ylim=[0.0,0.6], xlabel= "Minor isoform fraction (before correction)", ylabel= "Minor isoform fraction (after correction)") 
 ax.plot([0, 1], [0, 1], transform=ax.transAxes, color='k', ls='--')
 plt.savefig(sys.argv[2]+ '_lineplot.pdf')
 plt.close()
