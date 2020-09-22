@@ -67,16 +67,17 @@ def get_subsamples(transcript_cov, depth, nr_isoforms):
 
 
 
-def get_aligned_reads(sam_file, isoforms ):
+def get_aligned_reads(sam_file, minor_isoform, major_isoform ):
     isoform_reads = {} # defaultdict(lambda: defaultdict(set))
-    for acc in isoforms:
-        print(acc)
+    for acc in [minor_isoform, major_isoform]:
+        # print(acc)
         isoform_reads[acc] = set()
     
 
     for line in open(sam_file, "r"):
         vals = line.split()
-        isoform_reads[vals[2]].add((vals[0] +"|"+ vals[2], vals[9]))
+        flag = 'minor' if vals[2] == minor_isoform else 'major'
+        isoform_reads[vals[2]].add( (vals[0] +"|"+ vals[2]+"|"+ flag, vals[9], vals[10]) )
 
     # SAM_file = pysam.AlignmentFile(sam_file, "r", check_sq=False)
     # for read in SAM_file.fetch(until_eof=True):
@@ -101,17 +102,22 @@ def main(args):
     nr_reads_major = int((1-args.p)*args.d) 
     isoforms = { acc : seq for acc, (seq, _ ) in readfq(open(args.isoforms, 'r'))}
 
-    isoform_reads = get_aligned_reads(args.alignments, isoforms)
+    l = list(isoforms.keys())
+    random.shuffle(l)
+    minor_isoform, major_isoform = l[0], l[1]
 
-    minor_isoform, major_isoform = random.shuffle(list(isoforms.keys()))
+    isoform_reads = get_aligned_reads(args.alignments, minor_isoform, major_isoform)
+
+
     reads_minor = random.sample(isoform_reads[minor_isoform], nr_reads_minor)
     reads_major = random.sample(isoform_reads[major_isoform], nr_reads_major)
 
-    all_reads = random.shuffle(reads_minor + reads_major)
+    all_reads = reads_minor + reads_major
+    random.shuffle(all_reads)
 
     outfile = open(args.outfile, "w")
-    for acc, seq in all_reads.items():
-        outfile.write(">{0}\n{1}\n".format(acc, seq))
+    for (acc, seq, qual_seq) in all_reads:
+        outfile.write("@{0}\n{1}\n{2}\n{3}\n".format(acc, seq, "+", qual_seq))
     outfile.close()
 
 
@@ -127,6 +133,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     dirname=os.path.dirname(args.outfile)
     mkdir_p(dirname)
-    print(dirname)
+    # print(dirname)
     main(args)
 

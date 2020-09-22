@@ -64,6 +64,7 @@ import edlib
 def edlib_ed(x, y, mode="NW", task="distance", k=1):
     result = edlib.align(x, y, mode=mode, task=task, k=k)
     ed = result["editDistance"]
+    # print(result["cigar"])
     return ed
 
 
@@ -205,18 +206,21 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
     total_nucleotides = 0
     for acc, read in corrected_reads.items():
         best_ed = 1000
-        best_ed_acc = ''
+        best_ed_isoform = ''
         for ref_acc, ref in reference_transcripts.items():
-            edit_distance = edlib_ed(read, ref, mode="NW", k = 2*len(ref)) 
+            # since reads might be a bit shorter in ends, or contain adapters outside ends of transcript we do "semi-global" alignment with allowing infix.
+            edit_distance1 = edlib_ed(read, ref, mode="HW", task="path", k = 2*len(ref)) 
+            edit_distance2 = edlib_ed(ref, read, mode="HW", task="path", k = 2*len(ref)) 
+            edit_distance = min(edit_distance1, edit_distance2)
             # print(acc,ref_acc, edit_distance)
             ref_len = len(ref)
             if edit_distance < best_ed:
                 best_ed = edit_distance
-                best_ed_acc = ref_acc
+                best_ed_isoform = ref_acc
             elif edit_distance == best_ed:
                 print("Original error")
 
-        errors_container[acc] = (best_ed,best_ed_acc)
+        errors_container[acc] = (best_ed,best_ed_isoform)
         total_nucleotides += ref_len
         tot_errors += best_ed
 
@@ -228,12 +232,14 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
     minor_mut_retained = 0
     for q_acc in errors_container:
         q_acc_mod = q_acc.split("_")[0]
+        # print(q_acc_mod)
+        # print(q_acc_mod.split("|")[2], errors_container[q_acc][1])
         best_ref_ed, best_ref_acc = errors_container[q_acc]
         # switch = 1 if q_acc_mod !=  errors_container[q_acc][1] else 0
         true_abundance = original_abundances[q_acc_mod]
-
-        minor_isoform = 1 if q_acc_mod == "sim|sim|2" else 0   # true_abundance <= max(list(original_abundances.values())) else 0
-        correct_structure = 1 if q_acc_mod ==  errors_container[q_acc][1] else 0
+        true_isoform = q_acc_mod.split("|")[2]
+        minor_isoform = 1 if 'minor' in q_acc_mod else 0   # true_abundance <= max(list(original_abundances.values())) else 0
+        correct_structure = 1 if true_isoform == errors_container[q_acc][1] else 0
         if correct_structure == 1 and minor_isoform == 1:
             # print("here",correct_structure,minor_isoform )
             minor_mut_retained = 1
