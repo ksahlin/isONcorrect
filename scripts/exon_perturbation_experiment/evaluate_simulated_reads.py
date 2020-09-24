@@ -236,7 +236,7 @@ def get_best_match(corrected_reads, reference_transcripts, outfolder, params):
         correct_structure = 1 if q_acc_mod ==  errors_container[q_acc][1] else 0
         if correct_structure == 1 and minor_isoform == 1:
             # print("here",correct_structure,minor_isoform )
-            minor_mut_retained = 1
+            minor_mut_retained += 1
         out_file.write("{0},{1},{2},{3},{4},{5},{6}\n".format(q_acc, best_ref_acc, best_ref_ed, round(100*best_ref_ed/float(ref_len),4), true_abundance, correct_structure, minor_isoform )) 
 
 

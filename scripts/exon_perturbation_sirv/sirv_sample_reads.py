@@ -105,7 +105,7 @@ def main(args):
     l = list(isoforms.keys())
     random.shuffle(l)
     minor_isoform, major_isoform = l[0], l[1]
-    # print(minor_isoform, len(isoforms[minor_isoform]), len(isoforms[major_isoform]) )
+    print("MINOR:", minor_isoform, len(isoforms[minor_isoform]), len(isoforms[major_isoform]) )
     isoform_reads = get_aligned_reads(args.alignments, minor_isoform, major_isoform)
 
 

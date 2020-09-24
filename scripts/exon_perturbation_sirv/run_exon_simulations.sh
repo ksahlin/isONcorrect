@@ -52,7 +52,7 @@ echo -n  "id","type","Depth","p","q_acc","r_acc","total_errors","error_rate","ab
 
 
 
-exon_length=6 # either 6 or 14
+exon_length=14 # either 6 or 14
 
 if [ $exon_length == 6 ]
 then
@@ -97,12 +97,12 @@ fi
 
 
 
-for id in $(seq 1 1 2) #  $(seq 1 1 10)
+for id in $(seq 1 1 10) #  $(seq 1 1 10)
 do 
 
-    for depth in 20 40 60 #10 20 40 60 80 100
+    for depth in 10 20 40 60 80 100
     do
-        for p in 0.3 0.4 #0.1 0.2 0.3 0.4 0.5 
+        for p in 0.1 0.2 0.3 0.4 0.5 
         do
 
             python $experiment_dir/sirv_sample_reads.py $isoforms $alignments  $p $depth $outbase/$id/$depth/$p/"reads.fq"
