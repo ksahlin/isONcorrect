@@ -1,5 +1,56 @@
-#include "argparse.hpp"
+#include <iostream>
+#include "argparse/include/argparse.hpp"
+#include "edlib/include/edlib.h"
+#include "spoa/include/spoa.hpp"
 
+
+void run_edlib(const std::string x, const std::string y) {
+  const char * ptr_x = x.c_str();
+  const char * ptr_y = y.c_str();
+  EdlibAlignResult result = edlibAlign(ptr_x, x.length(), ptr_y, y.length(), edlibNewAlignConfig(-1, EDLIB_MODE_NW, EDLIB_TASK_PATH, NULL, 0));
+  if (result.status == EDLIB_STATUS_OK) {
+      printf("edit_distance('hello', 'world!') = %d\n", result.editDistance);
+      printf("edit_distance('hello', 'world!') = %s\n", result.alignment);
+      char* cigar = edlibAlignmentToCigar(result.alignment, result.alignmentLength, EDLIB_CIGAR_STANDARD);
+      printf("%s\n", cigar);
+      free(cigar);
+  }
+  edlibFreeAlignResult(result);
+  std::cout << "edlib just got executed!\n";
+}
+
+void run_spoa() {
+  std::vector<std::string> sequences = {
+      "CATAAAAGAACGTAGGTCGCCCGTCCGTAACCTGTCGGATCACCGGAAAGGACCCGTAAAGTGATAATGAT",
+      "ATAAAGGCAGTCGCTCTGTAAGCTGTCGATTCACCGGAAAGATGGCGTTACCACGTAAAGTGATAATGATTAT",
+      "ATCAAAGAACGTGTAGCCTGTCCGTAATCTAGCGCATTTCACACGAGACCCGCGTAATGGG",
+      "CGTAAATAGGTAATGATTATCATTACATATCACAACTAGGGCCGTATTAATCATGATATCATCA",
+      "GTCGCTAGAGGCATCGTGAGTCGCTTCCGTACCGCAAGGATGACGAGTCACTTAAAGTGATAAT",
+      "CCGTAACCTTCATCGGATCACCGGAAAGGACCCGTAAATAGACCTGATTATCATCTACAT"
+  };
+
+  auto alignment_engine = spoa::AlignmentEngine::Create(
+      spoa::AlignmentType::kNW, 3, -5, -3);  // linear gaps
+
+  spoa::Graph graph{};
+
+  for (const auto& it : sequences) {
+    auto alignment = alignment_engine->Align(it, graph);
+    graph.AddAlignment(alignment, it);
+  }
+
+  auto consensus = graph.GenerateConsensus();
+
+  std::cerr << ">Consensus LN:i:" << consensus.size() << std::endl
+            << consensus << std::endl;
+
+  auto msa = graph.GenerateMultipleSequenceAlignment();
+
+  for (const auto& it : msa) {
+    std::cerr << it << std::endl;
+  }
+  std::cout << "spoa just got executed!\n";
+}
 
 int main(int argc, char *argv[]) {
   argparse::ArgumentParser program("isONcorrect", "0.0.6");
@@ -55,7 +106,11 @@ int main(int argc, char *argv[]) {
   std::cout << (k * k) << std::endl;
   auto w = program.get<int>("--w");
   std::cout << "w is set to " << w << std::endl;
+  std::string x = "hello";
+  std::string y = "world!";
+  run_edlib(x, y);
 
+  run_spoa();
 
   return 0;
 }
