@@ -109,37 +109,41 @@ USAGE
  
 ### Running
 
-For a single file with raw ONT cDNA reads, the following pipeline is recommended (bash script to run this provided below)
-1.  Get full-length ONT cDNA sequences ([pychopper](https://github.com/nanoporetech/pychopper) (a.k.a. `cdna_classifier`))
-2.  Cluster the full length reads where a cluster corresponds to a gene/gene-family (isONclust)
-3.  Make fastq files of each cluster
-4.  Correct individual clusters (isONcorrect)
-5.  Optional (join reads from separate clusters back to a single file)
+For a fastq file with raw ONT cDNA reads, the following pipeline is recommended. A bash script to run this pipeline is provided below.
+1.  Produce full-length reads (with [pychopper](https://github.com/nanoporetech/pychopper) (a.k.a. `cdna_classifier`))
+2.  Cluster the full length reads into genes/gene-families ([isONclust](https://github.com/ksahlin/isONclust))
+3.  Make fastq files of each cluster (`isONclust write_fastq` command)
+4.  Correct individual clusters ([isONcorrect](https://github.com/ksahlin/isONcorrect))
+5.  Join reads back to a single fastq file (This is of course optional)
 
 Below shows specific pipeline script to go from raw reads `raw_reads.fq` to corrected full-length reads `all_corrected_reads.fq` (please modify/remove arguments as needed). 
 
 ```
 #!/bin/bash
 
-# isonano pipeline to get high quality full length reads from transcripts
+# Pipeline to get high-quality full-length reads from ONT cDNA sequencing
 
-cdna_classifier.py  raw_reads.fq outfolder/reads_full_length.fq \
-                      [-t cores]  [-w outfolder/rescued.fq]  \
-                      [-u outfolder/unclassified.fq]  [-S outfolder/stats.txt] 
+# Set your path and number of cores
+root_out="outfolder"
+cores=20
 
-isONclust  [--t cores]  --ont --fastq outfolder/reads_full_length.fq \
-             --outfolder outfolder/clustering
+mkdir -p $root_out
 
-isONclust write_fastq --N 1 --clusters outfolder/clustering/final_clusters.csv \
-                      --fastq reads_full_length.fq --outfolder  outfolder/clustering/fastq_files 
+cdna_classifier.py  raw_reads.fq $root_out/full_length.fq -t $cores 
 
-run_isoncorrect [--t cores]  --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ 
+isONclust  --t $cores  --ont --fastq $root_out/full_length.fq \
+             --outfolder $root_out/clustering
+
+isONclust write_fastq --N 1 --clusters $root_out/clustering/final_clusters.csv \
+                      --fastq $root_out/full_length.fq --outfolder  $root_out/clustering/fastq_files 
+
+run_isoncorrect --t $cores  --fastq_folder $root_out/clustering/fastq_files  --outfolder $root_out/correction/ 
 
 # OPTIONAL BELOW TO MERGE ALL CORRECTED READS INTO ONE FILE
-touch all_corrected_reads.fq
-for f in in /outfolder/correction/*/corrected_reads.fastq; 
+touch $root_out/all_corrected_reads.fq
+for f in in $root_out/correction/*/corrected_reads.fastq; 
 do 
-  cat {f} >> all_corrected_reads.fq
+  cat {f} >> $root_out/all_corrected_reads.fq
 done
 ```
 
