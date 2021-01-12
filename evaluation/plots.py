@@ -32,7 +32,7 @@ def label_transcript(row):
    if row['no_splices']  == 1:
       return 'NO_SPLICE'
 
-def splice_site_classification_plot(input_csv, outfolder):
+def splice_site_classification_plot(input_csv, outfolder, dataset):
 
     indata = pd.read_csv(input_csv)
     indata['transcript_type'] = indata.apply (lambda row: label_transcript(row), axis=1)
@@ -55,8 +55,8 @@ def splice_site_classification_plot(input_csv, outfolder):
     # ax.set_ylim(0,15)
     # ax.set_ylabel("Error rate %")
 
-    plt.savefig(os.path.join(outfolder, "drosophila_splice_site_classification.eps"))
-    plt.savefig(os.path.join(outfolder, "drosophila_splice_site_classification.pdf"))
+    plt.savefig(os.path.join(outfolder, "{0}_splice_site_classification.eps".format(dataset)))
+    plt.savefig(os.path.join(outfolder, "{0}_splice_site_classification.pdf".format(dataset)))
     plt.close()
 
 def number_splices_fsm(input_csv, outfolder):
@@ -88,7 +88,7 @@ def transpose_count(dct):
         d[value]  += 1
     return d
 
-def unique_fsm(input_csv, outfolder):
+def unique_fsm(input_csv, outfolder, dataset):
 
     indata = pd.read_csv(input_csv)
     orig = indata[indata['read_type']=='original']
@@ -160,8 +160,8 @@ def unique_fsm(input_csv, outfolder):
     ax.set_ylim(0.5,100000)
     ax.set_ylabel("Read depth corrected (log(1+x) scale)")
     ax.set_xlabel("Read depth original (log(1+x) scale)")
-    plt.savefig(os.path.join(outfolder, "drosophila_fsm_breakdown.eps"))
-    plt.savefig(os.path.join(outfolder, "drosophila_fsm_breakdown.pdf"))
+    plt.savefig(os.path.join(outfolder, "{0}_fsm_breakdown.eps".format(dataset)))
+    plt.savefig(os.path.join(outfolder, "{0}_fsm_breakdown.pdf".format(dataset)))
     plt.close()
 
     print("sum",sum([reads_per_transcript_orig[tr_id] for tr_id in set(all_fsm_orig | all_fsm_corr)]), sum([reads_per_transcript_corr[tr_id] for tr_id in set(all_fsm_orig | all_fsm_corr)]) )
@@ -252,7 +252,7 @@ def get_error_rates(input_csv, dataset, read_to_infer = "corrected"):
             # if SIRV full        
             acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,chr_id = line.split(',')
         
-        if dataset == 'drosophila':
+        if dataset == 'drosophila' or dataset == 'ont_human':
             # if Drosophila
             acc,read_type,ins,del_,subs,matches,error_rate,read_length,aligned_length,cluster_size, is_unaligned_in_other_method,tot_splices,read_sm_junctions,read_nic_junctions,fsm,nic,ism,nnc,no_splices,donor_acceptors,donor_acceptors_choords,transcript_fsm_id,chr_id,reference_start,reference_end,sam_flag = line.split(',')
 
@@ -304,9 +304,9 @@ def main(args):
 
     total_error_rate(args.input_csv, args.outfolder, args.dataset)
 
-    if args.dataset == 'drosophila':
-        splice_site_classification_plot(args.input_csv, args.outfolder)
-        unique_fsm(args.input_csv, args.outfolder)
+    if args.dataset == 'drosophila' or args.dataset == 'ont_human' :
+        splice_site_classification_plot(args.input_csv, args.outfolder,  args.dataset)
+        unique_fsm(args.input_csv, args.outfolder, args.dataset)
 
 
 if __name__ == '__main__':

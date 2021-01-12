@@ -65,7 +65,8 @@ rule all:
           # config["ROOT_OUT"] + "/evaluation_simulated/chr6/1000000/uniform/results.csv",
           #config["ROOT_OUT"], "eval_sim_table.csv"),
           #config["ROOT_OUT"], "controlled.csv")
-          config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz"
+          config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz",
+          config["ROOT_OUT"] + "/evaluation_simulated/sim_error_rate_per_mappability.pdf"
 
 # rule simulation:
 #     input: config["ROOT_OUT"] + "/eval_sim_table.csv"
@@ -149,6 +150,24 @@ rule error_rate_analysis:
         # shell("python {experiment_dir}/plot_error_rates.py $error_rates_file  $error_plot")
 
 
+rule annotate_mappability:
+    input: ref = config["HG38"],
+           transcripts = rules.remove_redundant.output.non_redundant_database
+    output: mappability_file = config["ROOT_OUT"] + "/evaluation_simulated/chr6/3500000/uneven/mappability.csv"
+    run:
+        eval_dir = config["ROOT_IN"] + "/evaluation_sim/"
+        shell("python {eval_dir}/annotate_transcript_with_mappability.py  {input.transcripts} {input.ref} {output.mappability_file} 31")
+
+
+rule plot_error_rate_by_mappability:
+    input: error_rates_file = config["ROOT_OUT"] + "/evaluation_simulated/chr6/3500000/uneven/results.csv",
+            mappability_file = rules.annotate_mappability.output.mappability_file
+    output: mappability_error_rates = config["ROOT_OUT"] + "/evaluation_simulated/sim_error_rate_per_mappability.pdf"
+    run: 
+        eval_dir = config["ROOT_IN"] + "/evaluation_sim/"
+        shell("python {eval_dir}/get_error_rate_and_mappability.py {input.error_rates_file} {input.mappability_file} {output.mappability_error_rates} ")
+
+
 rule align_corrected_reads_minimap2:
     input: corrected_reads = rules.combine_isoncorrect.output.corrected_reads_fastq,
             ref = rules.remove_redundant.output.non_redundant_database
@@ -208,7 +227,8 @@ rule plots_subsampling:
 rule zip_plots:
     input: plot1 = rules.plots_full.output.plot, 
            plot2 = rules.plots_subsampling.output.abundance_plot,
-           plot3 = rules.plots_subsampling.output.error_rate_plot
+           plot3 = rules.plots_subsampling.output.error_rate_plot,
+           plot4 = rules.plot_error_rate_by_mappability.output.mappability_error_rates,           
     output: plots_zip = config["ROOT_OUT"] + "/evaluation_simulated/plots.tar.gz"
     run:
         plot_pattern = config["ROOT_OUT"] + "/evaluation_simulated/*.pdf"

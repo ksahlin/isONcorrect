@@ -20,7 +20,7 @@ Table of Contents
   * [USAGE](#USAGE)
     * [Running](#Running)
     * [Output](#Output)
-    * [Parallelization](#Parallelization)
+    * [Parallelization across nodes](#Parallelization-across-nodes)
   * [CREDITS](#CREDITS)
   * [LICENCE](#LICENCE)
 
@@ -149,9 +149,9 @@ isONcorrect does not need ONT reads to be full-length (i.e., produced by `pychop
 
 The output of `run_isoncorrect` is one file per cluster with identical headers to the original reads.
 
-### Parallelization
+### Parallelization across nodes
 
-isONcorrect currently supports parallelization across cores on a node, but not across several nodes. There is a way to overcome this limitation if you have access to multiple nodes as follows. The `run_isoncorrect` step can be parallilized across n nodes by (in bash or other environment, e.g., snakemake) parallelizing the following commands
+isONcorrect currently supports parallelization across cores on a node (parameter `--t`), but not across several nodes. There is a way to overcome this limitation if you have access to multiple nodes as follows. The `run_isoncorrect` step can be parallilized across n nodes by (in bash or other environment, e.g., snakemake) parallelizing the following commands
 
 ```
 run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual 0
@@ -167,9 +167,7 @@ CREDITS
 
 Please cite [1] when using isONcorrect.
 
-1. Kristoffer Sahlin, Botond Sipos, Phillip L James, Daniel Turner, Paul Medvedev, Error correction enables use of Oxford Nanopore technology for reference-free transcriptome analysis (bioRxiv, 2020)  [Link](https://www.biorxiv.org/content/10.1101/2020.01.07.897512v1).
-
-Bib record: 
+1. Sahlin, K., Sipos, B., James, P.L. et al. Error correction enables use of Oxford Nanopore technology for reference-free transcriptome analysis. Nat Commun 12, 2 (2021). https://doi.org/10.1038/s41467-020-20340-8  [Link](https://www.nature.com/articles/s41467-020-20340-8).
 
 LICENCE
 ----------------

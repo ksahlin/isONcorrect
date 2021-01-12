@@ -1,0 +1,9 @@
+[submodule "vendor/bioparser"]
+	path = vendor/bioparser
+	url = https://github.com/rvaser/bioparser.git
+[submodule "vendor/edlib"]
+	path = vendor/edlib
+	url = https://github.com/Martinsos/edlib.git
+[submodule "vendor/spoa"]
+	path = vendor/spoa
+	url = https://github.com/bsipos/spoa.git
