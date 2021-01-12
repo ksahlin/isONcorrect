@@ -1,7 +1,7 @@
 #include <iostream>
-#include "argparse/include/argparse.hpp"
-#include "edlib/include/edlib.h"
-#include "spoa/include/spoa.hpp"
+#include "argparse.hpp"
+#include "edlib/edlib.h"
+#include "spoa/spoa.hpp"
 
 
 void run_edlib(const std::string x, const std::string y) {
