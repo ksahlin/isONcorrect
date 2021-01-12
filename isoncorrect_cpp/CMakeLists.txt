@@ -1,105 +1,146 @@
-"""A setuptools based setup module.
-See:
-https://packaging.python.org/en/latest/distributing.html
-https://github.com/pypa/sampleproject
-"""
+cmake_minimum_required(VERSION 3.1)
+project(isONclust2)
 
-# using example setup file from https://github.com/pypa/sampleproject/blob/master/setup.py
+set(isONclust2_VERSION_MAJOR 2)
+set(isONclust2_VERSION_MINOR 3)
 
-from setuptools import setup, find_packages
-from codecs import open
-from os import path
+set(CMAKE_MACOSX_RPATH 0)
+#set(CMAKE_SYSTEM_PROCESSOR x86-64)
 
-here = path.abspath(path.dirname(__file__))
+option(BUILD_SHARED_LIBS OFF)
 
-# Get the long description from the README file
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-setup(
+set(CMAKE_CXX_STANDARD 11)
 
-    name='isONcorrect',  # Required
-    version='0.0.6',  # Required
-    description='De novo error-correction of long-read transcriptome reads.',  # Required
-    long_description=long_description,  # Optional
-    long_description_content_type='text/markdown',
-    url='https://github.com/ksahlin/isONcorrect',  # Optional
-    author='Kristoffer Sahlin',  # Optional
-    author_email='ksahlin@kth.se',  # Optional
+if(NOT CMAKE_BUILD_TYPE)
+      set(CMAKE_BUILD_TYPE Release)
+endif()
+message(STATUS "Build type is ${CMAKE_BUILD_TYPE}")
 
-    # Classifiers help users find your project by categorizing it.
-    #
-    # For a list of valid classifiers, see
-    # https://pypi.python.org/pypi?%3Aaction=list_classifiers
-    classifiers=[  # Optional
-        # How mature is this project? Common values are
-        #   3 - Alpha
-        #   4 - Beta
-        #   5 - Production/Stable
-        'Development Status :: 3 - Alpha',
-
-        # Indicate who your project is intended for
-        #'Intended Audience :: Developers',
-        #'Topic :: Software Development :: Build Tools',
-
-        # Pick your license as you wish
-        #'License :: OSI Approved :: MIT License',
-
-        # Specify the Python versions you support here. In particular, ensure
-        # that you indicate whether you support Python 2, Python 3 or both.
-        #'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-    ],
-
-    keywords='Oxford Nanopore transcript long read error correction',  # Optional
-
-    # You can just specify package directories manually here if your project is
-    # simple. Or you can use find_packages().
-    #
-    # Alternatively, if you just want to distribute a single Python file, use
-    # the `py_modules` argument instead as follows, which will expect a file
-    # called `my_module.py` to exist:
-    #
-    #   py_modules=["my_module"],
-    #
-    packages=find_packages(exclude=['contrib', 'docs', 'tests']),  # Required
-
-    # If your package is for Python 2.7, and all versions of Python 3 starting with 3.4, write
-    python_requires='!=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4',
-    # This field lists other packages that your project depends on to run.
-    # Any package you put here will be installed by pip when your project is
-    # installed, so they must be valid existing projects.
-    #
-    # For an analysis of "install_requires" vs pip's requirements files see:
-    # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['edlib>=1.1.2',
-                     'numpy>=1.16.2'],  # Optional
-    # dependency_links=[], # Optional
-    # List additional groups of dependencies here (e.g. development
-    # dependencies). Users will be able to install these using the "extras"
-    # syntax, for example:
-    #
-    #   $ pip install sampleproject[dev]
-    #
-    # Similar to `install_requires` above, these must be valid existing
-    # projects.
-    # extras_require={  # Optional
-    #     'dev': ['check-manifest'],
-    #     'test': ['coverage'],
-    # },
-
-    # To provide executable scripts, use entry points in preference to the
-    # "scripts" keyword. Entry points provide cross-platform support and allow
-    # `pip` to create the appropriate form of executable for the target
-    # platform.
-    # entry_points={  # Optional
-    #     'console_scripts': [
-    #         'IsoCon=IsoCon.__main__()',
-    #     ],
-    # },
-    scripts=['run_isoncorrect', 'isONcorrect'],
+execute_process(
+    COMMAND git log -1 --format=%h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_COMMIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+set (CPACK_PACKAGE_VERSION "\"v${isONclust2_VERSION_MAJOR}.${isONclust2_VERSION_MINOR}-${GIT_COMMIT_HASH}\"")
+
+configure_file(
+    "${PROJECT_SOURCE_DIR}/src/isONclust2_config.h.in"
+        "${PROJECT_BINARY_DIR}/isONclust2_config.h"
+    )
+
+include_directories("${PROJECT_BINARY_DIR}")
+find_package(Threads REQUIRED)
+set(HAVE_POSIX_MEMALIGN 1)
+
+if(CMAKE_COMPILER_IS_GNUCXX)
+    set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++ -static -lpthread -lm")
+    add_compile_options(
+        -msse3
+        # All warnings
+        -Wall
+        #-fopt-info-vec-all
+        -Wno-unused-local-typedefs
+        -Wno-unused-variable
+        -Wno-strict-overflow
+        -Wno-error=maybe-uninitialized
+    )
+elseif(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" OR CMAKE_COMPILER_IS_CLANGXX)
+    set(CMAKE_EXE_LINKER_FLAGS "-lc++ -lc++abi -lm -lc")    
+    ##--------
+    #   - Added TBB_USE_GLIBCXX_VERSION macro to specify the version of GNU
+    #     libstdc++ when it cannot be properly recognized, e.g. when used
+    #     with Clang on Linux* OS.
+    string(REPLACE "." "0" TBB_USE_GLIBCXX_VERSION ${CMAKE_CXX_COMPILER_VERSION})
+    add_definitions(-DTBB_USE_GLIBCXX_VERSION=${TBB_USE_GLIBCXX_VERSION})
+    ##-------
+        add_compile_options(
+    -msse
+    -msse2
+    -msse3
+    -msse4.1
+    -mavx
+    -mavx2
+        # All warnings, error-on-warn
+        -Wall 
+        -Wno-unknown-pragmas
+        -Wno-unused-variable
+    -Wno-tautological-pointer-compare
+    )
+    if(APPLE)
+        add_compile_options(
+        )
+    endif()
+endif()
+
+include_directories(${PROJECT_SOURCE_DIR}/src)
+include_directories(${PROJECT_SOURCE_DIR}/vendor/bioparser/vendor/zlib)
+include_directories(${PROJECT_SOURCE_DIR}/vendor/bioparser/include)
+include_directories(${PROJECT_SOURCE_DIR}/vendor/tbb/include)
+include_directories(${PROJECT_SOURCE_DIR}/vendor/parasail)
+include_directories(${PROJECT_SOURCE_DIR}/vendor/spoa)
+include_directories(${PROJECT_SOURCE_DIR}/vendor/spoa/vendor/cereal/include)
+
+include_directories(${PROJECT_BINARY_DIR}/vendor/bioparser/vendor/zlib)
+add_subdirectory(vendor/bioparser EXCLUDE_FROM_ALL)
+add_subdirectory(vendor/tbb EXCLUDE_FROM_ALL)
+add_subdirectory(vendor/parasail EXCLUDE_FROM_ALL)
+add_subdirectory(vendor/spoa EXCLUDE_FROM_ALL)
+
+
+message(STATUS "CMAKE_CXX_FLAGS_DEBUG is ${CMAKE_CXX_FLAGS_DEBUG}")
+message(STATUS "CMAKE_CXX_FLAGS_RELEASE is ${CMAKE_CXX_FLAGS_RELEASE}")
+
+set(SOURCE 
+    src/main.cpp
+    src/args.cpp
+    src/seq.cpp
+    src/qualscore.cpp
+    src/output.cpp
+    src/hpc.cpp
+    src/minimizer.cpp
+    src/kmer_index.cpp
+    src/p_emp_prob.cpp
+    src/util.cpp
+    src/pbar.cpp
+    src/cluster.cpp
+    src/serialize.cpp
+    src/consensus.cpp
+    )
+
+add_library(lisONclust2
+    src/args.cpp
+    src/seq.cpp
+    src/qualscore.cpp
+    src/output.cpp
+    src/hpc.cpp
+    src/minimizer.cpp
+    src/kmer_index.cpp
+    src/p_emp_prob.cpp
+    src/util.cpp
+    src/pbar.cpp
+    src/cluster.cpp
+    src/serialize.cpp
+    src/consensus.cpp
+)
+target_link_libraries(lisONclust2 tbb_static Threads::Threads parasail spoa)
+
+add_executable(isONclust2 ${SOURCE})
+set_target_properties(isONclust2 PROPERTIES LINK_SEARCH_START_STATIC 1)
+set_target_properties(isONclust2 PROPERTIES LINK_SEARCH_END_STATIC 1)
+target_link_libraries(isONclust2 tbb_static bioparser parasail cereal Threads::Threads spoa)
+
+
+add_executable(test_isONclust2
+        test/isONclust2_test.cpp)
+set_target_properties(test_isONclust2 PROPERTIES LINK_SEARCH_START_STATIC 1)
+set_target_properties(test_isONclust2 PROPERTIES LINK_SEARCH_END_STATIC 1)
+
+add_subdirectory(vendor/googletest/googletest EXCLUDE_FROM_ALL)
+target_link_libraries(test_isONclust2 bioparser parasail tbb_static lisONclust2 gtest_main Threads::Threads spoa)
