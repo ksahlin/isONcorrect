@@ -1,0 +1,26 @@
+buildDir ?= build
+releaseType ?= Release
+
+.PHONY: all isONcorrect
+all: isONcorrect
+isONcorrect: ${buildDir}/bin/isONcorrect
+
+${buildDir}:
+    mkdir ${buildDir}
+
+.PHONY: clean
+clean:
+    rm -rf ${buildDir}
+
+.PHONY: docs
+docs:
+    doxygen Doxyfile
+
+${buildDir}/bin/isONcorrect: ${buildDir}
+    cd ${buildDir} && \
+    cmake .. -DCMAKE_BUILD_TYPE=${releaseType} && \
+    make -j
+
+.PHONY: test
+test: ${buildDir}/bin/isONcorrect
+    @${buildDir}/bin/test_isONcorrect

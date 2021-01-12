@@ -1,0 +1,2 @@
+read,read_length,err,ins,del,subs,matches,err_rate,type,transcript_cov,gene_cov,gene_fam_cov
+AL096814.2|ENSG00000287363|ENST00000053469_0_id=1,1900,20,8,8,4,1888,1.05,corrected,4,14,14
