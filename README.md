@@ -123,7 +123,7 @@ Below shows specific pipeline script to go from raw reads `raw_reads.fq` to corr
 
 # Pipeline to get high-quality full-length reads from ONT cDNA sequencing
 
-# Set your path and number of cores
+# Set path to output and number of cores
 root_out="outfolder"
 cores=20
 
