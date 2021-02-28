@@ -4,8 +4,8 @@ import argparse
 import re
 # import ssw
 import numpy as np
-from Bio import pairwise2
-from Bio.SubsMat import MatrixInfo as matlist
+# from Bio import pairwise2
+# from Bio.SubsMat import MatrixInfo as matlist
 import pandas as pd
 import string
 import fractions
