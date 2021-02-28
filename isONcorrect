@@ -223,7 +223,32 @@ def get_randstrobes_with_positions_database(reads, k_size, w_min, w_max, primes)
 
     print(tmp_cnt, "RANDSTROBES COMBINATIONS GENERATED")
 
+    avg_bundance = 0
+    singleton_minimzer = 0
+    cnt = 1
+    abundants=[]
+    for m1 in list(M2.keys()):
+        for m2 in list(M2[m1].keys()):
+            if len(M2[m1][m2]) > 3:
+                avg_bundance += len(M2[m1][m2])//3
+                cnt +=1
+            else:
+                del M2[m1][m2]
+                singleton_minimzer += 1
+
+            if len(M2[m1][m2])// 3 > len(reads):
+                abundants.append((m1,m2, len(M2[m1][m2])//3 ))
+                if m2 == forbidden: # poly A tail
+                    del M2[m1][m2]
+    for m1,m2,ab in sorted(abundants, key=lambda x: x[2], reverse=True):
+        print("Too abundant:", m1, m2, ab, len(reads))
+
+    print("Average abundance for non-unique randstrobes:", avg_bundance/float(cnt))
+    print("Number of singleton randstrobes filtered out:", singleton_minimzer)
+
     return M2
+
+
 
 def randstrobe_iterator(seq, k_size, w_min, w_max, primes):
     forbidden = 'A'*k_size
@@ -1007,18 +1032,19 @@ def main(args):
         x_low = args.xmin
         hash_fcn = "lex"
         # for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
-        if args.randstrobes:
-            primes = get_primes(1000, args.nprimes)
-            # print(primes)
-            # primes = [97,73]
-            minimizer_combinations_database = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
-        else:
+        if args.paired_minimizers:
             if args.compression:
                 minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
             else:
                 minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
 
             minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
+
+        else:
+            primes = get_primes(1000, args.nprimes)
+            # print(primes)
+            # primes = [97,73]
+            minimizer_combinations_database = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
 
         quality_values_database = get_qvs(reads)
         # print(minimizer_database)
@@ -1036,12 +1062,14 @@ def main(args):
         tmp_cnt = 0
 
         for r_id in sorted(reads): #, reverse=True):
-            if args.randstrobes:
+            if args.paired_minimizers:
+                # seq = reads[r_id][1]
+                # print("seq length:", len(seq))
+                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
+            else:
                 seq = reads[r_id][1]
                 # print("seq length:", len(seq))
                 read_min_comb = [ ((m1,p1), m1_curr_spans) for m1, p1, m1_curr_spans in randstrobe_iterator(seq, k_size, x_low, x_high, primes)] 
-            else:
-                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
             # print(read_min_comb)
             # sys.exit()
             if args.exact:
@@ -1212,8 +1240,8 @@ if __name__ == '__main__':
     # parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
     parser.add_argument('--verbose', action="store_true", help='Print various developer stats.')
-    parser.add_argument('--randstrobes', action="store_true", help='Uses randstrobes instead of paired minimizers (originally used) to find shared regions.\
-                                                                 paired minimizers was original implementation described in isONcorrect paper. Rrandstrobes \
+    parser.add_argument('--paired_minimizers', action="store_true", help='IsONcorrect now uses randstrobes instead of paired minimizers to find shared regions.\
+                                                                 paired minimizers was original implementation described in isONcorrect paper. Randstrobes \
                                                                  reduces memory footprint substantially without significan drcrease in post correction quality.')
 
     parser.add_argument('--nprimes', type=int, default=2, help='How many "layers" of randstrobes to sample.')
