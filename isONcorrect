@@ -179,6 +179,76 @@ def minimizers_comb_iterator(minimizers, k, x_low, x_high):
         yield (m1, p1), m1_curr_spans[::-1]
 
 
+import operator
+def argmin(values):
+    min_index, min_value = min(enumerate(values), key=operator.itemgetter(1))
+    return min_index, min_value
+
+
+def randstrobe_order2(subseq, m1, k_size, prime):
+    min_index, min_value = argmin([ hash(m1+ subseq[i:i+k_size]) % prime for i in range(len(subseq) - k_size + 1)])
+    min_m2 = subseq[min_index:min_index+k_size]
+    # print(len(m1 + min_m2))
+    return  min_m2, min_index
+
+
+def get_randstrobes_with_positions_database(reads, k_size, w_min, w_max, primes):
+    
+    M2 = defaultdict(lambda: defaultdict(lambda :array("I")))
+    tmp_cnt = 0
+    forbidden = 'A'*k_size
+    for r_id in reads:
+        (acc, seq, qual) = reads[r_id]
+        for p1 in range(len(seq) - 2*k_size + 1):
+            m1 = seq[p1:p1+k_size]
+            window_p_start = p1 + k_size + w_min if p1+k_size+w_max <= len(seq) else max( (p1 + k_size + w_min) -  (p1+k_size+w_max - len(seq)), p1 + k_size )
+            window_p_end = min(p1 + k_size + w_max, len(seq))
+            assert window_p_end - window_p_start >= k_size, window_p_end - window_p_start  
+            assert window_p_start >= p1+k_size, (window_p_start, p1+k_size)
+            # print(window_p_start, window_p_end)
+            window_seq = seq[window_p_start : window_p_end]
+            for prime in primes:
+                m2, min_index2 = randstrobe_order2(window_seq, m1, k_size, prime)
+                # print("min_index2", min_index2, m1,m2)
+                p2 = window_p_start + min_index2
+
+                if m2 == m1 == forbidden:
+                    continue
+                tmp_cnt +=1
+
+                assert p2 >= p1 + k_size, (p2, p1 + k_size)
+                M2[m1][m2].append(r_id)
+                M2[m1][m2].append(p1)
+                M2[m1][m2].append(p2)
+
+    print(tmp_cnt, "RANDSTROBES COMBINATIONS GENERATED")
+
+    return M2
+
+def randstrobe_iterator(seq, k_size, w_min, w_max, primes):
+    forbidden = 'A'*k_size
+    for p1 in range(len(seq) - 2*k_size + 1):
+        m1 = seq[p1:p1+k_size]
+        window_p_start = p1 + k_size + w_min if p1+k_size+w_max <= len(seq) else max( (p1 + k_size + w_min) -  (p1+k_size+w_max - len(seq)), p1 + k_size )
+        window_p_end = min(p1 + k_size + w_max, len(seq))
+        assert window_p_end - window_p_start >= k_size, window_p_end - window_p_start  
+        assert window_p_start >= p1+k_size, (window_p_start, p1+k_size)
+        window_seq = seq[window_p_start : window_p_end]
+        m1_curr_spans = []
+        for prime in primes:
+            m2, min_index2 = randstrobe_order2(window_seq, m1, k_size, prime)
+            p2 = window_p_start + min_index2
+
+            if m2 == m1 == forbidden:
+                continue
+
+            assert p2 >= p1 + k_size, (p2, p1 + k_size)
+            m1_curr_spans.append((m2, p2))
+        yield m1, p1, m1_curr_spans
+
+
+
+
 def edlib_alignment(x, y, k):
     # if i == 100 and j % 1000 == 0:
     #     print("Edlib processed alignments: {0}".format(j+1))
@@ -622,21 +692,26 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
 
 def fill_p2(p, all_intervals_sorted_by_finish):
 
-    stop_to_max_j = {stop : j for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish)}
+    stop_to_max_j = {stop : j for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish) if start < stop }
+    # print(stop_to_max_j)
     all_choord_to_max_j = []
     j_max = 0
-    for i in range(0, all_intervals_sorted_by_finish[-1][1]):
+    # print("L", all_intervals_sorted_by_finish[-1][1])
+    for i in range(0, all_intervals_sorted_by_finish[-1][1] +1):
         if i in stop_to_max_j:
             j_max = stop_to_max_j[i]
         
         all_choord_to_max_j.append(j_max)
-
+    # print("AAAAAAAAA", len(all_choord_to_max_j))
+    # print(all_choord_to_max_j)
     for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
+        # print(start)
         j_max = all_choord_to_max_j[start]
         p.append(j_max)
     return p
 
 def solve_WIS(all_intervals_sorted_by_finish):
+    # Using notation from https://courses.cs.washington.edu/courses/cse521/13wi/slides/06dp-sched.pdf
     # print("instance size", len(all_intervals_sorted_by_finish))
     # p = [None]
     # fill_p(p, all_intervals_sorted_by_finish)
@@ -649,7 +724,14 @@ def solve_WIS(all_intervals_sorted_by_finish):
 
     v = [None] + [w*(stop-start) for (start, stop, w, _) in all_intervals_sorted_by_finish]
     OPT = [0]
+    # print(len(v), len(p), len(all_intervals_sorted_by_finish) +1)
+    # print(p)
     for j in range(1, len(all_intervals_sorted_by_finish) +1):
+        # print(v[j])
+        # print(p[j])
+        # print( len(p), j, len(OPT),p[j] )
+        # print(OPT[p[j]])
+        # print(OPT[j-1])
         OPT.append( max(v[j] + OPT[ p[j] ], OPT[j-1] ) )
 
     # assert len(p) == len(all_intervals_sorted_by_finish) + 1 == len(v) == len(OPT)
@@ -883,6 +965,15 @@ def batch(dictionary, size):
     
     return batches
 
+def get_primes(n, nprimes):
+    primes = []
+    for num in range(n, 2, -1):
+        if all(num%i!=0 for i in range(2,int(math.sqrt(num))+1)):
+            primes.append(num)
+            if len(primes) >= nprimes:
+                return primes
+
+
 def main(args):
     # start = time()
     all_reads = { i + 1 : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
@@ -916,12 +1007,19 @@ def main(args):
         x_low = args.xmin
         hash_fcn = "lex"
         # for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
-        if args.compression:
-            minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
+        if args.randstrobes:
+            primes = get_primes(1000, args.nprimes)
+            # print(primes)
+            # primes = [97,73]
+            minimizer_combinations_database = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
         else:
-            minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
+            if args.compression:
+                minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
+            else:
+                minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
 
-        minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
+            minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
+
         quality_values_database = get_qvs(reads)
         # print(minimizer_database)
         if args.verbose:
@@ -938,7 +1036,12 @@ def main(args):
         tmp_cnt = 0
 
         for r_id in sorted(reads): #, reverse=True):
-            read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
+            if args.randstrobes:
+                seq = reads[r_id][1]
+                # print("seq length:", len(seq))
+                read_min_comb = [ ((m1,p1), m1_curr_spans) for m1, p1, m1_curr_spans in randstrobe_iterator(seq, k_size, x_low, x_high, primes)] 
+            else:
+                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
             # print(read_min_comb)
             # sys.exit()
             if args.exact:
@@ -1030,8 +1133,9 @@ def main(args):
                 # eprint("Found nothing to correct")
                 corrected_seq = seq
             else:
-                all_intervals.sort(key = lambda x: x[1])
-                # print([www for (_, _,  www, _)  in all_intervals])
+                all_intervals.sort(key = lambda x: (x[1],x[0]))
+                # print([(xxx, yyy, www) for (xxx, yyy, www, zzz)  in all_intervals])
+                # sys.exit()
                 opt_indicies = solve_WIS(all_intervals) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
                 # print(opt_indicies)
                 # assert opt_indicies == opt_indicies2
@@ -1092,8 +1196,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--k', type=int, default=9, help='Kmer size')
     parser.add_argument('--w', type=int, default=10, help='Window size')
-    parser.add_argument('--xmin', type=int, default=14, help='Upper interval length')
-    parser.add_argument('--xmax', type=int, default=80, help='Lower interval length')
+    parser.add_argument('--xmin', type=int, default=14, help='Lower interval length')
+    parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.1, help='Minimum fraction keeping substitution')
     # parser.add_argument('--C', type=float, default=0.05, help='Minimum fraction of keeping alternative refernece contexts')
     parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
@@ -1108,6 +1212,11 @@ if __name__ == '__main__':
     # parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
     parser.add_argument('--verbose', action="store_true", help='Print various developer stats.')
+    parser.add_argument('--randstrobes', action="store_true", help='Uses randstrobes instead of paired minimizers (originally used) to find shared regions.\
+                                                                 paired minimizers was original implementation described in isONcorrect paper. Rrandstrobes \
+                                                                 reduces memory footprint substantially without significan drcrease in post correction quality.')
+
+    parser.add_argument('--nprimes', type=int, default=2, help='How many "layers" of randstrobes to sample.')
 
     parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
                                                                         minmimizer combinations to span regions in homopolymenr dense regions. Solution \
