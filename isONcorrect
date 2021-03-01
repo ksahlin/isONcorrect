@@ -576,7 +576,8 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
             break
         reads_path.write(">{0}\n{1}\n".format(str(q_id)+str(pos1)+str(pos2), seq))
     reads_path.close()
-
+    # print(reads_path.name)
+    # sys.exit()
     spoa_ref = create_augmented_reference.run_spoa(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
     # print(spoa_ref)
     # spoa_ref_m = create_augmented_reference.run_spoa_m(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
@@ -762,8 +763,9 @@ def solve_WIS(all_intervals_sorted_by_finish):
     #     print(p)
     #     print(p2)
     # assert p == p2
-
-    v = [None] + [w*(stop-start) for (start, stop, w, _) in all_intervals_sorted_by_finish]
+    epsilon = 0.0001
+    # w - 1 since the read interval isself is included in the instance
+    v = [None] + [(w - 1)*(stop-start + epsilon) for (start, stop, w, _) in all_intervals_sorted_by_finish]
     OPT = [0]
     # print(len(v), len(p), len(all_intervals_sorted_by_finish) +1)
     # print(p)
@@ -809,9 +811,10 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
     for (m2,p2) in m1_curr_spans:
         # print('here', p1,p2)
         relevant_reads = minimizer_combinations_database[m1][m2]
-        seqs = array("I") #{} #defaultdict(list)
+        # seqs = array("I") #{} #defaultdict(list)
+        to_add = {}
         added_strings = {} 
-        locations = {}
+        # locations = {}
         # not_added_strings = set() 
         if len(relevant_reads)//3 >= 3: 
             # cnt += 1
@@ -821,8 +824,9 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
             # seqs["curr_read"] = (p1, p2)
             # add_items(seqs, "curr_read", p1, p2)
-            add_items(seqs, r_id, p1, p2) 
-            locations[0] = len(seqs) - 3
+            # add_items(seqs, r_id, p1, p2) 
+            to_add[r_id] = (r_id, p1, p2, 0)
+            # locations[0] = len(seqs) - 3
             added_strings[ref_seq] = 0
             reads_visited = {}
             for relevant_read_id, pos1, pos2 in grouper(relevant_reads, 3): #relevant_reads:
@@ -834,8 +838,9 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
                 if read_seq == ref_seq:
                     # seqs[relevant_read_id] = (pos1, pos2)
-                    add_items(seqs, relevant_read_id, pos1, pos2)
-                    locations[relevant_read_id] = len(seqs) - 3
+                    # add_items(seqs, relevant_read_id, pos1, pos2)
+                    to_add[relevant_read_id] = (relevant_read_id, pos1, pos2, 0)
+                    # locations[relevant_read_id] = len(seqs) - 3
                     reads_visited[relevant_read_id] = 0
                     already_computed[relevant_read_id] = (p1,p2,pos1,pos2, 0)
                     continue
@@ -847,8 +852,13 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         # or maybe use this traceback to get exact: https://github.com/Martinsos/edlib/pull/132#issuecomment-522258271
                 elif read_seq in added_strings:  #== ref_seq:
                     # seqs[relevant_read_id] = (pos1, pos2)
-                    add_items(seqs, relevant_read_id, pos1, pos2)
-                    locations[relevant_read_id] = len(seqs) - 3
+                    # add_items(seqs, relevant_read_id, pos1, pos2)
+                    if relevant_read_id in to_add and added_strings[read_seq] >= to_add[relevant_read_id][3]:
+                        continue
+                    else:
+                        to_add[relevant_read_id] = (relevant_read_id, pos1, pos2, added_strings[read_seq])
+
+                    # locations[relevant_read_id] = len(seqs) - 3
                     reads_visited[relevant_read_id] = added_strings[read_seq]
                     already_computed[relevant_read_id] = (p1,p2,pos1,pos2, added_strings[read_seq])
                     continue
@@ -866,8 +876,12 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                         ed_est = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff) 
                         if 0 <= ed_est <= p_error_sum_thresh*len(ref_seq): # < curr_p_error_sum_thresh*len(ref_seq):
                             # seqs[relevant_read_id] = (pos1, pos2)
-                            add_items(seqs, relevant_read_id, pos1, pos2)
-                            locations[relevant_read_id] = len(seqs) - 3
+                            # add_items(seqs, relevant_read_id, pos1, pos2)
+                            if relevant_read_id in to_add and ed_est >= to_add[relevant_read_id][3]:
+                                continue
+                            else:
+                                to_add[relevant_read_id] = (relevant_read_id, pos1, pos2, ed_est)
+                            # locations[relevant_read_id] = len(seqs) - 3
                             added_strings[read_seq] = ed_est
                             reads_visited[relevant_read_id] = ed_est
 
@@ -884,7 +898,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
                 tmp_cnt += 1
                 if editdist >= 0:    # passing second edit distance check
-                    if relevant_read_id in reads_visited: # we have already seen the minimizer combination
+                    if False: #relevant_read_id in reads_visited: # we have already seen the minimizer combination
                         # prev_pos1, prev_pos2 = seqs[relevant_read_id]
                         prev_pos1, prev_pos2 = seqs[ locations[relevant_read_id] + 1], seqs[ locations[relevant_read_id] + 2]
                         prev_read_seq = reads[relevant_read_id][1][prev_pos1: prev_pos2 + k_size]
@@ -907,15 +921,24 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                         #     already_computed[relevant_read_id] = (p1,p2,prev_pos1, prev_pos2, editdist_prev)
                     else:
                         # seqs[relevant_read_id] = (pos1, pos2)
-                        add_items(seqs, relevant_read_id, pos1, pos2)
-                        locations[relevant_read_id] = len(seqs) - 3
+                        # add_items(seqs, relevant_read_id, pos1, pos2)
+                        if relevant_read_id in to_add and editdist >= to_add[relevant_read_id][3]:
+                            continue
+                        else:
+                            to_add[relevant_read_id] = (relevant_read_id, pos1, pos2, editdist)
+
+                        # locations[relevant_read_id] = len(seqs) - 3
                         added_strings[read_seq] = editdist
                         reads_visited[relevant_read_id] = editdist
                         already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
 
+            seqs = array("I")
+            # print(to_add)
+            for relev_r_id in to_add:
+                add_items(seqs, to_add[relev_r_id][0], to_add[relev_r_id][1], to_add[relev_r_id][2])
 
             all_intervals.append( (p1 + k_size, p2,  len(seqs)//3, seqs) )
-    del seqs
+    # del seqs
     return tmp_cnt, read_complexity_cnt
 
 def get_intervals_to_correct(opt_indicies, all_intervals_sorted_by_finish):
@@ -1178,20 +1201,29 @@ def main(args):
                 corrected_seq = seq
             else:
                 all_intervals.sort(key = lambda x: (x[1],x[0]))
-                # print([(xxx, yyy, www) for (xxx, yyy, www, zzz)  in all_intervals])
+                # print(r_id)
+                # print([(xxx, yyy, www, zzz) for (xxx, yyy, www, zzz)  in all_intervals])
+                # print()
                 # sys.exit()
+                # if r_id == 1:
+                #     all_intervals = [(3191, 3191, 3, all_intervals[0][3])]
+                #     print("changed:", all_intervals )
                 opt_indicies = solve_WIS(all_intervals) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
                 # print(opt_indicies)
                 # assert opt_indicies == opt_indicies2
                 # print(opt_indicies)
-                intervals_to_correct = get_intervals_to_correct(opt_indicies[::-1], all_intervals)
-                del all_intervals
-                all_intervals = []
-                corrected_seq, other_reads_corrected_regions = correct_read(seq, reads, intervals_to_correct, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy, args.verbose, args.use_racon)
-                del intervals_to_correct
-                for other_r_id, corrected_regions in other_reads_corrected_regions.items():
-                    for corr_region in corrected_regions:
-                        previously_corrected_regions[other_r_id].append(corr_region)
+                if not opt_indicies: # all intervals had only the read to be corrected itself as support (i.e., 1 in support)
+                    corrected_seq = seq
+                else:
+                    intervals_to_correct = get_intervals_to_correct(opt_indicies[::-1], all_intervals)
+                    # print(r_id, intervals_to_correct)
+                    del all_intervals
+                    all_intervals = []
+                    corrected_seq, other_reads_corrected_regions = correct_read(seq, reads, intervals_to_correct, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy, args.verbose, args.use_racon)
+                    del intervals_to_correct
+                    for other_r_id, corrected_regions in other_reads_corrected_regions.items():
+                        for corr_region in corrected_regions:
+                            previously_corrected_regions[other_r_id].append(corr_region)
 
             # from pympler import asizeof
             # print("reads", asizeof.asizeof(reads)/1000000)
