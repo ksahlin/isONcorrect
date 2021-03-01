@@ -1133,16 +1133,17 @@ def main(args):
                 read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
                 group_id = 0
                 pos_group = {}
-                sorted_corr_pos = sorted(read_previously_considered_positions)
-                for p1, p2 in zip(sorted_corr_pos[:-1], sorted_corr_pos[1:]):
-                    if p2 > p1 + 1:
-                       pos_group[p1] = group_id 
-                       group_id += 1
-                       pos_group[p2] = group_id 
-                    else:
-                       pos_group[p1] = group_id 
-                if p2 == p1 + 1:
-                    pos_group[p2] = group_id 
+                if len(read_previously_considered_positions) > 1:
+                    sorted_corr_pos = sorted(read_previously_considered_positions)
+                    for p1, p2 in zip(sorted_corr_pos[:-1], sorted_corr_pos[1:]):
+                        if p2 > p1 + 1:
+                           pos_group[p1] = group_id 
+                           group_id += 1
+                           pos_group[p2] = group_id 
+                        else:
+                           pos_group[p1] = group_id 
+                    if p2 == p1 + 1:
+                        pos_group[p2] = group_id 
             else:
                 read_previously_considered_positions= set()
                 pos_group = {}
