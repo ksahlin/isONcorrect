@@ -192,6 +192,125 @@ def randstrobe_order2(subseq, m1, k_size, prime):
     return  min_m2, min_index
 
 
+# def seq_to_strobes(r_id, seq, M2, k_size, w_min, w_max, prime, forbidden, reverse = False):
+#     for p1 in range(len(seq) - 2*k_size + 1):
+#         m1 = seq[p1:p1+k_size]
+#         window_p_start = p1 + k_size + w_min if p1+k_size+w_max <= len(seq) else max( (p1 + k_size + w_min) -  (p1+k_size+w_max - len(seq)), p1 + k_size )
+#         window_p_end = min(p1 + k_size + w_max, len(seq))
+#         # assert window_p_end - window_p_start >= k_size, window_p_end - window_p_start  
+#         # assert window_p_start >= p1+k_size, (window_p_start, p1+k_size)
+#         # print(window_p_start, window_p_end)
+#         window_seq = seq[window_p_start : window_p_end]
+#         m2, min_index2 = randstrobe_order2(window_seq, m1, k_size, prime)
+#         # print("min_index2", min_index2, m1,m2)
+#         p2 = window_p_start + min_index2
+#         # assert p2 >= p1 + k_size, (p2, p1 + k_size)
+#         if m2 == m1 == forbidden:
+#             continue
+#         if reverse:
+#             M2[m2[::-1]][m1[::-1]].append(r_id)
+#             M2[m2[::-1]][m1[::-1]].append(len(seq) - p2 - k_size)
+#             M2[m2[::-1]][m1[::-1]].append(len(seq) - p1 - k_size)
+
+#         else:   
+#             M2[m1][m2].append(r_id)
+#             M2[m1][m2].append(p1)
+#             M2[m1][m2].append(p2)
+
+
+def get_randstrobes_with_positions_database_2way(reads, k_size, w_min, w_max, primes):
+    
+    M2 = defaultdict(lambda: defaultdict(lambda :array("I")))
+    tmp_cnt = 0
+    forbidden = 'A'*k_size
+
+    for r_id in reads:
+        (acc, seq, qual) = reads[r_id]
+        rand_strobes = defaultdict(set)
+        for i, prime in enumerate(primes):
+            if i % 2 == 0:
+                fw = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter(seq, k_size, w_min, w_max, prime, forbidden)]
+                for (m1, p1, (m2, p2)) in fw:
+                    rand_strobes[(m1, p1)].add((m2,p2))
+            else:
+                rv = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter(seq[::-1], k_size, w_min, w_max, prime, forbidden, reverse = True)]
+                for (m1, p1, (m2, p2)) in rv:
+                    rand_strobes[(m1, p1)].add((m2,p2))
+
+        for (m1, p1), s in rand_strobes.items():
+            for (m2, p2) in s:
+                M2[m1][m2].append(r_id)
+                M2[m1][m2].append(p1)
+                M2[m1][m2].append(p2)
+                tmp_cnt += 1
+
+    print(tmp_cnt, "RANDSTROBES 2WAY COMBINATIONS GENERATED")
+
+    avg_bundance = 0
+    singleton_minimzer = 0
+    cnt = 1
+    abundants=[]
+    for m1 in list(M2.keys()):
+        for m2 in list(M2[m1].keys()):
+            if len(M2[m1][m2]) > 3:
+                avg_bundance += len(M2[m1][m2])//3
+                cnt +=1
+            else:
+                del M2[m1][m2]
+                singleton_minimzer += 1
+            # if len(M2[m1][m2])// 3 > 5:
+            #     print(len(M2[m1][m2])// 3)
+            if len(M2[m1][m2])// 3 > len(reads):
+                abundants.append((m1,m2, len(M2[m1][m2])//3 ))
+                if m2 == forbidden: # poly A tail
+                    del M2[m1][m2]
+    for m1,m2,ab in sorted(abundants, key=lambda x: x[2], reverse=True):
+        print("Too abundant:", m1, m2, ab, len(reads))
+
+    print("Average abundance for non-unique randstrobes:", avg_bundance/float(cnt))
+    print("Number of singleton randstrobes filtered out:", singleton_minimzer)
+    # sys.exit()
+    return M2
+
+
+def seq_to_strobes_iter(seq, k_size, w_min, w_max, prime, forbidden, reverse = False):
+    for p1 in range(len(seq) - 2*k_size + 1):
+        m1 = seq[p1:p1+k_size]
+        window_p_start = p1 + k_size + w_min if p1+k_size+w_max <= len(seq) else max( (p1 + k_size + w_min) -  (p1+k_size+w_max - len(seq)), p1 + k_size )
+        window_p_end = min(p1 + k_size + w_max, len(seq))
+        # assert window_p_end - window_p_start >= k_size, window_p_end - window_p_start  
+        # assert window_p_start >= p1+k_size, (window_p_start, p1+k_size)
+        # print(window_p_start, window_p_end)
+        window_seq = seq[window_p_start : window_p_end]
+        m2, min_index2 = randstrobe_order2(window_seq, m1, k_size, prime)
+        # print("min_index2", min_index2, m1,m2)
+        p2 = window_p_start + min_index2
+        # assert p2 >= p1 + k_size, (p2, p1 + k_size)
+        if m2 == m1 == forbidden:
+            continue
+        if reverse:
+            yield m2[::-1], len(seq) - p2 - k_size, m1[::-1], len(seq) - p1 - k_size
+        else:   
+            yield m1, p1, m2, p2
+
+
+
+def randstrobes_read_2way(seq, k_size, w_min, w_max, primes):
+    forbidden = 'A'*k_size
+    rand_strobes = defaultdict(set)
+    for i, prime in enumerate(primes):
+        if i % 2 == 0:
+            fw = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter(seq, k_size, w_min, w_max, prime, forbidden)]
+            for (m1, p1, (m2, p2)) in fw:
+                rand_strobes[(m1, p1)].add((m2,p2))
+        else:
+            rv = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter(seq[::-1], k_size, w_min, w_max, prime, forbidden, reverse = True)]
+            for (m1, p1, (m2, p2)) in rv:
+                rand_strobes[(m1, p1)].add((m2,p2))
+
+    return [((m1, p2), list(s))  for (m1, p2), s in rand_strobes.items()]
+
+
 def get_randstrobes_with_positions_database(reads, k_size, w_min, w_max, primes):
     
     M2 = defaultdict(lambda: defaultdict(lambda :array("I")))
@@ -1083,7 +1202,8 @@ def main(args):
             primes = get_primes(1000, args.nprimes)
             # print(primes)
             # primes = [97,73]
-            minimizer_combinations_database = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
+            # minimizer_combinations_database = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
+            minimizer_combinations_database = get_randstrobes_with_positions_database_2way(reads, k_size, x_low, x_high, primes)
 
         quality_values_database = get_qvs(reads)
         # print(minimizer_database)
@@ -1108,7 +1228,8 @@ def main(args):
             else:
                 seq = reads[r_id][1]
                 # print("seq length:", len(seq))
-                read_min_comb = [ ((m1,p1), m1_curr_spans) for m1, p1, m1_curr_spans in randstrobe_iterator(seq, k_size, x_low, x_high, primes)] 
+                # read_min_comb = [ ((m1,p1), m1_curr_spans) for m1, p1, m1_curr_spans in randstrobe_iterator(seq, k_size, x_low, x_high, primes)] 
+                read_min_comb = randstrobes_read_2way(seq, k_size, x_low, x_high, primes)
             # print(read_min_comb)
             # sys.exit()
             if args.exact:
