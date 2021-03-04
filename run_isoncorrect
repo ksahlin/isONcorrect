@@ -257,7 +257,11 @@ def main(args):
             continue
 
     # sys.exit()
-    instances.sort(key = lambda x: x[3])
+    if args.split_wrt_batches:
+        instances.sort(key = lambda x: int(x[3].split('_')[0])) # sorting in order of cluster labels
+    else:
+        instances.sort(key = lambda x: int(x[3])) # sorting in order of cluster size!
+
     for t in instances:
         print(t)
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
