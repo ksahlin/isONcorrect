@@ -228,7 +228,7 @@ def get_randstrobes_with_positions_database_2way(reads, k_size, w_min, w_max, pr
     M2 = defaultdict(lambda: defaultdict(lambda :array("I")))
     tmp_cnt = 0
     forbidden = 'A'*k_size
-    read_to_randstrobes = {}
+    # read_to_randstrobes = {}
     for r_id in reads:
         (acc, seq, qual) = reads[r_id]
         rand_strobes = defaultdict(set)
@@ -257,7 +257,7 @@ def get_randstrobes_with_positions_database_2way(reads, k_size, w_min, w_max, pr
                 M2[m1][m2].append(p2)
                 tmp_cnt += 1
 
-        read_to_randstrobes[r_id] = [((m1, p2), list(s))  for (m1, p2), s in rand_strobes.items()]
+        # read_to_randstrobes[r_id] = [((m1, p2), list(s))  for (m1, p2), s in rand_strobes.items()]
 
     print(tmp_cnt, "RANDSTROBES 2WAY COMBINATIONS GENERATED")
 
@@ -285,7 +285,7 @@ def get_randstrobes_with_positions_database_2way(reads, k_size, w_min, w_max, pr
     print("Average abundance for non-unique randstrobes:", avg_bundance/float(cnt))
     print("Number of singleton randstrobes filtered out:", singleton_minimzer)
     # sys.exit()
-    return M2, read_to_randstrobes
+    return M2 #, read_to_randstrobes
 
 
 def seq_to_strobes_iter(seq, k_size, w_min, w_max, prime, forbidden, reverse = False):
@@ -1254,7 +1254,7 @@ def main(args):
             # print(primes)
             # primes = [97,73]
             # minimizer_combinations_database, read_to_randstrobes = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
-            minimizer_combinations_database, read_to_randstrobes = get_randstrobes_with_positions_database_2way(reads, k_size, x_low, x_high, primes)
+            minimizer_combinations_database = get_randstrobes_with_positions_database_2way(reads, k_size, x_low, x_high, primes)
 
         quality_values_database = get_qvs(reads)
         # print(minimizer_database)
@@ -1280,8 +1280,8 @@ def main(args):
                 seq = reads[r_id][1]
                 # print("seq length:", len(seq))
                 # read_min_comb = [ ((m1,p1), m1_curr_spans) for m1, p1, m1_curr_spans in randstrobe_iterator(seq, k_size, x_low, x_high, primes)] 
-                # read_min_comb = randstrobes_read_2way(seq, k_size, x_low, x_high, primes)
-                read_min_comb = read_to_randstrobes[r_id]
+                read_min_comb = randstrobes_read_2way(seq, k_size, x_low, x_high, primes)
+                # read_min_comb = read_to_randstrobes[r_id]
             # print(read_min_comb)
             # sys.exit()
             if args.exact:
