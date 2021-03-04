@@ -256,11 +256,13 @@ def main(args):
         else:
             continue
 
-    # sys.exit()
-    if args.split_wrt_batches:
-        instances.sort(key = lambda x: int(x[3].split('_')[0])) # sorting in order of cluster labels
-    else:
-        instances.sort(key = lambda x: int(x[3])) # sorting in order of cluster size!
+    # # sys.exit()
+    # if args.split_wrt_batches:
+    #     instances.sort(key = lambda x: int(x[3].split('_')[0])) # sorting in order of cluster labels
+    # else:
+    #     instances.sort(key = lambda x: int(x[3])) # sorting in order of cluster size!
+
+    instances.sort(key = lambda x: x[3]) # sorting on batch ids as strings
 
     for t in instances:
         print(t)
