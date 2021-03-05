@@ -1486,7 +1486,7 @@ if __name__ == '__main__':
                                                                  paired minimizers was original implementation described in isONcorrect paper. Randstrobes \
                                                                  reduces memory footprint substantially (and runtime) without much decrease in post correction quality.')
 
-    parser.add_argument('--layers', type=int, default=2, help='How many "layers" with randstrobes we want per sequence to sample.\
+    parser.add_argument('--layers', type=int, default=argparse.SUPPRESS, help='How many "layers" with randstrobes we want per sequence to sample.\
                                                                More layers gives more accureate results but is more memory consuming and slower.\
                                                                It is not reccomended to specify more than 5. in that case instead use old mode --paired_minimizers.')
     parser.add_argument('--set_layers_manually', action="store_true", help='By default isONcorrect sets layers = 1 if nr seqs in batch to be corrected is >= 1000, else layers = 2.\
@@ -1511,6 +1511,9 @@ if __name__ == '__main__':
     elif args.paired_minimizers and 'max_seqs' not in args:
         print("max_seqs was not specified. Setting max_seqs to 1000")
         args.max_seqs = 1000
+
+    if args.set_layers_manually and 'layers' not in args:
+        args.layers = 2
 
     if len(sys.argv)==1:
         parser.print_help()
