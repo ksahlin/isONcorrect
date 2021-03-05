@@ -1250,7 +1250,12 @@ def main(args):
             minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
 
         else:
-            primes = get_primes(1000, args.nprimes)
+            if args.set_layers_manually:
+                primes = get_primes(1000, args.layers)
+            else:
+                layers = 1 if len(reads) >= 1000 else 2
+                print("Using {0} layers.".format(layers))
+                primes = get_primes(1000, layers)
             # print(primes)
             # primes = [97,73]
             # minimizer_combinations_database, read_to_randstrobes = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
@@ -1419,6 +1424,21 @@ def main(args):
         print()
         print("Done with batch_id:", batch_id)
         print("Took {0} seconds.".format(time()- batch_start_time))
+        # from pympler import asizeof
+        # print("reads", asizeof.asizeof(reads)/1000000)
+        # # print("read_min_comb", asizeof.asizeof(read_min_comb)/1000000)
+        # print("not_prev_corrected_spans", asizeof.asizeof(not_prev_corrected_spans)/1000000)
+        # print("other_reads_corrected_regions", asizeof.asizeof(other_reads_corrected_regions)/1000000)
+        # print("previously_corrected_regions", asizeof.asizeof(previously_corrected_regions)/1000000)
+        # print("all_intervals", asizeof.asizeof(all_intervals)/1000000)
+        # print("read_min_comb", asizeof.asizeof(read_min_comb)/1000000)
+        # print("quality_values_database", asizeof.asizeof(quality_values_database)/1000000)
+        # print("already_computed", asizeof.asizeof(already_computed)/1000000)   
+        # # print("minimizer_database", asizeof.asizeof(minimizer_database)/1000000)            
+        # print("minimizer_combinations_database", asizeof.asizeof(minimizer_combinations_database)/1000000)
+        # minimizer_combinations_database.clear()
+        # quality_values_database.clear()
+        # previously_corrected_regions.clear()
                 # eval_sim2(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
                 # if r_id == 10:
                 #     sys.exit()
@@ -1455,7 +1475,7 @@ if __name__ == '__main__':
     parser.add_argument('--disable_numpy', action="store_true", help='Do not require numpy to be installed, but this version is about 1.5x slower than with numpy.')
 
     parser.add_argument('--max_seqs_to_spoa', type=int, default=200,  help='Maximum number of seqs to spoa')
-    parser.add_argument('--max_seqs', type=int, default=1000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
+    parser.add_argument('--max_seqs', type=int, default=argparse.SUPPRESS,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
     parser.add_argument('--use_racon', action="store_true", help='Use racon to polish consensus after spoa (more time consuming but higher accuracy).')
 
     parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance smaller than this limit')
@@ -1464,9 +1484,13 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', action="store_true", help='Print various developer stats.')
     parser.add_argument('--paired_minimizers', action="store_true", help='IsONcorrect now uses randstrobes instead of paired minimizers to find shared regions.\
                                                                  paired minimizers was original implementation described in isONcorrect paper. Randstrobes \
-                                                                 reduces memory footprint substantially without significan drcrease in post correction quality.')
+                                                                 reduces memory footprint substantially (and runtime) without much decrease in post correction quality.')
 
-    parser.add_argument('--nprimes', type=int, default=2, help='How many "layers" of randstrobes to sample.')
+    parser.add_argument('--layers', type=int, default=2, help='How many "layers" with randstrobes we want per sequence to sample.\
+                                                               More layers gives more accureate results but is more memory consuming and slower.\
+                                                               It is not reccomended to specify more than 5. in that case instead use old mode --paired_minimizers.')
+    parser.add_argument('--set_layers_manually', action="store_true", help='By default isONcorrect sets layers = 1 if nr seqs in batch to be corrected is >= 1000, else layers = 2.\
+                                                                            This command will manually pick the number of layers specified with the --layers parameter.')
 
     parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
                                                                         minmimizer combinations to span regions in homopolymenr dense regions. Solution \
@@ -1480,6 +1504,13 @@ if __name__ == '__main__':
     if args.xmin < 2*args.k:
         args.xmin = 2*args.k
         eprint("xmin set to {0}".format(args.xmin))
+
+    if not args.paired_minimizers and 'max_seqs' not in args:
+        print("max_seqs was not specified and paired_minimizer setting not used. Setting max_seqs to 2000")
+        args.max_seqs = 2000
+    elif args.paired_minimizers and 'max_seqs' not in args:
+        print("max_seqs was not specified. Setting max_seqs to 1000")
+        args.max_seqs = 1000
 
     if len(sys.argv)==1:
         parser.print_help()
