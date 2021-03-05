@@ -313,7 +313,7 @@ if __name__ == '__main__':
     # parser.add_argument('--w_equal_k_limit', type=int, default=100,  help='Do not recompute previous results')
     parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results if corrected_reads.fq is found and has the smae number of reads as input file (i.e., is complete).')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
-    parser.add_argument('--max_seqs', type=int, default=1000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
+    parser.add_argument('--max_seqs', type=int, default=argparse.SUPPRESS,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
     parser.add_argument('--use_racon', action="store_true", help='Use racon to polish consensus after spoa (more time consuming but higher accuracy).')
 
     parser.add_argument('--split_mod', type=int, default=1, help='Splits cluster ids in n (default=1) partitions by computing residual of cluster_id divided by n.\
@@ -326,12 +326,34 @@ if __name__ == '__main__':
     parser.add_argument('--split_wrt_batches', action="store_true", help='Process reads per batch (of max_seqs sequences) instead of per cluster. Significantly decrease runtime when few very large clusters are less than the number of cores used.')
   
     parser.add_argument('--outfolder', type=str,  default=None, help='Outfolder with all corrected reads.')
+    parser.add_argument('--paired_minimizers', action="store_true", help='IsONcorrect now uses randstrobes instead of paired minimizers to find shared regions.\
+                                                                 paired minimizers was original implementation described in isONcorrect paper. Randstrobes \
+                                                                 reduces memory footprint substantially (and runtime) without much decrease in post correction quality.')
+
+    parser.add_argument('--layers', type=int, default=argparse.SUPPRESS, help='How many "layers" with randstrobes we want per sequence to sample.\
+                                                               More layers gives more accureate results but is more memory consuming and slower.\
+                                                               It is not reccomended to specify more than 5. in that case instead use old mode --paired_minimizers.')
+    parser.add_argument('--set_layers_manually', action="store_true", help='By default isONcorrect sets layers = 1 if nr seqs in batch to be corrected is >= 1000, else layers = 2.\
+                                                                            This command will manually pick the number of layers specified with the --layers parameter.')
+
+
     args = parser.parse_args()
 
     if len(sys.argv)==1:
         parser.print_help()
         sys.exit()
-    
+
+    if not args.paired_minimizers and 'max_seqs' not in args:
+        print("max_seqs was not specified and paired_minimizer setting not used. Setting max_seqs to 2000")
+        args.max_seqs = 2000
+    elif args.paired_minimizers and 'max_seqs' not in args:
+        print("max_seqs was not specified. Setting max_seqs to 1000")
+        args.max_seqs = 1000
+
+    if args.set_layers_manually and 'layers' not in args:
+        args.layers = 2
+
+
     if args.split_mod > 1:
         assert args.residual < args.split_mod 
 
