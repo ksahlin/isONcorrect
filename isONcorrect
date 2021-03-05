@@ -1235,7 +1235,10 @@ def main(args):
         batch_start_time = time()
         if args.set_w_dynamically:
             # Activates for 'small' clusters with less than 700 reads
-            w = min(args.w, args.k + (len(reads)//100 + 4))  # min(args.w,)  #args.w = args.k + min(7, int( len(all_reads)/500))
+            if len(reads) >= 100:
+                w = min(args.w, args.k + (len(reads)//100 + 4))  # min(args.w,)  #args.w = args.k + min(7, int( len(all_reads)/500))
+            else:
+                w = args.k + 1 + len(reads)//30  # min(args.w,)  #args.w = args.k + min(7, int( len(all_reads)/500))
         else:
             w = args.w
         print("Window used for batch:", w)
