@@ -1215,8 +1215,6 @@ def main(args):
     max_seqs_to_spoa = args.max_seqs_to_spoa
     if len(all_reads) <= args.exact_instance_limit:
         args.exact = True
-    if args.set_w_dynamically:
-        args.w = args.k + min(7, int( len(all_reads)/500))
 
     eprint("ARGUMENT SETTINGS:")
     for key, value in args.__dict__.items():
@@ -1235,21 +1233,17 @@ def main(args):
     for batch_id, reads in enumerate(batch(all_reads, args.max_seqs)):
         print("correcting {0} reads in a batch".format(len(reads)))
         batch_start_time = time()
-
-        w = args.w
+        if args.set_w_dynamically:
+            # Activates for 'small' clusters with less than 700 reads
+            w = min(args.w, args.k + (len(reads)//100 + 4))  # min(args.w,)  #args.w = args.k + min(7, int( len(all_reads)/500))
+        else:
+            w = args.w
+        print("Window used for batch:", w)
         x_high = args.xmax
         x_low = args.xmin
         hash_fcn = "lex"
         # for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
-        if args.paired_minimizers:
-            if args.compression:
-                minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
-            else:
-                minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
-
-            minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
-
-        else:
+        if args.randstrobes:
             if args.set_layers_manually:
                 primes = get_primes(1000, args.layers)
             else:
@@ -1260,6 +1254,13 @@ def main(args):
             # primes = [97,73]
             # minimizer_combinations_database, read_to_randstrobes = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
             minimizer_combinations_database = get_randstrobes_with_positions_database_2way(reads, k_size, x_low, x_high, primes)
+        else:
+            if args.compression:
+                minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
+            else:
+                minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
+
+            minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
 
         quality_values_database = get_qvs(reads)
         # print(minimizer_database)
@@ -1277,16 +1278,17 @@ def main(args):
         tmp_cnt = 0
 
         for r_id in sorted(reads): #, reverse=True):
-            if args.paired_minimizers:
-                # seq = reads[r_id][1]
-                # print("seq length:", len(seq))
-                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
-            else:
+            if args.randstrobes:
                 seq = reads[r_id][1]
                 # print("seq length:", len(seq))
                 # read_min_comb = [ ((m1,p1), m1_curr_spans) for m1, p1, m1_curr_spans in randstrobe_iterator(seq, k_size, x_low, x_high, primes)] 
                 read_min_comb = randstrobes_read_2way(seq, k_size, x_low, x_high, primes)
                 # read_min_comb = read_to_randstrobes[r_id]
+            else:
+                # seq = reads[r_id][1]
+                # print("seq length:", len(seq))
+                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
+
             # print(read_min_comb)
             # sys.exit()
             if args.exact:
@@ -1459,14 +1461,14 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo error correction of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.0.7')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.8')
 
     parser.add_argument('--fastq', type=str,  default=False, help='Path to input fastq file with reads')
     # parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
 
     parser.add_argument('--k', type=int, default=9, help='Kmer size')
-    parser.add_argument('--w', type=int, default=10, help='Window size')
-    parser.add_argument('--xmin', type=int, default=14, help='Lower interval length')
+    parser.add_argument('--w', type=int, default=20, help='Window size')
+    parser.add_argument('--xmin', type=int, default=18, help='Lower interval length')
     parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.1, help='Minimum fraction keeping substitution')
     # parser.add_argument('--C', type=float, default=0.05, help='Minimum fraction of keeping alternative refernece contexts')
@@ -1475,22 +1477,25 @@ if __name__ == '__main__':
     parser.add_argument('--disable_numpy', action="store_true", help='Do not require numpy to be installed, but this version is about 1.5x slower than with numpy.')
 
     parser.add_argument('--max_seqs_to_spoa', type=int, default=200,  help='Maximum number of seqs to spoa')
-    parser.add_argument('--max_seqs', type=int, default=argparse.SUPPRESS,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
+    parser.add_argument('--max_seqs', type=int, default=2000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
     parser.add_argument('--use_racon', action="store_true", help='Use racon to polish consensus after spoa (more time consuming but higher accuracy).')
 
     parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance smaller than this limit')
     # parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
     parser.add_argument('--verbose', action="store_true", help='Print various developer stats.')
-    parser.add_argument('--paired_minimizers', action="store_true", help='IsONcorrect now uses randstrobes instead of paired minimizers to find shared regions.\
-                                                                 paired minimizers was original implementation described in isONcorrect paper. Randstrobes \
-                                                                 reduces memory footprint substantially (and runtime) without much decrease in post correction quality.')
+    parser.add_argument('--randstrobes', action="store_true", help='EXPERIMENTAL PARAMETER: IsONcorrect uses paired minimizers (described in isONcorrect paper). This experimental option\
+                                                                 uses randstrobes instead of paired minimizers to find shared regions. Randstrobes \
+                                                                 reduces memory footprint substantially (and runtime) with only slight increase in post correction quality.')
 
-    parser.add_argument('--layers', type=int, default=argparse.SUPPRESS, help='How many "layers" with randstrobes we want per sequence to sample.\
+
+    parser.add_argument('--layers', type=int, default=argparse.SUPPRESS, help='EXPERIMENTAL PARAMETER: Active when --randstrobes specified.\
+                                                                How many "layers" with randstrobes we want per sequence to sample.\
                                                                More layers gives more accureate results but is more memory consuming and slower.\
-                                                               It is not reccomended to specify more than 5. in that case instead use old mode --paired_minimizers.')
-    parser.add_argument('--set_layers_manually', action="store_true", help='By default isONcorrect sets layers = 1 if nr seqs in batch to be corrected is >= 1000, else layers = 2.\
+                                                               It is not reccomended to specify more than 5. ')
+    parser.add_argument('--set_layers_manually', action="store_true", help='EXPERIMENTAL PARAMETER: By default isONcorrect sets layers = 1 if nr seqs in batch to be corrected is >= 1000, else layers = 2.\
                                                                             This command will manually pick the number of layers specified with the --layers parameter.')
+
 
     parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
                                                                         minmimizer combinations to span regions in homopolymenr dense regions. Solution \
@@ -1505,12 +1510,12 @@ if __name__ == '__main__':
         args.xmin = 2*args.k
         eprint("xmin set to {0}".format(args.xmin))
 
-    if not args.paired_minimizers and 'max_seqs' not in args:
-        print("max_seqs was not specified and paired_minimizer setting not used. Setting max_seqs to 2000")
-        args.max_seqs = 2000
-    elif args.paired_minimizers and 'max_seqs' not in args:
-        print("max_seqs was not specified. Setting max_seqs to 1000")
-        args.max_seqs = 1000
+    # if not args.paired_minimizers and 'max_seqs' not in args:
+    #     print("max_seqs was not specified and paired_minimizer setting not used. Setting max_seqs to 2000")
+    #     args.max_seqs = 2000
+    # elif args.paired_minimizers and 'max_seqs' not in args:
+    #     print("max_seqs was not specified. Setting max_seqs to 1000")
+    #     args.max_seqs = 1000
 
     if args.set_layers_manually and 'layers' not in args:
         args.layers = 2
