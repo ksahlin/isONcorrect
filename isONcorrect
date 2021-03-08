@@ -179,6 +179,287 @@ def minimizers_comb_iterator(minimizers, k, x_low, x_high):
         yield (m1, p1), m1_curr_spans[::-1]
 
 
+import operator
+def argmin(values):
+    min_index, min_value = min(enumerate(values), key=operator.itemgetter(1))
+    return min_index, min_value
+
+
+def randstrobe_order2(subseq, m1, k_size, prime):
+    min_index, min_value = argmin([ hash(m1+ subseq[i:i+k_size]) % prime for i in range(len(subseq) - k_size + 1)])
+    min_m2 = subseq[min_index:min_index+k_size]
+    # print(len(m1 + min_m2))
+    return  min_m2, min_index
+
+def randstrobe_order2_list(hash_seq_list, start, stop, hash_m1, k_size, prime):
+    min_index, min_value = argmin([ (hash_m1+ hash_seq_list[i]) % prime for i in range(start, stop)])
+    # min_m2 = hash_subseq_list[min_index]
+    # print(len(m1 + min_m2))
+    return min_index
+
+# def seq_to_strobes(r_id, seq, M2, k_size, w_min, w_max, prime, forbidden, reverse = False):
+#     for p1 in range(len(seq) - 2*k_size + 1):
+#         m1 = seq[p1:p1+k_size]
+#         window_p_start = p1 + k_size + w_min if p1+k_size+w_max <= len(seq) else max( (p1 + k_size + w_min) -  (p1+k_size+w_max - len(seq)), p1 + k_size )
+#         window_p_end = min(p1 + k_size + w_max, len(seq))
+#         # assert window_p_end - window_p_start >= k_size, window_p_end - window_p_start  
+#         # assert window_p_start >= p1+k_size, (window_p_start, p1+k_size)
+#         # print(window_p_start, window_p_end)
+#         window_seq = seq[window_p_start : window_p_end]
+#         m2, min_index2 = randstrobe_order2(window_seq, m1, k_size, prime)
+#         # print("min_index2", min_index2, m1,m2)
+#         p2 = window_p_start + min_index2
+#         # assert p2 >= p1 + k_size, (p2, p1 + k_size)
+#         if m2 == m1 == forbidden:
+#             continue
+#         if reverse:
+#             M2[m2[::-1]][m1[::-1]].append(r_id)
+#             M2[m2[::-1]][m1[::-1]].append(len(seq) - p2 - k_size)
+#             M2[m2[::-1]][m1[::-1]].append(len(seq) - p1 - k_size)
+
+#         else:   
+#             M2[m1][m2].append(r_id)
+#             M2[m1][m2].append(p1)
+#             M2[m1][m2].append(p2)
+
+
+def get_randstrobes_with_positions_database_2way(reads, k_size, w_min, w_max, primes):
+    
+    M2 = defaultdict(lambda: defaultdict(lambda :array("I")))
+    tmp_cnt = 0
+    forbidden = 'A'*k_size
+    # read_to_randstrobes = {}
+    for r_id in reads:
+        (acc, seq, qual) = reads[r_id]
+        rand_strobes = defaultdict(set)
+        for i, prime in enumerate(primes):
+            if i % 2 == 0:
+                # fw = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter(seq, k_size, w_min, w_max, prime, forbidden)]
+                # fw2 = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter2(seq, k_size, w_min, w_max, prime, forbidden)]
+                # seq_to_strobes_iter_list2(seq, k_size, w_min, w_max, prime, forbidden)
+                # print( [ (z1, z2) for z1, z2 in zip(fw, fw2) if z1 != z2])
+                # assert fw == fw2
+                for m1, p1, m2, p2 in seq_to_strobes_iter2(seq, k_size, w_min, w_max, prime, forbidden):
+                # for (m1, p1, (m2, p2)) in fw:
+                    rand_strobes[(m1, p1)].add((m2,p2))
+            else:
+                # rv = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter(seq[::-1], k_size, w_min, w_max, prime, forbidden, reverse = True)]
+                # rv2 = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter2(seq[::-1], k_size, w_min, w_max, prime, forbidden, reverse = True)]
+                # assert rv == rv2
+                for m1, p1, m2, p2 in seq_to_strobes_iter2(seq[::-1], k_size, w_min, w_max, prime, forbidden, reverse = True):
+                # for (m1, p1, (m2, p2)) in rv:
+                    rand_strobes[(m1, p1)].add((m2,p2))
+
+        for (m1, p1), s in rand_strobes.items():
+            for (m2, p2) in s:
+                M2[m1][m2].append(r_id)
+                M2[m1][m2].append(p1)
+                M2[m1][m2].append(p2)
+                tmp_cnt += 1
+
+        # read_to_randstrobes[r_id] = [((m1, p2), list(s))  for (m1, p2), s in rand_strobes.items()]
+
+    print(tmp_cnt, "RANDSTROBES 2WAY COMBINATIONS GENERATED")
+
+    avg_bundance = 0
+    singleton_minimzer = 0
+    cnt = 1
+    abundants=[]
+    for m1 in list(M2.keys()):
+        for m2 in list(M2[m1].keys()):
+            if len(M2[m1][m2]) > 3:
+                avg_bundance += len(M2[m1][m2])//3
+                cnt +=1
+            else:
+                del M2[m1][m2]
+                singleton_minimzer += 1
+            # if len(M2[m1][m2])// 3 > 5:
+            #     print(len(M2[m1][m2])// 3)
+            if len(M2[m1][m2])// 3 > len(reads):
+                abundants.append((m1,m2, len(M2[m1][m2])//3 ))
+                if m2 == forbidden: # poly A tail
+                    del M2[m1][m2]
+    for m1,m2,ab in sorted(abundants, key=lambda x: x[2], reverse=True):
+        print("Too abundant:", m1, m2, ab, len(reads))
+
+    print("Average abundance for non-unique randstrobes:", avg_bundance/float(cnt))
+    print("Number of singleton randstrobes filtered out:", singleton_minimzer)
+    # sys.exit()
+    return M2 #, read_to_randstrobes
+
+
+def seq_to_strobes_iter(seq, k_size, w_min, w_max, prime, forbidden, reverse = False):
+    for p1 in range(len(seq) - 2*k_size + 1):
+        m1 = seq[p1:p1+k_size]
+        window_p_start = p1 + k_size + w_min if p1+k_size+w_max <= len(seq) else max( (p1 + k_size + w_min) -  (p1+k_size+w_max - len(seq)), p1 + k_size )
+        window_p_end = min(p1 + k_size + w_max, len(seq))
+        # assert window_p_end - window_p_start >= k_size, window_p_end - window_p_start  
+        # assert window_p_start >= p1+k_size, (window_p_start, p1+k_size)
+        # print(window_p_start, window_p_end)
+        window_seq = seq[window_p_start : window_p_end]
+        m2, min_index2 = randstrobe_order2(window_seq, m1, k_size, prime)
+        # print("min_index2", min_index2, m1,m2)
+        p2 = window_p_start + min_index2
+        # assert p2 >= p1 + k_size, (p2, p1 + k_size)
+        if m2 == m1 == forbidden:
+            continue
+        if reverse:
+            yield m2[::-1], len(seq) - p2 - k_size, m1[::-1], len(seq) - p1 - k_size
+        else:   
+            yield m1, p1, m2, p2
+
+
+def seq_to_strobes_iter2(seq, k_size, w_min, w_max, prime, forbidden, reverse = False):
+    hash_seq_list = [hash(seq[i:i+k_size]) for i in range(len(seq) - k_size +1)]
+    for p1 in range(len(seq) - 2*k_size + 1):
+        hash_m1 = hash_seq_list[p1]
+        window_p_start = p1 + k_size + w_min if p1 + w_max <= len(hash_seq_list) else max( (p1 + k_size + w_min) -  (p1+k_size+w_max - len(hash_seq_list)), p1+ k_size )
+        window_p_end = min(p1 + w_max, len(hash_seq_list))
+        # assert window_p_end - window_p_start >= k_size, window_p_end - window_p_start  
+        # assert window_p_start >= p1+k_size, (window_p_start, p1+k_size)
+        # print(window_p_start, window_p_end)
+        # window_seq_list = hash_seq_list[window_p_start : window_p_end+1]
+        # print(len(hash_seq_list), window_p_start, window_p_end)
+        min_index2 = randstrobe_order2_list(hash_seq_list, window_p_start, window_p_end, hash_m1, k_size, prime)
+        # print("min_index2", min_index2, m1,m2)
+        p2 = window_p_start + min_index2
+        assert p2 >= p1 + k_size, (p2, p1 + k_size)
+        assert p2 <= len(seq) -k_size, (p2, len(seq) -k_size)
+        m1 = seq[p1:p1+k_size]
+        m2 = seq[p2:p2+k_size]
+        if m2 == m1 == forbidden:
+            continue
+        if reverse:
+            yield m2[::-1], len(seq) - p2 - k_size, m1[::-1], len(seq) - p1 - k_size
+        else:   
+            yield m1, p1, m2, p2
+
+# def seq_to_strobes_iter_list2(seq, k_size, w_min, w_max, prime, forbidden, reverse = False):
+#     hash_seq_list = [hash(seq[i:i+k_size]) for i in range(len(seq) - k_size +1)]
+#     return [ (i, argmin([ (hash_seq_list[i]+ hash_seq_list[j]) % prime for j in range( min(i + k_size + w_min, len(hash_seq_list)- k_size) , min(i + w_max, len(hash_seq_list) - 1))] ) ) for i in range(len(hash_seq_list) - k_size) ]
+#     # return  min_index, min_value = argmin([ (hash_m1+ hash_seq_list[i]) % prime for i in range(start, stop)])
+
+
+def randstrobes_read_2way(seq, k_size, w_min, w_max, primes):
+    forbidden = 'A'*k_size
+    rand_strobes = defaultdict(set)
+    for i, prime in enumerate(primes):
+        if i % 2 == 0:
+            # fw = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter(seq, k_size, w_min, w_max, prime, forbidden)]
+            for m1, p1, m2, p2 in seq_to_strobes_iter2(seq, k_size, w_min, w_max, prime, forbidden):
+                rand_strobes[(m1, p1)].add((m2,p2))
+        else:
+            # rv = [(m1, p1, (m2, p2)) for m1, p1, m2, p2 in seq_to_strobes_iter(seq[::-1], k_size, w_min, w_max, prime, forbidden, reverse = True)]
+            for m1, p1, m2, p2 in seq_to_strobes_iter2(seq[::-1], k_size, w_min, w_max, prime, forbidden, reverse = True):
+                rand_strobes[(m1, p1)].add((m2,p2))
+
+    return [((m1, p2), list(s))  for (m1, p2), s in rand_strobes.items()]
+
+
+def get_randstrobes_with_positions_database(reads, k_size, w_min, w_max, primes):
+    
+    M2 = defaultdict(lambda: defaultdict(lambda :array("I")))
+    tmp_cnt = 0
+    forbidden = 'A'*k_size
+    read_to_randstrobes = {}
+
+    for r_id in reads:
+        (acc, seq, qual) = reads[r_id]
+        rand_strobes = defaultdict(set)
+        for p1 in range(len(seq) - 2*k_size + 1):
+            m1 = seq[p1:p1+k_size]
+            window_p_start = p1 + k_size + w_min if p1+k_size+w_max <= len(seq) else max( (p1 + k_size + w_min) -  (p1+k_size+w_max - len(seq)), p1 + k_size )
+            window_p_end = min(p1 + k_size + w_max, len(seq))
+            # assert window_p_end - window_p_start >= k_size, window_p_end - window_p_start  
+            # assert window_p_start >= p1+k_size, (window_p_start, p1+k_size)
+            # print(window_p_start, window_p_end)
+            window_seq = seq[window_p_start : window_p_end]
+            added_m2 = set()
+            added_p2 = set()
+            for prime in primes:
+                m2, min_index2 = randstrobe_order2(window_seq, m1, k_size, prime)
+                # print("min_index2", min_index2, m1,m2)
+                p2 = window_p_start + min_index2
+
+                if m2 == m1 == forbidden:
+                    continue
+                if m2 in added_m2 and p2 in added_p2:
+                    # print("LOOOL")
+                    continue
+                tmp_cnt +=1
+
+                # assert p2 >= p1 + k_size, (p2, p1 + k_size)
+                M2[m1][m2].append(r_id)
+                M2[m1][m2].append(p1)
+                M2[m1][m2].append(p2)
+                added_m2.add(m2)
+                added_p2.add(p2)
+                rand_strobes[(m1, p1)].add((m2,p2))
+
+        read_to_randstrobes[r_id] = [((m1, p2), list(s))  for (m1, p2), s in rand_strobes.items()]
+
+    print(tmp_cnt, "RANDSTROBES COMBINATIONS GENERATED")
+
+    avg_bundance = 0
+    singleton_minimzer = 0
+    cnt = 1
+    abundants=[]
+    for m1 in list(M2.keys()):
+        for m2 in list(M2[m1].keys()):
+            if len(M2[m1][m2]) > 3:
+                avg_bundance += len(M2[m1][m2])//3
+                cnt +=1
+            else:
+                del M2[m1][m2]
+                singleton_minimzer += 1
+
+            if len(M2[m1][m2])// 3 > len(reads):
+                abundants.append((m1,m2, len(M2[m1][m2])//3 ))
+                if m2 == forbidden: # poly A tail
+                    del M2[m1][m2]
+    for m1,m2,ab in sorted(abundants, key=lambda x: x[2], reverse=True):
+        print("Too abundant:", m1, m2, ab, len(reads))
+
+    print("Average abundance for non-unique randstrobes:", avg_bundance/float(cnt))
+    print("Number of singleton randstrobes filtered out:", singleton_minimzer)
+    # sys.exit()
+    return M2, read_to_randstrobes
+
+
+
+def randstrobe_iterator(seq, k_size, w_min, w_max, primes):
+    forbidden = 'A'*k_size
+    for p1 in range(len(seq) - 2*k_size + 1):
+        m1 = seq[p1:p1+k_size]
+        window_p_start = p1 + k_size + w_min if p1+k_size+w_max <= len(seq) else max( (p1 + k_size + w_min) -  (p1+k_size+w_max - len(seq)), p1 + k_size )
+        window_p_end = min(p1 + k_size + w_max, len(seq))
+        # assert window_p_end - window_p_start >= k_size, window_p_end - window_p_start  
+        # assert window_p_start >= p1+k_size, (window_p_start, p1+k_size)
+        window_seq = seq[window_p_start : window_p_end]
+        m1_curr_spans = []
+        added_m2 = set()
+        added_p2 = set()
+        for prime in primes:
+            m2, min_index2 = randstrobe_order2(window_seq, m1, k_size, prime)
+            p2 = window_p_start + min_index2
+
+            if m2 == m1 == forbidden:
+                continue
+
+            if m2 in added_m2 and p2 in added_p2:
+                # print("LEWL")
+                continue
+
+            # assert p2 >= p1 + k_size, (p2, p1 + k_size)
+            m1_curr_spans.append((m2, p2))
+            added_m2.add(m2)
+            added_p2.add(p2)
+
+        yield m1, p1, m1_curr_spans
+
+
+
+
 def edlib_alignment(x, y, k):
     # if i == 100 and j % 1000 == 0:
     #     print("Edlib processed alignments: {0}".format(j+1))
@@ -465,7 +746,8 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
             break
         reads_path.write(">{0}\n{1}\n".format(str(q_id)+str(pos1)+str(pos2), seq))
     reads_path.close()
-
+    # print(reads_path.name)
+    # sys.exit()
     spoa_ref = create_augmented_reference.run_spoa(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
     # print(spoa_ref)
     # spoa_ref_m = create_augmented_reference.run_spoa_m(reads_path.name, os.path.join(work_dir,"spoa_tmp.fa"), "spoa")
@@ -622,21 +904,26 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
 
 def fill_p2(p, all_intervals_sorted_by_finish):
 
-    stop_to_max_j = {stop : j for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish)}
+    stop_to_max_j = {stop : j for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish) if start < stop }
+    # print(stop_to_max_j)
     all_choord_to_max_j = []
     j_max = 0
-    for i in range(0, all_intervals_sorted_by_finish[-1][1]):
+    # print("L", all_intervals_sorted_by_finish[-1][1])
+    for i in range(0, all_intervals_sorted_by_finish[-1][1] +1):
         if i in stop_to_max_j:
             j_max = stop_to_max_j[i]
         
         all_choord_to_max_j.append(j_max)
-
+    # print("AAAAAAAAA", len(all_choord_to_max_j))
+    # print(all_choord_to_max_j)
     for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish):
+        # print(start)
         j_max = all_choord_to_max_j[start]
         p.append(j_max)
     return p
 
 def solve_WIS(all_intervals_sorted_by_finish):
+    # Using notation from https://courses.cs.washington.edu/courses/cse521/13wi/slides/06dp-sched.pdf
     # print("instance size", len(all_intervals_sorted_by_finish))
     # p = [None]
     # fill_p(p, all_intervals_sorted_by_finish)
@@ -646,10 +933,18 @@ def solve_WIS(all_intervals_sorted_by_finish):
     #     print(p)
     #     print(p2)
     # assert p == p2
-
-    v = [None] + [w*(stop-start) for (start, stop, w, _) in all_intervals_sorted_by_finish]
+    epsilon = 0.0001
+    # w - 1 since the read interval isself is included in the instance
+    v = [None] + [(w - 1)*(stop-start + epsilon) for (start, stop, w, _) in all_intervals_sorted_by_finish]
     OPT = [0]
+    # print(len(v), len(p), len(all_intervals_sorted_by_finish) +1)
+    # print(p)
     for j in range(1, len(all_intervals_sorted_by_finish) +1):
+        # print(v[j])
+        # print(p[j])
+        # print( len(p), j, len(OPT),p[j] )
+        # print(OPT[p[j]])
+        # print(OPT[j-1])
         OPT.append( max(v[j] + OPT[ p[j] ], OPT[j-1] ) )
 
     # assert len(p) == len(all_intervals_sorted_by_finish) + 1 == len(v) == len(OPT)
@@ -684,11 +979,12 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
     acc, seq, qual = reads[r_id]
     for (m2,p2) in m1_curr_spans:
-        # print(p1,p2)
+        # print('here', p1,p2)
         relevant_reads = minimizer_combinations_database[m1][m2]
-        seqs = array("I") #{} #defaultdict(list)
+        # seqs = array("I") #{} #defaultdict(list)
+        to_add = {}
         added_strings = {} 
-        locations = {}
+        # locations = {}
         # not_added_strings = set() 
         if len(relevant_reads)//3 >= 3: 
             # cnt += 1
@@ -698,8 +994,9 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
             # seqs["curr_read"] = (p1, p2)
             # add_items(seqs, "curr_read", p1, p2)
-            add_items(seqs, r_id, p1, p2) 
-            locations[0] = len(seqs) - 3
+            # add_items(seqs, r_id, p1, p2) 
+            to_add[r_id] = (r_id, p1, p2, 0)
+            # locations[0] = len(seqs) - 3
             added_strings[ref_seq] = 0
             reads_visited = {}
             for relevant_read_id, pos1, pos2 in grouper(relevant_reads, 3): #relevant_reads:
@@ -711,8 +1008,9 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
                 if read_seq == ref_seq:
                     # seqs[relevant_read_id] = (pos1, pos2)
-                    add_items(seqs, relevant_read_id, pos1, pos2)
-                    locations[relevant_read_id] = len(seqs) - 3
+                    # add_items(seqs, relevant_read_id, pos1, pos2)
+                    to_add[relevant_read_id] = (relevant_read_id, pos1, pos2, 0)
+                    # locations[relevant_read_id] = len(seqs) - 3
                     reads_visited[relevant_read_id] = 0
                     already_computed[relevant_read_id] = (p1,p2,pos1,pos2, 0)
                     continue
@@ -724,8 +1022,13 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
         # or maybe use this traceback to get exact: https://github.com/Martinsos/edlib/pull/132#issuecomment-522258271
                 elif read_seq in added_strings:  #== ref_seq:
                     # seqs[relevant_read_id] = (pos1, pos2)
-                    add_items(seqs, relevant_read_id, pos1, pos2)
-                    locations[relevant_read_id] = len(seqs) - 3
+                    # add_items(seqs, relevant_read_id, pos1, pos2)
+                    if relevant_read_id in to_add and added_strings[read_seq] >= to_add[relevant_read_id][3]:
+                        continue
+                    else:
+                        to_add[relevant_read_id] = (relevant_read_id, pos1, pos2, added_strings[read_seq])
+
+                    # locations[relevant_read_id] = len(seqs) - 3
                     reads_visited[relevant_read_id] = added_strings[read_seq]
                     already_computed[relevant_read_id] = (p1,p2,pos1,pos2, added_strings[read_seq])
                     continue
@@ -743,8 +1046,12 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                         ed_est = curr_ed + math.fabs(ref_end_diff - read_end_diff) + math.fabs(read_beg_diff - ref_beg_diff) 
                         if 0 <= ed_est <= p_error_sum_thresh*len(ref_seq): # < curr_p_error_sum_thresh*len(ref_seq):
                             # seqs[relevant_read_id] = (pos1, pos2)
-                            add_items(seqs, relevant_read_id, pos1, pos2)
-                            locations[relevant_read_id] = len(seqs) - 3
+                            # add_items(seqs, relevant_read_id, pos1, pos2)
+                            if relevant_read_id in to_add and ed_est >= to_add[relevant_read_id][3]:
+                                continue
+                            else:
+                                to_add[relevant_read_id] = (relevant_read_id, pos1, pos2, ed_est)
+                            # locations[relevant_read_id] = len(seqs) - 3
                             added_strings[read_seq] = ed_est
                             reads_visited[relevant_read_id] = ed_est
 
@@ -761,7 +1068,7 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
 
                 tmp_cnt += 1
                 if editdist >= 0:    # passing second edit distance check
-                    if relevant_read_id in reads_visited: # we have already seen the minimizer combination
+                    if False: #relevant_read_id in reads_visited: # we have already seen the minimizer combination
                         # prev_pos1, prev_pos2 = seqs[relevant_read_id]
                         prev_pos1, prev_pos2 = seqs[ locations[relevant_read_id] + 1], seqs[ locations[relevant_read_id] + 2]
                         prev_read_seq = reads[relevant_read_id][1][prev_pos1: prev_pos2 + k_size]
@@ -784,15 +1091,24 @@ def find_most_supported_span(r_id, m1, p1, m1_curr_spans, minimizer_combinations
                         #     already_computed[relevant_read_id] = (p1,p2,prev_pos1, prev_pos2, editdist_prev)
                     else:
                         # seqs[relevant_read_id] = (pos1, pos2)
-                        add_items(seqs, relevant_read_id, pos1, pos2)
-                        locations[relevant_read_id] = len(seqs) - 3
+                        # add_items(seqs, relevant_read_id, pos1, pos2)
+                        if relevant_read_id in to_add and editdist >= to_add[relevant_read_id][3]:
+                            continue
+                        else:
+                            to_add[relevant_read_id] = (relevant_read_id, pos1, pos2, editdist)
+
+                        # locations[relevant_read_id] = len(seqs) - 3
                         added_strings[read_seq] = editdist
                         reads_visited[relevant_read_id] = editdist
                         already_computed[relevant_read_id] = (p1,p2,pos1,pos2, editdist)
 
+            seqs = array("I")
+            # print(to_add)
+            for relev_r_id in to_add:
+                add_items(seqs, to_add[relev_r_id][0], to_add[relev_r_id][1], to_add[relev_r_id][2])
 
             all_intervals.append( (p1 + k_size, p2,  len(seqs)//3, seqs) )
-    del seqs
+    # del seqs
     return tmp_cnt, read_complexity_cnt
 
 def get_intervals_to_correct(opt_indicies, all_intervals_sorted_by_finish):
@@ -828,7 +1144,7 @@ def correct_read(seq, reads, intervals_to_correct, k_size, work_dir, v_depth_rat
                     other_reads_corrected_regions[other_r_id].append(region)
         # print(seq[start: stop],  best_corr)
         corr_seq.append((start,stop, best_corr))
-
+    # print(corr_seq)
     tmp = [seq[0 : corr_seq[0][0]] ]
     for cnt, (start_, stop_, seq_segment) in enumerate(corr_seq):
         tmp.append(seq_segment)
@@ -883,6 +1199,15 @@ def batch(dictionary, size):
     
     return batches
 
+def get_primes(n, nprimes):
+    primes = []
+    for num in range(n, 2, -1):
+        if all(num%i!=0 for i in range(2,int(math.sqrt(num))+1)):
+            primes.append(num)
+            if len(primes) >= nprimes:
+                return primes
+
+
 def main(args):
     # start = time()
     all_reads = { i + 1 : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
@@ -890,8 +1215,6 @@ def main(args):
     max_seqs_to_spoa = args.max_seqs_to_spoa
     if len(all_reads) <= args.exact_instance_limit:
         args.exact = True
-    if args.set_w_dynamically:
-        args.w = args.k + min(7, int( len(all_reads)/500))
 
     eprint("ARGUMENT SETTINGS:")
     for key, value in args.__dict__.items():
@@ -910,18 +1233,38 @@ def main(args):
     for batch_id, reads in enumerate(batch(all_reads, args.max_seqs)):
         print("correcting {0} reads in a batch".format(len(reads)))
         batch_start_time = time()
-
-        w = args.w
+        if args.set_w_dynamically:
+            # Activates for 'small' clusters with less than 700 reads
+            if len(reads) >= 100:
+                w = min(args.w, args.k + (len(reads)//100 + 4))  # min(args.w,)  #args.w = args.k + min(7, int( len(all_reads)/500))
+            else:
+                w = args.k + 1 + len(reads)//30  # min(args.w,)  #args.w = args.k + min(7, int( len(all_reads)/500))
+        else:
+            w = args.w
+        print("Window used for batch:", w)
         x_high = args.xmax
         x_low = args.xmin
         hash_fcn = "lex"
         # for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
-        if args.compression:
-            minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
+        if args.randstrobes:
+            if args.set_layers_manually:
+                primes = get_primes(1000, args.layers)
+            else:
+                layers = 1 if len(reads) >= 1000 else 2
+                print("Using {0} layers.".format(layers))
+                primes = get_primes(1000, layers)
+            # print(primes)
+            # primes = [97,73]
+            # minimizer_combinations_database, read_to_randstrobes = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
+            minimizer_combinations_database = get_randstrobes_with_positions_database_2way(reads, k_size, x_low, x_high, primes)
         else:
-            minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
+            if args.compression:
+                minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
+            else:
+                minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
 
-        minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
+            minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
+
         quality_values_database = get_qvs(reads)
         # print(minimizer_database)
         if args.verbose:
@@ -938,7 +1281,17 @@ def main(args):
         tmp_cnt = 0
 
         for r_id in sorted(reads): #, reverse=True):
-            read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
+            if args.randstrobes:
+                seq = reads[r_id][1]
+                # print("seq length:", len(seq))
+                # read_min_comb = [ ((m1,p1), m1_curr_spans) for m1, p1, m1_curr_spans in randstrobe_iterator(seq, k_size, x_low, x_high, primes)] 
+                read_min_comb = randstrobes_read_2way(seq, k_size, x_low, x_high, primes)
+                # read_min_comb = read_to_randstrobes[r_id]
+            else:
+                # seq = reads[r_id][1]
+                # print("seq length:", len(seq))
+                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
+
             # print(read_min_comb)
             # sys.exit()
             if args.exact:
@@ -963,16 +1316,17 @@ def main(args):
                 read_previously_considered_positions = set([tmp_pos for tmp_p1, tmp_p2, w_tmp, _ in previously_corrected_regions[r_id] for tmp_pos in range(tmp_p1, tmp_p2)])
                 group_id = 0
                 pos_group = {}
-                sorted_corr_pos = sorted(read_previously_considered_positions)
-                for p1, p2 in zip(sorted_corr_pos[:-1], sorted_corr_pos[1:]):
-                    if p2 > p1 + 1:
-                       pos_group[p1] = group_id 
-                       group_id += 1
-                       pos_group[p2] = group_id 
-                    else:
-                       pos_group[p1] = group_id 
-                if p2 == p1 + 1:
-                    pos_group[p2] = group_id 
+                if len(read_previously_considered_positions) > 1:
+                    sorted_corr_pos = sorted(read_previously_considered_positions)
+                    for p1, p2 in zip(sorted_corr_pos[:-1], sorted_corr_pos[1:]):
+                        if p2 > p1 + 1:
+                           pos_group[p1] = group_id 
+                           group_id += 1
+                           pos_group[p2] = group_id 
+                        else:
+                           pos_group[p1] = group_id 
+                    if p2 == p1 + 1:
+                        pos_group[p2] = group_id 
             else:
                 read_previously_considered_positions= set()
                 pos_group = {}
@@ -1030,20 +1384,30 @@ def main(args):
                 # eprint("Found nothing to correct")
                 corrected_seq = seq
             else:
-                all_intervals.sort(key = lambda x: x[1])
-                # print([www for (_, _,  www, _)  in all_intervals])
+                all_intervals.sort(key = lambda x: (x[1],x[0]))
+                # print(r_id)
+                # print([(xxx, yyy, www, zzz) for (xxx, yyy, www, zzz)  in all_intervals])
+                # print()
+                # sys.exit()
+                # if r_id == 1:
+                #     all_intervals = [(3191, 3191, 3, all_intervals[0][3])]
+                #     print("changed:", all_intervals )
                 opt_indicies = solve_WIS(all_intervals) # solve Weighted Interval Scheduling here to find set of best non overlapping intervals to correct over
                 # print(opt_indicies)
                 # assert opt_indicies == opt_indicies2
                 # print(opt_indicies)
-                intervals_to_correct = get_intervals_to_correct(opt_indicies[::-1], all_intervals)
-                del all_intervals
-                all_intervals = []
-                corrected_seq, other_reads_corrected_regions = correct_read(seq, reads, intervals_to_correct, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy, args.verbose, args.use_racon)
-                del intervals_to_correct
-                for other_r_id, corrected_regions in other_reads_corrected_regions.items():
-                    for corr_region in corrected_regions:
-                        previously_corrected_regions[other_r_id].append(corr_region)
+                if not opt_indicies: # all intervals had only the read to be corrected itself as support (i.e., 1 in support)
+                    corrected_seq = seq
+                else:
+                    intervals_to_correct = get_intervals_to_correct(opt_indicies[::-1], all_intervals)
+                    # print(r_id, intervals_to_correct)
+                    del all_intervals
+                    all_intervals = []
+                    corrected_seq, other_reads_corrected_regions = correct_read(seq, reads, intervals_to_correct, k_size, work_dir, v_depth_ratio_threshold, max_seqs_to_spoa, args.disable_numpy, args.verbose, args.use_racon)
+                    del intervals_to_correct
+                    for other_r_id, corrected_regions in other_reads_corrected_regions.items():
+                        for corr_region in corrected_regions:
+                            previously_corrected_regions[other_r_id].append(corr_region)
 
             # from pympler import asizeof
             # print("reads", asizeof.asizeof(reads)/1000000)
@@ -1065,6 +1429,21 @@ def main(args):
         print()
         print("Done with batch_id:", batch_id)
         print("Took {0} seconds.".format(time()- batch_start_time))
+        # from pympler import asizeof
+        # print("reads", asizeof.asizeof(reads)/1000000)
+        # # print("read_min_comb", asizeof.asizeof(read_min_comb)/1000000)
+        # print("not_prev_corrected_spans", asizeof.asizeof(not_prev_corrected_spans)/1000000)
+        # print("other_reads_corrected_regions", asizeof.asizeof(other_reads_corrected_regions)/1000000)
+        # print("previously_corrected_regions", asizeof.asizeof(previously_corrected_regions)/1000000)
+        # print("all_intervals", asizeof.asizeof(all_intervals)/1000000)
+        # print("read_min_comb", asizeof.asizeof(read_min_comb)/1000000)
+        # print("quality_values_database", asizeof.asizeof(quality_values_database)/1000000)
+        # print("already_computed", asizeof.asizeof(already_computed)/1000000)   
+        # # print("minimizer_database", asizeof.asizeof(minimizer_database)/1000000)            
+        # print("minimizer_combinations_database", asizeof.asizeof(minimizer_combinations_database)/1000000)
+        # minimizer_combinations_database.clear()
+        # quality_values_database.clear()
+        # previously_corrected_regions.clear()
                 # eval_sim2(corrected_seq, seq, qual, tot_errors_before, tot_errors_after)
                 # if r_id == 10:
                 #     sys.exit()
@@ -1085,15 +1464,15 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo error correction of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.0.7')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.8')
 
     parser.add_argument('--fastq', type=str,  default=False, help='Path to input fastq file with reads')
     # parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
 
     parser.add_argument('--k', type=int, default=9, help='Kmer size')
-    parser.add_argument('--w', type=int, default=10, help='Window size')
-    parser.add_argument('--xmin', type=int, default=14, help='Upper interval length')
-    parser.add_argument('--xmax', type=int, default=80, help='Lower interval length')
+    parser.add_argument('--w', type=int, default=20, help='Window size')
+    parser.add_argument('--xmin', type=int, default=18, help='Lower interval length')
+    parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.1, help='Minimum fraction keeping substitution')
     # parser.add_argument('--C', type=float, default=0.05, help='Minimum fraction of keeping alternative refernece contexts')
     parser.add_argument('--exact', action="store_true", help='Get exact solution for WIS for evary read (recalculating weights for each read (much slower but slightly more accuracy,\
@@ -1101,13 +1480,25 @@ if __name__ == '__main__':
     parser.add_argument('--disable_numpy', action="store_true", help='Do not require numpy to be installed, but this version is about 1.5x slower than with numpy.')
 
     parser.add_argument('--max_seqs_to_spoa', type=int, default=200,  help='Maximum number of seqs to spoa')
-    parser.add_argument('--max_seqs', type=int, default=1000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
+    parser.add_argument('--max_seqs', type=int, default=2000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
     parser.add_argument('--use_racon', action="store_true", help='Use racon to polish consensus after spoa (more time consuming but higher accuracy).')
 
     parser.add_argument('--exact_instance_limit', type=int, default=0,  help='Activates slower exact mode for instance smaller than this limit')
     # parser.add_argument('--w_equal_k_limit', type=int, default=0,  help='Sets w=k which is slower and more memory consuming but more accurate and useful for smalled clusters.')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
     parser.add_argument('--verbose', action="store_true", help='Print various developer stats.')
+    parser.add_argument('--randstrobes', action="store_true", help='EXPERIMENTAL PARAMETER: IsONcorrect uses paired minimizers (described in isONcorrect paper). This experimental option\
+                                                                 uses randstrobes instead of paired minimizers to find shared regions. Randstrobes \
+                                                                 reduces memory footprint substantially (and runtime) with only slight increase in post correction quality.')
+
+
+    parser.add_argument('--layers', type=int, default=argparse.SUPPRESS, help='EXPERIMENTAL PARAMETER: Active when --randstrobes specified.\
+                                                                How many "layers" with randstrobes we want per sequence to sample.\
+                                                               More layers gives more accureate results but is more memory consuming and slower.\
+                                                               It is not reccomended to specify more than 5. ')
+    parser.add_argument('--set_layers_manually', action="store_true", help='EXPERIMENTAL PARAMETER: By default isONcorrect sets layers = 1 if nr seqs in batch to be corrected is >= 1000, else layers = 2.\
+                                                                            This command will manually pick the number of layers specified with the --layers parameter.')
+
 
     parser.add_argument('--compression', action="store_true", help='Use homopolymenr compressed reads. (Deprecated, because we will have fewer \
                                                                         minmimizer combinations to span regions in homopolymenr dense regions. Solution \
@@ -1121,6 +1512,16 @@ if __name__ == '__main__':
     if args.xmin < 2*args.k:
         args.xmin = 2*args.k
         eprint("xmin set to {0}".format(args.xmin))
+
+    # if not args.paired_minimizers and 'max_seqs' not in args:
+    #     print("max_seqs was not specified and paired_minimizer setting not used. Setting max_seqs to 2000")
+    #     args.max_seqs = 2000
+    # elif args.paired_minimizers and 'max_seqs' not in args:
+    #     print("max_seqs was not specified. Setting max_seqs to 1000")
+    #     args.max_seqs = 1000
+
+    if args.set_layers_manually and 'layers' not in args:
+        args.layers = 2
 
     if len(sys.argv)==1:
         parser.print_help()

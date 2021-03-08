@@ -398,37 +398,37 @@ def print_detailed_values_to_file(alignments_dict, reads, all_ref_locations,  ou
         outfile.write( ",".join( [str(item) for item in info_tuple] ) + "\n")
 
 
-# def print_quantile_values(alignments_dict):
+def print_quantile_values(alignments_dict):
 
-#     alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1][0:4])) )
-#     print(alignments_sorted[-5:])
+    alignments_sorted = sorted(alignments_dict.items(), key = lambda x: sum(x[1][0:3])/float(sum(x[1][0:4])) )
+    print(alignments_sorted[-5:])
 
-#     sorted_error_rates = [ sum(tup[0:3])/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+    sorted_error_rates = [ sum(tup[0:3])/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
 
-#     insertions = [ tup[0]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
-#     deletions = [ tup[1]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
-#     substitutions = [ tup[2]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+    insertions = [ tup[0]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+    deletions = [ tup[1]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
+    substitutions = [ tup[2]/float(sum(tup[0:4])) for acc, tup in alignments_sorted]
 
-#     n = len(sorted_error_rates)
-#     quantiles = [0, 1.0/20, 1.0/10, 1.0/4, 1.0/2, 3.0/4, 9.0/10, 19.0/20, 1 ]
-#     quantile_errors = []
-#     quantile_insertions = []
-#     quantile_deletions = []
-#     quantile_substitutions = []
+    n = len(sorted_error_rates)
+    quantiles = [0, 1.0/20, 1.0/10, 1.0/4, 1.0/2, 3.0/4, 9.0/10, 19.0/20, 1 ]
+    quantile_errors = []
+    quantile_insertions = []
+    quantile_deletions = []
+    quantile_substitutions = []
 
-#     for q in quantiles:
-#         if q == 1:
-#             quantile_errors.append(sorted_error_rates[int(q*n)-1])
-#             quantile_insertions.append(insertions[int(q*n)-1])
-#             quantile_deletions.append(deletions[int(q*n)-1])
-#             quantile_substitutions.append(substitutions[int(q*n)-1])
-#         else:
-#             quantile_errors.append(sorted_error_rates[int(q*n)])
-#             quantile_insertions.append(insertions[int(q*n)])
-#             quantile_deletions.append(deletions[int(q*n)])
-#             quantile_substitutions.append(substitutions[int(q*n)])
+    for q in quantiles:
+        if q == 1:
+            quantile_errors.append(sorted_error_rates[int(q*n)-1])
+            quantile_insertions.append(insertions[int(q*n)-1])
+            quantile_deletions.append(deletions[int(q*n)-1])
+            quantile_substitutions.append(substitutions[int(q*n)-1])
+        else:
+            quantile_errors.append(sorted_error_rates[int(q*n)])
+            quantile_insertions.append(insertions[int(q*n)])
+            quantile_deletions.append(deletions[int(q*n)])
+            quantile_substitutions.append(substitutions[int(q*n)])
 
-#     return quantile_errors, quantile_insertions, quantile_deletions, quantile_substitutions
+    return quantile_errors, quantile_insertions, quantile_deletions, quantile_substitutions
 
 
 def cigar_to_seq(cigar, query, ref):
@@ -532,8 +532,10 @@ def main(args):
     print(refs.keys())
 
 
-    reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq_split(open(args.reads, 'r')))}
-    corr_reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq_split(open(args.corr_reads, 'r')))}
+    reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.reads, 'r')))}
+    corr_reads = { acc.split()[0] : seq for i, (acc, (seq, qual)) in enumerate(readfq(open(args.corr_reads, 'r')))}
+    # print(list(reads.keys()))
+    # print(list(corr_reads.keys()))
     orig_primary_locations, orig_ref_locations = decide_primary_locations(args.orig_sam, args)
     corr_primary_locations, corr_ref_locations = decide_primary_locations(args.corr_sam, args)
 
@@ -543,7 +545,21 @@ def main(args):
     print( "Reads successfully aligned (as found in sam file):", len(orig),len(corr))
 
 
+    ##############
+    quantile_tot_orig, quantile_insertions_orig, quantile_deletions_orig, quantile_substitutions_orig = print_quantile_values(orig)
+    quantile_tot_corr, quantile_insertions_corr, quantile_deletions_corr, quantile_substitutions_corr = print_quantile_values(corr)
 
+    orig_stats = get_summary_stats(orig, 1.0)
+    corr_stats = get_summary_stats(corr, 1.0)
+    
+    print("Distribution of error rates (Percent)")
+    print("Reads, Best, top 5%, top 10%, top 25%, Median, top 75%, top 90%, top 95%, Worst")
+    print("Original,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in quantile_tot_orig ] ))
+    print("Corrected,{0},{1},{2},{3},{4},{5},{6},{7},{8}".format( *[round(100*round(x,3), 2) for x in quantile_tot_corr ] ))
+    ################
+
+
+    
     reads_missing_from_clustering_correction_output = set(reads.keys()) - set(corr_reads.keys())
     for r_acc in reads_missing_from_clustering_correction_output:
         if r_acc in orig and r_acc not in corr:
