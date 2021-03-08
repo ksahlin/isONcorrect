@@ -49,9 +49,9 @@ def isoncorrect(data):
         print('Running isoncorrect batch_id:{0}...'.format(batch_id), end=' ')
         stdout.flush()
 
-        dyn_flag = "--set_w_dynamically" if isoncorrect_algorithm_params["set_w_dynamically"] else ''
         racon_flag = "--use_racon" if isoncorrect_algorithm_params["use_racon"] else ''
-        
+        # randstrobes_flag = "--randstrobes" if isoncorrect_algorithm_params["randstrobes"] else ''
+        dyn_flag = "--set_w_dynamically" if isoncorrect_algorithm_params["set_w_dynamically"] else ''
         # null = open("/dev/null", "w")
         isoncorrect_out_file = open(os.path.join(outfolder, "stdout.txt"), "w")
         # print( " ".join([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
@@ -71,7 +71,7 @@ def isoncorrect(data):
         if dyn_flag and racon_flag:
             subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                     "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
-                                    dyn_flag,  "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
+                                    dyn_flag, "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
                                     racon_flag,
                                     "--k",  str(isoncorrect_algorithm_params["k"]),  "--w",  str(isoncorrect_algorithm_params["w"]),
                                     "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
@@ -245,7 +245,7 @@ def main(args):
                         compute = False
 
             if compute:
-                isoncorrect_algorithm_params = {  "set_w_dynamically" : args.set_w_dynamically, "exact_instance_limit" : args.exact_instance_limit, 
+                isoncorrect_algorithm_params = {  "set_w_dynamically" : args.set_w_dynamically, "exact_instance_limit" : args.exact_instance_limit, "randstrobes" : args.randstrobes,
                                                     "k": args.k, "w" : args.w, "xmin" : args.xmin, "xmax" :  args.xmax, "T" : args.T, "max_seqs" : args.max_seqs,  "use_racon" : args.use_racon  }
                 instances.append((isoncorrect_location, fastq_file_path, outfolder, batch_id, isoncorrect_algorithm_params) )
             # else:
@@ -256,8 +256,14 @@ def main(args):
         else:
             continue
 
-    # sys.exit()
-    instances.sort(key = lambda x: x[3])
+    # # sys.exit()
+    # if args.split_wrt_batches:
+    #     instances.sort(key = lambda x: int(x[3].split('_')[0])) # sorting in order of cluster labels
+    # else:
+    #     instances.sort(key = lambda x: int(x[3])) # sorting in order of cluster size!
+
+    instances.sort(key = lambda x: x[3]) # sorting on batch ids as strings
+
     for t in instances:
         print(t)
     original_sigint_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -295,19 +301,19 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.0.7')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.0.8')
     parser.add_argument('--fastq_folder', type=str,  default=False, help='Path to input fastq folder with reads in clusters')
     parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
     parser.add_argument('--k', type=int, default=9, help='Kmer size')
-    parser.add_argument('--w', type=int, default=10, help='Window size')
-    parser.add_argument('--xmin', type=int, default=14, help='Lower interval length')
+    parser.add_argument('--w', type=int, default=20, help='Window size')
+    parser.add_argument('--xmin', type=int, default=18, help='Lower interval length')
     parser.add_argument('--xmax', type=int, default=80, help='Upper interval length')
     parser.add_argument('--T', type=float, default=0.1, help='Minimum fraction keeping substitution')
     parser.add_argument('--exact_instance_limit', type=int, default=50,  help='Do exact correction for clusters under this threshold')
     # parser.add_argument('--w_equal_k_limit', type=int, default=100,  help='Do not recompute previous results')
     parser.add_argument('--keep_old', action="store_true", help='Do not recompute previous results if corrected_reads.fq is found and has the smae number of reads as input file (i.e., is complete).')
     parser.add_argument('--set_w_dynamically', action="store_true", help='Set w = k + max(2*k, floor(cluster_size/1000)).')
-    parser.add_argument('--max_seqs', type=int, default=1000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
+    parser.add_argument('--max_seqs', type=int, default=2000,  help='Maximum number of seqs to correct at a time (in case of large clusters).')
     parser.add_argument('--use_racon', action="store_true", help='Use racon to polish consensus after spoa (more time consuming but higher accuracy).')
 
     parser.add_argument('--split_mod', type=int, default=1, help='Splits cluster ids in n (default=1) partitions by computing residual of cluster_id divided by n.\
@@ -320,12 +326,36 @@ if __name__ == '__main__':
     parser.add_argument('--split_wrt_batches', action="store_true", help='Process reads per batch (of max_seqs sequences) instead of per cluster. Significantly decrease runtime when few very large clusters are less than the number of cores used.')
   
     parser.add_argument('--outfolder', type=str,  default=None, help='Outfolder with all corrected reads.')
+    parser.add_argument('--randstrobes', action="store_true", help='EXPERIMENTAL PARAMETER: IsONcorrect uses paired minimizers (described in isONcorrect paper). This experimental option\
+                                                                 uses randstrobes instead of paired minimizers to find shared regions. Randstrobes \
+                                                                 reduces memory footprint substantially (and runtime) with only slight increase in post correction quality.')
+
+
+    parser.add_argument('--layers', type=int, default=argparse.SUPPRESS, help='EXPERIMENTAL PARAMETER: Active when --randstrobes specified.\
+                                                                How many "layers" with randstrobes we want per sequence to sample.\
+                                                               More layers gives more accureate results but is more memory consuming and slower.\
+                                                               It is not reccomended to specify more than 5. ')
+    parser.add_argument('--set_layers_manually', action="store_true", help='EXPERIMENTAL PARAMETER: By default isONcorrect sets layers = 1 if nr seqs in batch to be corrected is >= 1000, else layers = 2.\
+                                                                            This command will manually pick the number of layers specified with the --layers parameter.')
+
+
     args = parser.parse_args()
 
     if len(sys.argv)==1:
         parser.print_help()
         sys.exit()
-    
+
+    # if not args.paired_minimizers and 'max_seqs' not in args:
+    #     print("max_seqs was not specified and paired_minimizer setting not used. Setting max_seqs to 2000")
+    #     args.max_seqs = 2000
+    # elif args.paired_minimizers and 'max_seqs' not in args:
+    #     print("max_seqs was not specified. Setting max_seqs to 1000")
+    #     args.max_seqs = 1000
+
+    if args.set_layers_manually and 'layers' not in args:
+        args.layers = 2
+
+
     if args.split_mod > 1:
         assert args.residual < args.split_mod 
 
