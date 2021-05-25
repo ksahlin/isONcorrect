@@ -5,7 +5,7 @@ isONcorrect is a tool for error-correcting  Oxford Nanopore cDNA reads. It is de
 
 **Update:** Since v0.0.8, isONcorrect uses different default parameters compared to what was used in the [paper](https://www.nature.com/articles/s41467-020-20340-8). The new parameters make isONcorrect 2-3 times faster and use 3-8 times less memory with only a small cost of increased median post-correction error rate. With the new parameter setting the correction accuracy is 98.5-99.3% instead of 98.9–99.6% on the data used in the paper. Current default uses `--k 9 --w 20 --max_seqs 2000`. To invoke settings used in paper, set parameters `--k 9 --w 10 --max_seqs 1000`.
 
-Processing and error correction of full-length ONT cDNA reads is achieved by the pipeline of running [pychopper](https://github.com/nanoporetech/pychopper) --> [isONclust](https://github.com/ksahlin/isONclust) --> [isONcorrect](https://github.com/ksahlin/isONcorrect) 
+Processing and error correction of full-length ONT cDNA reads is achieved by the pipeline of running [pychopper](https://github.com/nanoporetech/pychopper) --> [isONclust](https://github.com/ksahlin/isONclust) --> [isONcorrect](https://github.com/ksahlin/isONcorrect). All these steps can be run in one go with [this script](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). See below for installation and usage. 
 
 
 isONcorrect is distributed as a python package supported on Linux / OSX with python v>=3.4. [![Build Status](https://travis-ci.org/ksahlin/isONcorrect.svg?branch=master)](https://travis-ci.org/ksahlin/isONcorrect).
@@ -67,7 +67,7 @@ conda install -c bioconda "hmmer>=3.0"
 conda install -c bioconda "pychopper>=2.0"
 ```
 
-You are now set to run the [correction_pipeline](https://github.com/ksahlin/isONcorrect/blob/master/correction_pipeline.sh). See [USAGE](https://github.com/ksahlin/isONcorrect#usage).
+You are now set to run the [correction_pipeline](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). See [USAGE](https://github.com/ksahlin/isONcorrect#usage).
 
 ### Using pip 
 
