@@ -59,6 +59,16 @@ Upon start/login to your server/computer you need to activate the conda environm
 conda activate isoncorrect
 ```
 
+4. You probably want to install `pychopper` and `isONclust` in the isoncorrect environmment as well to run the complete correction pipeline if you haven't already. This can be done with:
+
+```
+pip install isONclust
+conda install -c bioconda "hmmer>=3.0"
+conda install -c bioconda "pychopper>=2.0"
+```
+
+You are now set to run the [correction_pipeline](https://github.com/ksahlin/isONcorrect/blob/master/correction_pipeline.sh). See [USAGE](https://github.com/ksahlin/isONcorrect#usage).
+
 ### Using pip 
 
 `pip` is pythons official package installer and is included in most python versions. If you do not have `pip`, it can be easily installed [from here](https://pip.pypa.io/en/stable/installing/) and upgraded with `pip install --upgrade pip`. 
@@ -109,16 +119,22 @@ This will perform correction on `0.fastq` and `1.fastq` in parallel. Expected ru
 USAGE
 -------
  
-### Running
+## Running
 
-For a fastq file with raw ONT cDNA reads, the following pipeline is recommended. A bash script to run this pipeline is provided below.
+### Using correction_pipeline.sh
+
+You can simply run `./correction_pipeline.sh <raw_reads.fq>  <outfolder>  <num_cores> ` which will perform the steps 1-5 below for you. The `correction_pipeline.sh` script is available in this repository [here](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). Simply download the reposotory or the individual [correction_pipeline.sh file](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). 
+
+For a fastq file with raw ONT cDNA reads, the following pipeline is recommended:
 1.  Produce full-length reads (with [pychopper](https://github.com/nanoporetech/pychopper) (a.k.a. `cdna_classifier`))
 2.  Cluster the full length reads into genes/gene-families ([isONclust](https://github.com/ksahlin/isONclust))
 3.  Make fastq files of each cluster (`isONclust write_fastq` command)
 4.  Correct individual clusters ([isONcorrect](https://github.com/ksahlin/isONcorrect))
 5.  Join reads back to a single fastq file (This is of course optional)
 
-Below shows specific pipeline script to go from raw reads `raw_reads.fq` to corrected full-length reads `all_corrected_reads.fq` (please modify/remove arguments as needed). 
+### Manually
+
+The contents of the `correction_pipeline.sh` is (roughly) provided below. If you want more individual control over the steps than what the `correction_pipeline.sh` can do for you (such as different parameters in each step), you can modify/remove arguments as needed in `correction_pipeline.sh` or in the below script.  
 
 ```
 #!/bin/bash
@@ -136,7 +152,7 @@ cdna_classifier.py  raw_reads.fq $root_out/full_length.fq -t $cores
 isONclust  --t $cores  --ont --fastq $root_out/full_length.fq \
              --outfolder $root_out/clustering
 
-isONclust write_fastq --N 1 --clusters $root_out/clustering/final_clusters.csv \
+isONclust write_fastq --N 1 --clusters $root_out/clustering/final_clusters.tsv \
                       --fastq $root_out/full_length.fq --outfolder  $root_out/clustering/fastq_files 
 
 run_isoncorrect --t $cores  --fastq_folder $root_out/clustering/fastq_files  --outfolder $root_out/correction/ 
@@ -151,11 +167,11 @@ done
 
 isONcorrect does not need ONT reads to be full-length (i.e., produced by `pychopper`), but unless you have specific other goals, it is advised to run pychopper for any kind of downstream analysis to guarantee full-length reads. 
 
-### Output
+## Output
 
 The output of `run_isoncorrect` is one file per cluster with identical headers to the original reads.
 
-### Parallelization across nodes
+## Parallelization across nodes
 
 isONcorrect currently supports parallelization across cores on a node (parameter `--t`), but not across several nodes. There is a way to overcome this limitation if you have access to multiple nodes as follows. The `run_isoncorrect` step can be parallilized across n nodes by (in bash or other environment, e.g., snakemake) parallelizing the following commands
 
