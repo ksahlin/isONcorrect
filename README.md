@@ -8,7 +8,7 @@ isONcorrect is a tool for error-correcting  Oxford Nanopore cDNA reads. It is de
 Processing and error correction of full-length ONT cDNA reads is achieved by the pipeline of running [pychopper](https://github.com/nanoporetech/pychopper) --> [isONclust](https://github.com/ksahlin/isONclust) --> [isONcorrect](https://github.com/ksahlin/isONcorrect). All these steps can be run in one go with [this script](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). See below for installation and usage. 
 
 
-isONcorrect is distributed as a python package supported on Linux / OSX with python v>=3.4. [![Build Status](https://travis-ci.org/ksahlin/isONcorrect.svg?branch=master)](https://travis-ci.org/ksahlin/isONcorrect).
+isONcorrect is distributed as a python package supported on Linux / OSX with python v>=3.4. [![Build Status](https://travis-ci.org/ksahlin/isONcorrect.svg?branch=master)](https://travis-ci.com/ksahlin/isONcorrect).
 
 Table of Contents
 =================
