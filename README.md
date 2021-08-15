@@ -1,7 +1,7 @@
 isONcorrect
 ===========
 
-isONcorrect is a tool for error-correcting  Oxford Nanopore cDNA reads. It is designed to handle highly variable coverage and exon variation within reads and achieves about a 0.5-1% median error rate after correction. It leverages regions shared between reads from different isoforms achieve low error rates even for low abundant transcripts. See [paper](https://www.nature.com/articles/s41467-020-20340-8) for details. 
+isONcorrect is a tool for error-correcting Oxford Nanopore cDNA reads. It is designed to handle highly variable coverage and exon variation within reads and achieves about a 0.5-1% median error rate after correction. It leverages regions shared between reads from different isoforms achieve low error rates even for low abundant transcripts. See [paper](https://www.nature.com/articles/s41467-020-20340-8) for details. 
 
 **Update:** Since v0.0.8, isONcorrect uses different default parameters compared to what was used in the [paper](https://www.nature.com/articles/s41467-020-20340-8). The new parameters make isONcorrect 2-3 times faster and use 3-8 times less memory with only a small cost of increased median post-correction error rate. With the new parameter setting the correction accuracy is 98.5-99.3% instead of 98.9–99.6% on the data used in the paper. Current default uses `--k 9 --w 20 --max_seqs 2000`. To invoke settings used in paper, set parameters `--k 9 --w 10 --max_seqs 1000`.
 
@@ -29,11 +29,11 @@ Table of Contents
 
 
 INSTALLATION
-----------------
+=================
 
 Typical install time on a desktop computer is about 10 minutes with conda for this software.
 
-### Using conda
+## Using conda
 Conda is the preferred way to install isONcorrect.
 
 1. Create and activate a new environment called isoncorrect
@@ -69,7 +69,7 @@ conda install -c bioconda "pychopper>=2.0"
 
 You are now set to run the [correction_pipeline](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). See [USAGE](https://github.com/ksahlin/isONcorrect#usage).
 
-### Using pip 
+## Using pip 
 
 `pip` is pythons official package installer and is included in most python versions. If you do not have `pip`, it can be easily installed [from here](https://pip.pypa.io/en/stable/installing/) and upgraded with `pip install --upgrade pip`. 
 
@@ -80,9 +80,9 @@ pip install isONcorrect
 Then install [spoa](https://github.com/rvaser/spoa) and include it in your path.
 
 
-### Downloading source from GitHub
+## Downloading source from GitHub
 
-#### Dependencies
+### Dependencies
 
 Make sure the below listed dependencies are installed (installation links below). Versions in parenthesis are suggested as isONcorrect has not been tested with earlier versions of these libraries. However, isONcorrect may also work with earliear versions of these libaries.
 * [spoa](https://github.com/rvaser/spoa) (1.1.5)
@@ -99,7 +99,7 @@ cd isONcorrect
 ./isONcorrect
 ```
 
-### Testing installation
+## Testing installation
 
 You can verify successul installation by running isONcorrect on this [small dataset of 100 reads](https://github.com/ksahlin/isONcorrect/tree/master/test_data/isoncorrect/0.fastq). Assuming you have cloned this repository and the repository is found in /my/path/isONcorrect, simply run:
 
@@ -117,7 +117,7 @@ This will perform correction on `0.fastq` and `1.fastq` in parallel. Expected ru
 
 
 USAGE
--------
+=================
  
 ## Running
 
@@ -131,6 +131,7 @@ For a fastq file with raw ONT cDNA reads, the following pipeline is recommended:
 3.  Make fastq files of each cluster (`isONclust write_fastq` command)
 4.  Correct individual clusters ([isONcorrect](https://github.com/ksahlin/isONcorrect))
 5.  Join reads back to a single fastq file (This is of course optional)
+
 
 ### Manually
 
@@ -170,6 +171,11 @@ isONcorrect does not need ONT reads to be full-length (i.e., produced by `pychop
 ## Output
 
 The output of `run_isoncorrect` is one file per cluster with identical headers to the original reads.
+
+### Few large clusters
+
+For some datasets, e.g. targeted data, `isONclust` can produce highly uneven clusters, i.e., a few very large clusters and some/many small ones. In such cases, runtime can be reduced if the argument `--split_wrt_batches` is specified to `run_isoncorrect`.
+
 
 ## Parallelization across nodes
 
