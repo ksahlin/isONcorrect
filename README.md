@@ -160,9 +160,10 @@ run_isoncorrect --t $cores  --fastq_folder $root_out/clustering/fastq_files  --o
 
 # OPTIONAL BELOW TO MERGE ALL CORRECTED READS INTO ONE FILE
 touch $root_out/all_corrected_reads.fq
-for f in in $root_out/correction/*/corrected_reads.fastq; 
+OUTFILES=$root_out"/correction/"*"/corrected_reads.fastq"
+for f in $OUTFILES
 do 
-  cat {f} >> $root_out/all_corrected_reads.fq
+  cat $f >> $outfolder/all_corrected_reads.fq
 done
 ```
 

@@ -60,9 +60,11 @@ echo
 
 # OPTIONAL BELOW TO MERGE ALL CORRECTED READS INTO ONE FILE
 touch $outfolder/all_corrected_reads.fq
-for f in in $outfolder/correction/*/corrected_reads.fastq; 
+OUTFILES=$outfolder"/correction/"*"/corrected_reads.fastq"
+for f in $OUTFILES
 do 
-  cat {f} >> $outfolder/all_corrected_reads.fq
+  echo $f
+  cat $f >> $outfolder/all_corrected_reads.fq
 done
 
 echo
