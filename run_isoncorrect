@@ -54,7 +54,7 @@ def isoncorrect(data):
         dyn_flag = "--set_w_dynamically" if isoncorrect_algorithm_params["set_w_dynamically"] else ''
         # null = open("/dev/null", "w")
         isoncorrect_out_file = open(os.path.join(outfolder, "stdout.txt"), "w")
-        # print( " ".join([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+        # print( " ".join([ "time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
         #                         "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
         #                         "--set_w_dynamically" if isoncorrect_algorithm_params["set_w_dynamically"] else '',  "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
         #                         "--use_racon" if isoncorrect_algorithm_params["use_racon"] else '',
@@ -62,14 +62,14 @@ def isoncorrect(data):
         #                         "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
         #                         "--T",  str(isoncorrect_algorithm_params["T"]) ]))
 
-        # subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq {0} --outfolder {1} --exact_instance_limit {2} {3} {4} --max_seqs {5} --k {6} --w {7} --xmin {8} --xmax {9} --T {10}".format(read_fastq_file,  outfolder, 
+        # subprocess.check_call([ "time", isoncorrect_exec, "--fastq {0} --outfolder {1} --exact_instance_limit {2} {3} {4} --max_seqs {5} --k {6} --w {7} --xmin {8} --xmax {9} --T {10}".format(read_fastq_file,  outfolder, 
         #                          str(isoncorrect_algorithm_params["exact_instance_limit"]),
         #                         dyn_flag, racon_flag, str(isoncorrect_algorithm_params["max_seqs"]),
         #                         str(isoncorrect_algorithm_params["k"]), str(isoncorrect_algorithm_params["w"]),
         #                         str(isoncorrect_algorithm_params["xmin"]), str(isoncorrect_algorithm_params["xmax"]),
         #                         str(isoncorrect_algorithm_params["T"])) ], stderr=error_file, stdout=isoncorrect_out_file)
         if dyn_flag and racon_flag:
-            subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+            subprocess.check_call([ "time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                     "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
                                     dyn_flag, "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
                                     racon_flag,
@@ -77,21 +77,21 @@ def isoncorrect(data):
                                     "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
                                     "--T",  str(isoncorrect_algorithm_params["T"]) ], stderr=error_file, stdout=isoncorrect_out_file)
         elif dyn_flag:
-            subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+            subprocess.check_call([ "time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                     "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
                                     dyn_flag,  "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
                                     "--k",  str(isoncorrect_algorithm_params["k"]),  "--w",  str(isoncorrect_algorithm_params["w"]),
                                     "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
                                     "--T",  str(isoncorrect_algorithm_params["T"]) ], stderr=error_file, stdout=isoncorrect_out_file)      
         elif racon_flag:
-            subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+            subprocess.check_call([ "time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                     "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
                                     racon_flag,  "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
                                     "--k",  str(isoncorrect_algorithm_params["k"]),  "--w",  str(isoncorrect_algorithm_params["w"]),
                                     "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
                                     "--T",  str(isoncorrect_algorithm_params["T"]) ], stderr=error_file, stdout=isoncorrect_out_file)
         else:
-            subprocess.check_call([ "/usr/bin/time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+            subprocess.check_call([ "time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                     "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
                                     "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
                                     "--k",  str(isoncorrect_algorithm_params["k"]),  "--w",  str(isoncorrect_algorithm_params["w"]),
