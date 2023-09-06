@@ -43,7 +43,7 @@ def wccount(filename):
 def isoncorrect(data):
     isoncorrect_location, read_fastq_file, outfolder, batch_id, isoncorrect_algorithm_params = data[0],data[1],data[2], data[3], data[4]
     mkdir_p(outfolder)
-    isoncorrect_exec = os.path.join(isoncorrect_location, "isONcorrect")
+    isoncorrect_exec = os.path.join(isoncorrect_location, "isONcorrect.py")
     isoncorrect_error_file = os.path.join(outfolder, "stderr.txt")
     with open(isoncorrect_error_file, "w") as error_file:
         print('Running isoncorrect batch_id:{0}...'.format(batch_id), end=' ')
@@ -69,7 +69,7 @@ def isoncorrect(data):
         #                         str(isoncorrect_algorithm_params["xmin"]), str(isoncorrect_algorithm_params["xmax"]),
         #                         str(isoncorrect_algorithm_params["T"])) ], stderr=error_file, stdout=isoncorrect_out_file)
         if dyn_flag and racon_flag:
-            subprocess.check_call([ "time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+            subprocess.check_call([ "time", "python", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                     "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
                                     dyn_flag, "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
                                     racon_flag,
@@ -77,21 +77,21 @@ def isoncorrect(data):
                                     "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
                                     "--T",  str(isoncorrect_algorithm_params["T"]) ], stderr=error_file, stdout=isoncorrect_out_file)
         elif dyn_flag:
-            subprocess.check_call([ "time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+            subprocess.check_call([ "time", "python", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                     "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
                                     dyn_flag,  "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
                                     "--k",  str(isoncorrect_algorithm_params["k"]),  "--w",  str(isoncorrect_algorithm_params["w"]),
                                     "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
                                     "--T",  str(isoncorrect_algorithm_params["T"]) ], stderr=error_file, stdout=isoncorrect_out_file)      
         elif racon_flag:
-            subprocess.check_call([ "time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+            subprocess.check_call([ "time", "python", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                     "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
                                     racon_flag,  "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
                                     "--k",  str(isoncorrect_algorithm_params["k"]),  "--w",  str(isoncorrect_algorithm_params["w"]),
                                     "--xmin",  str(isoncorrect_algorithm_params["xmin"]),  "--xmax",  str(isoncorrect_algorithm_params["xmax"]),
                                     "--T",  str(isoncorrect_algorithm_params["T"]) ], stderr=error_file, stdout=isoncorrect_out_file)
         else:
-            subprocess.check_call([ "time", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
+            subprocess.check_call([ "time", "python", isoncorrect_exec, "--fastq",  read_fastq_file,  "--outfolder",  outfolder, 
                                     "--exact_instance_limit",  str(isoncorrect_algorithm_params["exact_instance_limit"]),
                                     "--max_seqs", str(isoncorrect_algorithm_params["max_seqs"]),
                                     "--k",  str(isoncorrect_algorithm_params["k"]),  "--w",  str(isoncorrect_algorithm_params["w"]),
@@ -301,7 +301,7 @@ def run_isoncorrect_parallel(args):
 
 def main():
     parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1.3.4')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.1.3.5')
     parser.add_argument('--fastq_folder', type=str,  default=False, help='Path to input fastq folder with reads in clusters')
     parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
     parser.add_argument('--k', type=int, default=9, help='Kmer size')
