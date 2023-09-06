@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "isONcorrect"
+version = "0.1.3"
+authors = [
+  { name="Kristoffer Sahlin", email="krsahlin.work@gmail.com" },
+]
+description = "De novo error-correction of long-read transcriptome reads"
+readme = "README.md"
+requires-python = ">=3.4"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [  "edlib >= 1.1.2",  "numpy >= 1.16.2",  "parasail == 1.3.4"]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["run_isoncorrect", "isONcorrect"]
+exclude = ["data*", "test_data*", "evaluation*"]
+
+[tool.scripts]
+run_isoncorrect = 'run_isoncorrect'
+isONcorrect = 'isONcorrect'
+
+[options]
+scripts=["run_isoncorrect", "isONcorrect"]
+
+[options.entry_points]
+console_scripts = ["run_isoncorrect", "isONcorrect"]
+
+[project.scripts]
+run_isoncorrect = "run_isoncorrect"
+isONcorrect = "isONcorrect"
+
+[project.urls]
+"Homepage" = "https://github.com/ksahlin/isONcorrect"
+"Bug Tracker" = "https://github.com/ksahlin/isONcorrect/issues"
