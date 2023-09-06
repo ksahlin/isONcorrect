@@ -54,6 +54,33 @@ def get_kmer_minimizers(seq, k_size, w_size):
 
     return minimizers
 
+# def get_kmer_minimizers_lex(seq, k_size, w_size):
+#     # kmers = [seq[i:i+k_size] for i in range(len(seq)-k_size) ]
+#     w = w_size - k_size
+#     window_kmers = deque([seq[i:i+k_size] for i in range(w +1)])
+#     curr_min = min(window_kmers)
+#     minimizer_pos = rindex(list(window_kmers), curr_min)
+#     minimizers = [ (seq[minimizer_pos: minimizer_pos+k_size], minimizer_pos) ] # get the last element if ties in window
+
+#     for i in range(w+1,len(seq) - k_size):
+#         new_kmer = seq[i:i+k_size]
+#         # updateing window
+#         discarded_kmer = window_kmers.popleft()
+#         window_kmers.append(new_kmer)
+
+#         # we have discarded previous window's minimizer, look for new minimizer brute force
+#         if curr_min == discarded_kmer and minimizer_pos < i - w: 
+#             curr_min = min(window_kmers)
+#             minimizer_pos = rindex(list(window_kmers), curr_min) + i - w  
+#             minimizers.append( (seq[minimizer_pos: minimizer_pos+k_size], minimizer_pos) ) # get the last element if ties in window
+
+#         # Previous minimizer still in window, we only need to compare with the recently added kmer 
+#         elif new_kmer < curr_min:
+#             curr_min = new_kmer
+#             minimizers.append( (seq[i: i+k_size], i) )
+
+#     return minimizers
+
 def get_kmer_maximizers(seq, k_size, w_size):
     # kmers = [seq[i:i+k_size] for i in range(len(seq)-k_size) ]
     w = w_size - k_size
@@ -88,7 +115,7 @@ def get_minimizers_and_positions_compressed(reads, w, k, hash_fcn):
 
         seq_hpol_comp = ''.join(ch for ch, _ in itertools.groupby(seq))
 
-        if hash_fcn == "lex":
+        if hash_fcn == "random":
             minimizers = get_kmer_minimizers(seq_hpol_comp, k, w)
         elif hash_fcn == "rev_lex":
             minimizers = get_kmer_maximizers(seq_hpol_comp, k, w)
@@ -106,7 +133,7 @@ def get_minimizers_and_positions(reads, w, k, hash_fcn):
     M = {}
     for r_id in reads:
         (acc, seq, qual) = reads[r_id]
-        if hash_fcn == "lex":
+        if hash_fcn == "random":
             minimizers = get_kmer_minimizers(seq, k, w)
         elif hash_fcn == "rev_lex":
             minimizers = get_kmer_maximizers(seq, k, w)
@@ -1360,7 +1387,7 @@ def main(args):
         print("Window used for batch:", w)
         x_high = args.xmax
         x_low = args.xmin
-        hash_fcn = "lex"
+        hash_fcn = "random"
         # for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
         if args.randstrobes:
             if args.set_layers_manually:
