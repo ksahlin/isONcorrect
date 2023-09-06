@@ -39,7 +39,7 @@ Conda is the preferred way to install isONcorrect.
 1. Create and activate a new environment called isoncorrect
 
 ```
-conda create -n isoncorrect python=3 pip 
+conda create -n isoncorrect python=3.9 pip 
 conda activate isoncorrect
 ```
 
