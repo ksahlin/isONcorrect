@@ -31,7 +31,7 @@ Table of Contents
 INSTALLATION
 =================
 
-Typical install time on a desktop computer is about 10 minutes with conda for this software.
+Typical install time on a desktop computer is about 5 minutes with conda for this software.
 
 ## Using conda
 Conda is the preferred way to install isONcorrect.
@@ -69,51 +69,31 @@ conda install -c bioconda "pychopper>=2.0"
 
 You are now set to run the [correction_pipeline](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). See [USAGE](https://github.com/ksahlin/isONcorrect#usage).
 
-## Using pip 
-
-`pip` is pythons official package installer and is included in most python versions. If you do not have `pip`, it can be easily installed [from here](https://pip.pypa.io/en/stable/installing/) and upgraded with `pip install --upgrade pip`. 
-
-To install isONcorrect, run:
-```
-pip install isONcorrect
-```
-Then install [spoa](https://github.com/rvaser/spoa) and include it in your path.
-
-
-## Downloading source from GitHub
 
 ### Dependencies
 
-Make sure the below listed dependencies are installed (installation links below). Versions in parenthesis are suggested as isONcorrect has not been tested with earlier versions of these libraries. However, isONcorrect may also work with earliear versions of these libaries.
-* [spoa](https://github.com/rvaser/spoa) 
+isONcorrect has the following dependencies (the three first are automatically installed with `pip`)
 * [edlib](https://github.com/Martinsos/edlib/tree/master/bindings/python)
 * [NumPy](https://numpy.org/) 
 * [parasail](https://github.com/jeffdaily/parasail-python)
+*  [spoa](https://github.com/rvaser/spoa) 
 
-In addition, please make sure you use python version >=3.
-
-With these dependencies installed. Run
-
-```sh
-git clone https://github.com/ksahlin/isONcorrect.git
-cd isONcorrect
-./isONcorrect
-```
 
 ## Testing installation
 
-You can verify successul installation by running isONcorrect on this [small dataset of 100 reads](https://github.com/ksahlin/isONcorrect/tree/master/test_data/isoncorrect/0.fastq). Assuming you have cloned this repository and the repository is found in /my/path/isONcorrect, simply run:
+You can verify successul installation by running isONcorrect on [these](https://github.com/ksahlin/isONcorrect/tree/master/test_data/isoncorrect/) two small datasets of 100 reads. Download the two datasets and put in a folder `test_data` run, e.g,
 
 ```
-isONcorrect --fastq /my/path/isONcorrect/test_data/isoncorrect/0.fastq \
+isONcorrect --fastq test_data/0.fastq \
             --outfolder [output path]
 ```
 Expected runtime for this test data is about 15 seconds. The output will be found in `[output path]/corrected_reads.fastq` where the 100 reads have the same headers as in the original file, but with corrected sequence. Testing the paralleized version (by separate clusters) of isONcorrect can be done by running
 
 ```
-./run_isoncorrect --t 3 --fastq_folder /my/path/isONcorrect/test_data/isoncorrect/ \
+./run_isoncorrect --t 3 --fastq_folder test_data/ \
                   --outfolder [output path]
 ```
+ 
 This will perform correction on `0.fastq` and `1.fastq` in parallel. Expected runtime for this test data is about 15 seconds. The output will be found in `[output path]/0/corrected_reads.fastq` and `[output path]/1/corrected_reads.fastq` where the 100 reads in each separate cluster have the same headers as in the respective original files, but with corrected sequence. 
 
 
