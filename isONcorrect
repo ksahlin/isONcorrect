@@ -30,13 +30,13 @@ def rindex(lst, value):
 def get_kmer_minimizers(seq, k_size, w_size):
     # kmers = [seq[i:i+k_size] for i in range(len(seq)-k_size) ]
     w = w_size - k_size
-    window_kmers = deque([seq[i:i+k_size] for i in range(w +1)])
+    window_kmers = deque([hash(seq[i:i+k_size]) for i in range(w +1)])
     curr_min = min(window_kmers)
     minimizer_pos = rindex(list(window_kmers), curr_min)
-    minimizers = [ (curr_min, minimizer_pos) ] # get the last element if ties in window
+    minimizers = [ (seq[minimizer_pos: minimizer_pos+k_size], minimizer_pos) ] # get the last element if ties in window
 
     for i in range(w+1,len(seq) - k_size):
-        new_kmer = seq[i:i+k_size]
+        new_kmer = hash(seq[i:i+k_size])
         # updateing window
         discarded_kmer = window_kmers.popleft()
         window_kmers.append(new_kmer)
@@ -45,12 +45,12 @@ def get_kmer_minimizers(seq, k_size, w_size):
         if curr_min == discarded_kmer and minimizer_pos < i - w: 
             curr_min = min(window_kmers)
             minimizer_pos = rindex(list(window_kmers), curr_min) + i - w  
-            minimizers.append( (curr_min, minimizer_pos) ) # get the last element if ties in window
+            minimizers.append( (seq[minimizer_pos: minimizer_pos+k_size], minimizer_pos) ) # get the last element if ties in window
 
         # Previous minimizer still in window, we only need to compare with the recently added kmer 
         elif new_kmer < curr_min:
             curr_min = new_kmer
-            minimizers.append( (curr_min, i) )
+            minimizers.append( (seq[i: i+k_size], i) )
 
     return minimizers
 
