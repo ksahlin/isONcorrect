@@ -1358,7 +1358,7 @@ def get_primes(n, nprimes):
                 return primes
 
 
-def main(args):
+def isoncorrect_main(args):
     # start = time()
     all_reads = { i + 1 : (acc, seq, qual) for i, (acc, (seq, qual)) in enumerate(help_functions.readfq(open(args.fastq, 'r')))}
     eprint("Total cluster of {0} reads.".format(len(all_reads)))
@@ -1612,10 +1612,9 @@ def main(args):
     shutil.rmtree(work_dir)
 
 
-
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description="De novo error correction of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1.2')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.1.3.1')
 
     parser.add_argument('--fastq', type=str,  default=False, help='Path to input fastq file with reads')
     # parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
@@ -1656,7 +1655,7 @@ if __name__ == '__main__':
                                                                         could be to adjust upper interval legnth dynamically to guarantee a certain number of spanning intervals.')
     parser.add_argument('--outfolder', type=str,  default=None, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
     # parser.add_argument('--pickled_subreads', type=str, help='Path to an already parsed subreads file in pickle format')
-    # parser.set_defaults(which='main')
+    # parser.set_defaults(which='isoncorrect_main')
     args = parser.parse_args()
 
 
@@ -1699,5 +1698,10 @@ if __name__ == '__main__':
         eprint('Please specify a window of size larger or equal to k, and smaller than 100.')
         sys.exit(1)
 
-    main(args)
+    isoncorrect_main(args)
+
+
+if __name__ == '__main__':
+    main()
+
 

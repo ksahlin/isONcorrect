@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "isONcorrect"
-version = "0.1.3"
+version = "0.1.3.4"
 authors = [
   { name="Kristoffer Sahlin", email="krsahlin.work@gmail.com" },
 ]
@@ -19,26 +19,14 @@ classifiers = [
 
 dependencies = [  "edlib >= 1.1.2",  "numpy >= 1.16.2",  "parasail == 1.3.4"]
 
-[tool.setuptools]
-include-package-data = false
-
 [tool.setuptools.packages.find]
-include = ["run_isoncorrect", "isONcorrect"]
-exclude = ["data*", "test_data*", "evaluation*"]
-
-[tool.scripts]
-run_isoncorrect = 'run_isoncorrect'
-isONcorrect = 'isONcorrect'
-
-[options]
-scripts=["run_isoncorrect", "isONcorrect"]
-
-[options.entry_points]
-console_scripts = ["run_isoncorrect", "isONcorrect"]
+where = ["src"]
+include = ["isoncorrect*"]
+namespaces = false
 
 [project.scripts]
-run_isoncorrect = "run_isoncorrect"
-isONcorrect = "isONcorrect"
+run_isoncorrect = 'isoncorrect.run_isoncorrect:main'
+isONcorrect = 'isoncorrect.isONcorrect:main'
 
 [project.urls]
 "Homepage" = "https://github.com/ksahlin/isONcorrect"
