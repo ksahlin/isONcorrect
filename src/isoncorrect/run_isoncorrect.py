@@ -301,7 +301,7 @@ def run_isoncorrect_parallel(args):
 
 def main():
     parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1.3.1')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.1.3.4')
     parser.add_argument('--fastq_folder', type=str,  default=False, help='Path to input fastq folder with reads in clusters')
     parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
     parser.add_argument('--k', type=int, default=9, help='Kmer size')
