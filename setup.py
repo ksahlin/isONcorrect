@@ -19,7 +19,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 setup(
 
     name='isONcorrect',  # Required
-    version='0.1.0',  # Required
+    version='0.1.1',  # Required
     description='De novo error-correction of long-read transcriptome reads.',  # Required
     long_description=long_description,  # Optional
     long_description_content_type='text/markdown',
@@ -77,7 +77,8 @@ setup(
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=['edlib>=1.1.2',
-                     'numpy>=1.16.2'],  # Optional
+                     'numpy>=1.16.2',
+                     'parasail==1.3.4'],  # Optional
     # dependency_links=[], # Optional
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"

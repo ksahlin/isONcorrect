@@ -1,2 +1,3 @@
 edlib>=1.1.2
 numpy>=1.16.2
+parasail==1.3.4
