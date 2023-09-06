@@ -85,9 +85,10 @@ Then install [spoa](https://github.com/rvaser/spoa) and include it in your path.
 ### Dependencies
 
 Make sure the below listed dependencies are installed (installation links below). Versions in parenthesis are suggested as isONcorrect has not been tested with earlier versions of these libraries. However, isONcorrect may also work with earliear versions of these libaries.
-* [spoa](https://github.com/rvaser/spoa) (1.1.5)
-* [edlib](https://github.com/Martinsos/edlib/tree/master/bindings/python) (1.1.2)
-* [NumPy](https://numpy.org/) (1.16.2)
+* [spoa](https://github.com/rvaser/spoa) 
+* [edlib](https://github.com/Martinsos/edlib/tree/master/bindings/python)
+* [NumPy](https://numpy.org/) 
+* [parasail](https://github.com/jeffdaily/parasail-python)
 
 In addition, please make sure you use python version >=3.
 
