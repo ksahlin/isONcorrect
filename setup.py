@@ -19,7 +19,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 setup(
 
     name='isONcorrect',  # Required
-    version='0.1.2',  # Required
+    version='0.1.3.4',  # Required
     description='De novo error-correction of long-read transcriptome reads.',  # Required
     long_description=long_description,  # Optional
     long_description_content_type='text/markdown',
@@ -55,7 +55,7 @@ setup(
         'Programming Language :: Python :: 3.7',
     ],
 
-    keywords='Oxford Nanopore transcript long read error correction',  # Optional
+    # keywords='Oxford Nanopore transcript long read error correction',  # Optional
 
     # You can just specify package directories manually here if your project is
     # simple. Or you can use find_packages().
@@ -102,5 +102,5 @@ setup(
     #         'IsoCon=IsoCon.__main__()',
     #     ],
     # },
-    scripts=['run_isoncorrect', 'isONcorrect'],
+    #scripts=['run_isoncorrect', 'isONcorrect'],
 )

@@ -211,7 +211,7 @@ def join_back_corrected_batches_into_cluster(tmp_work_dir, outdir, split_mod, re
 
 
 
-def main(args):
+def run_isoncorrect_parallel(args):
     directory = args.fastq_folder #os.fsencode(args.fastq_folder)
     isoncorrect_location = os.path.dirname(os.path.realpath(__file__))
     if args.split_wrt_batches:
@@ -299,9 +299,9 @@ def main(args):
     return
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description="De novo clustering of long-read transcriptome reads", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--version', action='version', version='%(prog)s 0.1.2')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.1.3.1')
     parser.add_argument('--fastq_folder', type=str,  default=False, help='Path to input fastq folder with reads in clusters')
     parser.add_argument('--t', dest="nr_cores", type=int, default=8, help='Number of cores allocated for clustering')
     parser.add_argument('--k', type=int, default=9, help='Kmer size')
@@ -362,4 +362,7 @@ if __name__ == '__main__':
     if args.outfolder and not os.path.exists(args.outfolder):
         os.makedirs(args.outfolder)
 
-    main(args)
+    run_isoncorrect_parallel(args)
+
+if __name__ == '__main__':
+    main()

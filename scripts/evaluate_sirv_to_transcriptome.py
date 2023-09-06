@@ -576,6 +576,13 @@ def main(args):
     print_detailed_values_to_file(corr, corr_reads, corr_ref_locations, detailed_results_outfile, reads_unaligned_in_original, reads_missing_from_clustering_correction_output, "corrected")    
     print_detailed_values_to_file(orig, reads, orig_ref_locations, detailed_results_outfile, reads_unaligned_in_correction, reads_missing_from_clustering_correction_output, "original")
     detailed_results_outfile.close()
+    for acc in orig_ref_locations:
+        orig_loc = orig_ref_locations[acc]
+        o = orig_loc.pop()
+        corr_loc = corr_ref_locations[acc]
+        c = corr_loc.pop()
+        if o != c:
+            print(o, c)
 
     print()
     print("Reads successfully aligned all reads (original/corrected):", len(orig),len(corr))
