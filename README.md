@@ -23,6 +23,7 @@ Table of Contents
     * [Running](#Running)
     * [Output](#Output)
     * [Parallelization across nodes](#Parallelization-across-nodes)
+  * [PAPER DATA](#PAPER-DATA)
   * [CREDITS](#CREDITS)
   * [LICENCE](#LICENCE)
 
@@ -171,6 +172,21 @@ run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /ou
 run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual n-1
 ```
 Which tells isONcorrect to only work with distinct cluster IDs.
+
+PAPER DATA
+=================
+
+The result data behind the [paper](https://www.nature.com/articles/s41467-020-20340-8) used to be committed to this repository under `data/`, which made it about 2.4 GB to clone. It is now archived on Zenodo:
+
+**https://zenodo.org/records/21920617**
+
+Nothing in isONcorrect reads this data at run time. You only need it to regenerate the paper figures with the snakemake workflows under `paper/`. To restore it into `data/`:
+
+```
+tools/fetch_data.sh
+```
+
+This downloads the archive and verifies it against the checksums published with the record.
 
 CREDITS
 ----------------
