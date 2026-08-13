@@ -159,8 +159,26 @@ def main() -> int:
         BATCH["n"] += 1
         return result
 
+    # solve_WIS is pure: intervals in, chosen indices out. Capturing both sides
+    # of every call lets the Rust implementation be replayed against the exact
+    # same inputs, which is far more searching than any synthetic test --- the
+    # weights are floats and the tie-breaks are strict `>`.
+    orig_wis = ion.solve_WIS
+    wis_calls = {"n": 0, "inp": [], "out": []}
+
+    def wrapped_wis(intervals):
+        call = wis_calls["n"]
+        for j, (start, stop, w, _instance) in enumerate(intervals):
+            wis_calls["inp"].append(f"{call}\t{j}\t{start}\t{stop}\t{w}")
+        result = orig_wis(intervals)
+        for idx in result:
+            wis_calls["out"].append(f"{call}\t{idx}")
+        wis_calls["n"] += 1
+        return result
+
     ion.get_minimizers_and_positions = wrapped_minpos
     ion.get_minimizer_combinations_database = wrapped_db
+    ion.solve_WIS = wrapped_wis
 
     argv = ["isONcorrect", "--fastq", args.fastq, "--outfolder", os.path.join(args.outdir, "_run")]
     argv += [a for a in args.passthrough if a != "--"]
@@ -173,6 +191,19 @@ def main() -> int:
         if exc.code not in (0, None):
             print(f"isONcorrect exited with {exc.code}", file=sys.stderr)
             return int(exc.code)
+
+    with open(os.path.join(args.outdir, "wis_input.tsv"), "w") as fh:
+        fh.write("#call\tj\tstart\tstop\tw\n")
+        fh.write("\n".join(wis_calls["inp"]))
+        fh.write("\n" if wis_calls["inp"] else "")
+    with open(os.path.join(args.outdir, "wis_output.tsv"), "w") as fh:
+        fh.write("#call\topt_index\n")
+        fh.write("\n".join(wis_calls["out"]))
+        fh.write("\n" if wis_calls["out"] else "")
+    BATCH["meta"].append(
+        f"solve_WIS calls={wis_calls['n']} intervals={len(wis_calls['inp'])} "
+        f"selected={len(wis_calls['out'])}"
+    )
 
     with open(os.path.join(args.outdir, "meta.txt"), "w") as fh:
         fh.write(f"argv: {' '.join(argv)}\n")

@@ -34,7 +34,8 @@ Two binaries must keep their exact current names, flags, and defaults:
 | fastq reading + `r_id` order | done, byte-identical dumps |
 | minimizers (`lex`) | done, byte-identical dumps across 6 parameter settings |
 | minimizer-pair database | done, byte-identical dumps across 6 parameter settings; stores 1 459 keys where the reference holds 23 260 |
-| `find_most_supported_span`, WIS | next |
+| `solve_WIS` + `fill_p2` | done; replayed against every recorded reference call |
+| `find_most_supported_span` | next; first stage needing edlib |
 | consensus / POA, MSA, PFM | not started |
 | structural-overcorrection guard | not started |
 
@@ -62,6 +63,18 @@ Verified identical so far, on both test clusters:
 - `anchors.tsv` and `anchor_keys.tsv` at six `--k/--w/--xmin/--xmax` combinations, including the
   paper settings (90 036 entries) — and the Rust `generated` counter matches the reference's own
   printed "25953 MINIMIZER COMBINATIONS GENERATED"
+
+Pure functions get a stronger check than diffing: `bench/dump_reference.py` records every
+`solve_WIS` call's inputs *and* outputs, and a Rust test replays them. Hand-written cases cannot
+cover float weights and strict-`>` tie-breaks; real ones do.
+
+```bash
+bench/dump_reference.py --fastq test_data/isoncorrect/0.fastq --outdir /tmp/wd -- --k 9 --w 10
+WIS_DUMP=/tmp/wd cargo test --manifest-path rust/Cargo.toml wis::replay -- --nocapture
+```
+
+Replayed clean at `--k/--w` of 9/20 (100 calls, 1 342 intervals), 9/10 (100 calls, 20 689) and
+11/25 (78 calls, 313). The test skips silently when `WIS_DUMP` is unset.
 
 **The dump tool must apply the same argument massaging `main` does.** A mismatch at
 `--xmin 14 --k 9` turned out to be the dump binary, not the anchor logic: `main` clamps `--xmin` up
@@ -322,6 +335,18 @@ goldens must be re-recorded afterwards.
   eligible context. The flag is documented as "1.5x slower" but it does not run at all. Marked
   `xfail` in `bench/equivalence.sh`. **There is no reference behaviour for the port to match here** —
   decide whether the Rust port rejects the flag, accepts it as a no-op, or waits for a fix.
+- **`solve_WIS` is suboptimal: `fill_p2` is off by one.** It stores 0-based interval indices in
+  `p`, but `p[j]` is then used to index the **1-based** `OPT` array (`OPT[p[j]]`). Every predecessor
+  is therefore shifted, and compatible earlier intervals get treated as incompatible. Three
+  pairwise-disjoint intervals, which a correct WIS would all select, come back as two — verified
+  directly against `solve_WIS`, which returns `[2, 0]` rather than `[2, 1, 0]`.
+
+  The effect is to correct over **fewer** intervals than intended, so it is conservative rather than
+  wrong-in-a-dangerous-way, but it does mean isONcorrect leaves correctable regions untouched.
+  **The port reproduces it**, because fixing it changes corrected output on real data. If it is ever
+  fixed, that is a behaviour change needing its own commit, a note here, and re-recorded goldens —
+  and it is worth measuring what it does to accuracy first, since it may be a free improvement.
+
 - **`args.flnc` and `args.ccs` are referenced but never defined by argparse**
   (`src/isoncorrect/isONcorrect.py:1679`). Running `isONcorrect` with no `--fastq` raises
   `AttributeError` instead of printing help. Error path only; no effect on correct runs.

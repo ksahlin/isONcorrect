@@ -15,3 +15,4 @@ pub mod fastq;
 pub mod minimizers;
 pub mod params;
 pub mod validate;
+pub mod wis;
