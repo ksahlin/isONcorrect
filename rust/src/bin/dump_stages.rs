@@ -21,7 +21,11 @@ use isoncorrect::anchors::{self, Minimizer};
 use isoncorrect::fastq::read_fastq;
 use isoncorrect::minimizers::minimizers_lex;
 use isoncorrect::params::Params;
+use isoncorrect::quality;
+use isoncorrect::regions;
+use isoncorrect::support::SpanFinder;
 use isoncorrect::validate::clamp_xmin;
+use std::collections::{BTreeSet, HashMap};
 
 #[derive(Parser)]
 #[command(
@@ -146,6 +150,61 @@ fn main() -> ExitCode {
         }
         af.flush().unwrap();
         kf.flush().unwrap();
+        // Per-read span collection, mirroring isoncorrect_main's inner loop.
+        //
+        // previously_corrected_regions is left empty: populating it needs the
+        // correction stage. Under --exact the reference clears it per read, so
+        // an --exact run is directly comparable to this.
+        let seq_by_id: Vec<Vec<u8>> = chunk.iter().map(|r| r.seq.as_bytes().to_vec()).collect();
+        let qvs: Vec<Vec<f64>> = chunk
+            .iter()
+            .map(|r| quality::prefix_sums(r.qual.as_bytes()))
+            .collect();
+        let mut finder = SpanFinder::new(&seq_by_id, &qvs, params.k);
+        let no_regions = BTreeSet::new();
+        let no_groups = HashMap::new();
+
+        let mut sf = BufWriter::new(fs::File::create(dir.join("spans.tsv")).unwrap());
+        writeln!(sf, "#r_id\tm1\tp1\tstart\tstop\tweight\tinstance").unwrap();
+        let mut n_spans = 0usize;
+        for (r_id, mins) in &by_read {
+            // --exact resets the cache per read.
+            finder.reset_cache();
+            for ((m1, p1), spans) in anchors::comb_iterator(mins, params.xmin, params.xmax) {
+                let kept = regions::filter_spans(&spans, p1, params.k, &no_regions, &no_groups);
+                if kept.is_empty() {
+                    continue;
+                }
+                let mut out_iv = Vec::new();
+                finder.find(*r_id, m1, p1, &kept, &db, &mut out_iv);
+                for c in out_iv {
+                    let payload: Vec<String> = c
+                        .instance
+                        .iter()
+                        .flat_map(|&(a, b, cc)| [a.to_string(), b.to_string(), cc.to_string()])
+                        .collect();
+                    writeln!(
+                        sf,
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        r_id,
+                        String::from_utf8_lossy(m1),
+                        p1,
+                        c.start,
+                        c.stop,
+                        c.support,
+                        payload.join(",")
+                    )
+                    .unwrap();
+                    n_spans += 1;
+                }
+            }
+        }
+        sf.flush().unwrap();
+        eprintln!(
+            "batch {batch_id:03}: spans={n_spans} edlib_calls={}",
+            finder.edlib_calls
+        );
+
         eprintln!(
             "batch {batch_id:03}: anchor_keys={} entries={} generated={} singletons={} high_abundance={}",
             db.len(),

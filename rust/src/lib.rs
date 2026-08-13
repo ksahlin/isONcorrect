@@ -16,6 +16,7 @@ pub mod fastq;
 pub mod minimizers;
 pub mod params;
 pub mod quality;
+pub mod regions;
 pub mod support;
 pub mod validate;
 pub mod wis;
