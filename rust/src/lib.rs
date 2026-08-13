@@ -1,0 +1,14 @@
+//! isONcorrect --- Rust port.
+//!
+//! The Python implementation under `src/isoncorrect/` is the normative
+//! reference: where the two disagree, Python is right until a human decides
+//! otherwise. Equivalence is checked, not assumed --- see `bench/` and
+//! `PORTING.md`.
+//!
+//! Current state: **CLI parity only.** Argument parsing, defaults, validation
+//! order and exit codes match the reference; the correction algorithm is not
+//! ported yet and the binaries exit non-zero when asked to do real work.
+
+pub mod cli;
+pub mod params;
+pub mod validate;

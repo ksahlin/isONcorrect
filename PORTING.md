@@ -19,12 +19,42 @@ Two binaries must keep their exact current names, flags, and defaults:
 | `src/isoncorrect/correct_seqs.py` | Reference: MSA matrix, PFM, consensus correction |
 | `src/isoncorrect/create_augmented_reference.py` | Reference: spoa/racon subprocess wrappers |
 | `src/isoncorrect/run_isoncorrect.py` | Reference: batch splitting + multiprocessing driver |
-| `rust/` | The port (to be created) |
+| `rust/` | The port. `src/cli.rs` CLI parity, `src/params.rs` resolved parameters, `src/validate.rs` argument validation, `src/bin/` the two binaries |
 | `bench/` | Equivalence + performance harness |
 | `test_data/isoncorrect/{0,1}.fastq` | The CI / harness fixture. **These two files are byte-identical** — see below |
 | `tools/repo-slim/` | Staged tooling to strip committed data from history |
 | `paper/` | The snakemake evaluations behind the paper (`evaluation*`, `ont_error_rates`). Not part of the port. Do not modify. |
 | `scripts/` | Paper experiment scripts. Not part of the port. `scripts/correction_pipeline.sh` is linked from README and must keep its path. |
+
+## Port status
+
+**CLI parity only.** Argument names, defaults, validation order, stderr text and exit codes match
+the reference and are locked by unit tests. The correction algorithm is not ported: both binaries
+validate their arguments and then exit non-zero saying so.
+
+Current `bench/equivalence.sh verify`: **7 passed, 22 failed** — the 7 are the unsupported-flag
+cases, and the 22 failures are the supported cases with no algorithm behind them yet. That is the
+expected state; it becomes the progress bar as the algorithm lands.
+
+Verified equal to the reference by hand: `--version` on both binaries, exit codes for
+`--w 150` (1), `--split_mod 2 --residual 5` (1), `--version` (0), no-args (0), and the exact stderr
+text of `xmin set to 40` and the window-range message. Help *layout* differs — clap leads with the
+description, argparse with usage — which is cosmetic and outside the contract.
+
+```bash
+cargo build --release --manifest-path rust/Cargo.toml
+cargo test --manifest-path rust/Cargo.toml
+```
+
+### Porting gotchas found so far
+
+- **clap rewrites `field_name` to `--field-name`.** The reference uses underscores throughout, so
+  every multi-word flag silently became a different flag (`--max_seqs` → `--max-seqs`) until each
+  was pinned with an explicit `long = "..."`. `cli.rs` has tests asserting the exact flag set and
+  that no flag contains a hyphen; keep them.
+- `--T` and `--t` are different flags, and `--t` exists only on `run_isoncorrect`. Case matters.
+- `Cargo.toml` cannot hold the four-component version `0.1.3.5`; the crate is `0.1.3` and the CLI
+  string lives in `cli::VERSION`. Keep them in step.
 
 ## The pipeline, in one pass
 
@@ -240,6 +270,9 @@ goldens must be re-recorded afterwards.
 - **`args.flnc` and `args.ccs` are referenced but never defined by argparse**
   (`src/isoncorrect/isONcorrect.py:1679`). Running `isONcorrect` with no `--fastq` raises
   `AttributeError` instead of printing help. Error path only; no effect on correct runs.
+  **Intentional divergence:** the Rust port prints help and exits 0 there, matching the evident
+  intent and its own no-args behaviour. Reproducing a traceback is not worth it, and no correct run
+  reaches this path.
 
 ### Performance and structure
 

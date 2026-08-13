@@ -1,0 +1,32 @@
+[package]
+name = "isoncorrect"
+# Cargo requires semver, but the tool's advertised version is the four-component
+# "0.1.3.5" that the Python implementation prints. The CLI version string lives
+# in `cli::VERSION` and is what `--version` emits; keep the two in step.
+version = "0.1.3"
+edition = "2021"
+rust-version = "1.74"
+description = "De novo error-correction of long-read transcriptome reads"
+repository = "https://github.com/ksahlin/isONcorrect"
+license = "GPL-3.0-only"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+
+[lib]
+name = "isoncorrect"
+path = "src/lib.rs"
+
+# Binary names must match the Python entry points exactly; existing pipelines
+# invoke them by these names.
+[[bin]]
+name = "isONcorrect"
+path = "src/bin/isoncorrect.rs"
+
+[[bin]]
+name = "run_isoncorrect"
+path = "src/bin/run_isoncorrect.rs"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
