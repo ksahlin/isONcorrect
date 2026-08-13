@@ -197,6 +197,27 @@ def main() -> int:
             )
         return result
 
+    # Capture edlib's task="path" calls: query, target, and the CIGAR it chose.
+    # The CIGAR is NOT unique -- many alignments share the optimal score -- so
+    # this is the oracle for deciding whether any Rust aligner can replace it.
+    import edlib as _edlib
+
+    orig_align = _edlib.align
+    cigar_cases = {"rows": []}
+
+    def wrapped_align(query, target, *a, **kw):
+        # The reference calls edlib both positionally --- align(x, y, "NW",
+        # 'dist', k) --- and by keyword, so accept either shape.
+        res = orig_align(query, target, *a, **kw)
+        task = kw.get("task", a[1] if len(a) > 1 else None)
+        if task == "path" and res.get("cigar"):
+            cigar_cases["rows"].append(
+                f"{query}\t{target}\t{res['editDistance']}\t{res['cigar']}"
+            )
+        return res
+
+    _edlib.align = wrapped_align
+
     # Capture what actually goes into spoa and what comes back: the oracle for
     # deciding whether a Rust POA reproduces spoa's consensus exactly.
     from isoncorrect import create_augmented_reference as car
@@ -230,6 +251,12 @@ def main() -> int:
         if exc.code not in (0, None):
             print(f"isONcorrect exited with {exc.code}", file=sys.stderr)
             return int(exc.code)
+
+    with open(os.path.join(args.outdir, "cigar_cases.tsv"), "w") as fh:
+        fh.write("#query\ttarget\ted\tcigar\n")
+        fh.write("\n".join(cigar_cases["rows"]))
+        fh.write("\n" if cigar_cases["rows"] else "")
+    BATCH["meta"].append(f"edlib path-calls={len(cigar_cases['rows'])}")
 
     with open(os.path.join(args.outdir, "spoa_cases.tsv"), "w") as fh:
         fh.write("#consensus\tseq...\n")

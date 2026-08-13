@@ -133,10 +133,27 @@ There is no native Rust port of edlib; `edlib_rs` and `rsedlib` are both C++ bin
 `CMAKE_POLICY_VERSION_MINIMUM=3.5` set, and pulls in `xz2`, `winapi` and `buf_redux`. Avoided for
 the distance path.
 
-**TODO for the consensus stage:** decide between (a) `edlib_rs`/`rsedlib` bindings with the CMake
-workaround, or (b) reimplementing edlib's NW traceback natively and validating the CIGAR against
-edlib byte-for-byte over a large corpus. (b) keeps the build dependency-free and is the only route
-to an all-Rust binary, but the tie-breaking has to be replicated exactly, not merely optimally.
+**Measured.** `bench/dump_reference.py` now captures every `task="path"` call as
+`cigar_cases.tsv` (query, target, edit distance, CIGAR) — 677 calls on cluster 0 at defaults. Tested
+against that oracle:
+
+| Crate | Result |
+| --- | --- |
+| `edlib_rs` 0.1.2 | **677/677 CIGARs identical**, edit distances too. But only builds with `CMAKE_POLICY_VERSION_MINIMUM=3.5` set, because its vendored `CMakeLists.txt` requires compatibility CMake 4 removed. Pulls in `xz2`, `winapi`, `buf_redux`. |
+| `rsedlib` 0.1.1 | Compiles, then **fails to link** — its build script does not produce the vendored library (`ld: library 'edlib' not found`). Unusable here. |
+| native Rust | No candidate. The traceback is not unique, so an independent implementation gives a different-but-equally-optimal CIGAR. |
+
+So the CIGAR *can* be reproduced exactly, but only through C++ bindings that need a build-time
+workaround. **This decision is still open**, and it is the last one blocking `get_best_corrections`:
+
+1. **`edlib_rs` + documented CMake workaround.** Correct today, at the cost of a C++ toolchain and
+   an env var users must know about (or a `build.rs` that sets it).
+2. **Reimplement edlib's NW traceback natively**, validated against `cigar_cases.tsv`. Keeps the
+   build pure Rust — the port is otherwise C++-free — but the tie-breaking must be replicated
+   exactly, not merely optimally. The oracle makes this checkable; 677 cases is a starting corpus,
+   not a sufficient one.
+3. **Vendor edlib's C source directly** with a `cc`-based build, skipping CMake entirely. edlib is a
+   single self-contained `.cpp`, so this sidesteps the toolchain fragility while keeping exactness.
 
 ### Porting gotchas found so far
 
