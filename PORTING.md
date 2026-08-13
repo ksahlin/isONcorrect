@@ -40,7 +40,8 @@ Two binaries must keep their exact current names, flags, and defaults:
 | `find_most_supported_span` | done; 52 558 intervals byte-identical to the reference |
 | anchor filtering (`previously_corrected_regions`, `pos_group`) | implemented; inert under `--exact`, so verified only in that mode |
 | correction driver (`correct_read`, consensus) | next; needed to exercise the non-`--exact` filtering |
-| consensus / POA, MSA, PFM | not started |
+| consensus POA (`run_spoa`) | done via `spoars`; oracle green on 505 real intervals |
+| MSA matrix, PFM, correction | not started |
 | structural-overcorrection guard | not started |
 
 Argument names, defaults, validation order, stderr text and exit codes match the reference. The
@@ -287,17 +288,49 @@ configuration is:
 Linear-gap local POA is a much smaller target than affine or convex. Only the consensus is used —
 the MSA output path is not on the hot path.
 
-Candidate approaches, in order of preference:
+### Measured: `spoars` reproduces spoa exactly on this configuration
 
-1. **Reimplement linear-gap kSW POA + heaviest-bundle consensus natively in Rust.** Small, no FFI,
-   no C++ toolchain in the build, and it is the only option that also removes the process spawn.
-   Must be validated to be **bit-identical** against the `spoa` binary over a large corpus of real
-   intervals (see `bench/`).
-2. **`spoars` crate** — advertises itself as a faithful native-Rust reimplementation of spoa. If it
-   is genuinely faithful this is option 1 for free. It is very new and low-usage; treat "faithful"
-   as a claim to verify, not a fact.
-3. **`spoa` / `spoa-sys` crate** (bindings to the C++ library). Guaranteed-identical output and
-   removes the fork+temp-file overhead, at the cost of a C++ dependency in the build.
+`bench/dump_reference.py` captures the sequences handed to `run_spoa` and the consensus it returns,
+giving a differential oracle. Against the real `spoa` binary (bioconda 4.1.5):
+
+**505 / 505 unique correction intervals produced an identical consensus**, gathered across 8
+parameter combinations (`--k/--w` of 9/20, 9/10, 11/25, 7/15, plus `--max_seqs_to_spoa 3` and
+`--T 0.05`) on both test clusters, with up to 28 sequences per POA and a mean of 8.3.
+
+The mapping from isONcorrect's invocation to the spoars API:
+
+```rust
+// spoa <fa> -l 0 -r 0 -g -2  ->  kSW (local), linear gap -2, m=+5, n=-4
+let scoring = Scoring::new(5, -4, -2, -2, -2, -2)?;
+let mut engine = SimdEngine::new(AlignmentType::Local, scoring);
+// then per sequence: engine.align(seq, &graph) -> graph.add_alignment(&aln, seq, &weights)
+```
+
+`spoars` is pure Rust, builds in seconds, and needs no C++ toolchain — which also keeps the port
+free of the CMake fragility that made `edlib_rs` unusable.
+
+Caveats that keep this a decision rather than a formality: `spoars` is v0.1.3 with low usage, and the
+corpus above comes from a single distinct 100-read cluster (the two fixtures are the same file), so
+sequence diversity is limited. The differential oracle is cheap to re-run and should stay a
+permanent gate, not a one-off.
+
+**Decision: adopt `spoars` now, write a native POA later.** It gets the port to end-to-end
+equivalence sooner without a C++ toolchain, and the oracle proves any future replacement is
+faithful when it lands. The native implementation is a separate piece of work, tracked under
+*Deferred improvements* — not a prerequisite.
+
+Costs accepted with this choice:
+
+- **MSRV rose from 1.74 to 1.85**, which `spoars` requires.
+- A v0.1.3 dependency with low usage sits on the critical path. The oracle
+  (`cargo test poa::oracle` with `SPOA_CASES` set) is the mitigation and must stay green on every
+  upgrade.
+
+Remaining options if `spoars` ever fails that gate:
+
+1. **Reimplement linear-gap kSW POA + heaviest-bundle consensus natively.** The oracle above makes
+   this a tractable, checkable project rather than a leap.
+2. **`spoa` / `spoa-sys` bindings.** Identical by construction, at the cost of a C++ dependency.
 
 `abpoa-rs` / `rsabpoa` (adaptive banded) and `poasta` (optimal gap-affine) implement *different*
 algorithms and will not reproduce spoa's output. Do not use them for the identical-output port.
@@ -404,6 +437,11 @@ goldens must be re-recorded afterwards.
 - `run_isoncorrect` shells out to `python isONcorrect.py` per batch via `subprocess`, with four
   near-duplicate `check_call` branches for the flag combinations. In Rust this should be in-process
   work distribution, which also removes the per-batch interpreter startup.
+- **Write a native linear-gap kSW POA + heaviest-bundle consensus**, replacing `spoars`. Removes the
+  only low-usage dependency on the critical path and allows reusing graph allocations across
+  intervals, which matters because POA runs once per correction interval. `poa.rs` already isolates
+  the surface (`consensus`), and `poa::oracle` is the acceptance test — 505 real intervals against
+  the `spoa` binary. Deferred because `spoars` is already byte-identical on that corpus.
 - The `hash_fcn` parameter is threaded through but hardcoded to `"lex"`; `get_kmer_minimizers`
   (random) and `get_kmer_maximizers` are dead in the default path.
 - Dropping the flags listed under *Scope* leaves a large amount of now-unreachable Python

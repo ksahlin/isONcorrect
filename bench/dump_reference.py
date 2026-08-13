@@ -197,6 +197,23 @@ def main() -> int:
             )
         return result
 
+    # Capture what actually goes into spoa and what comes back: the oracle for
+    # deciding whether a Rust POA reproduces spoa's consensus exactly.
+    from isoncorrect import create_augmented_reference as car
+
+    orig_spoa = car.run_spoa
+    spoa_cases = {"rows": []}
+
+    def wrapped_spoa(reads_path, spoa_out_file, spoa_path):
+        with open(reads_path) as fh:
+            seqs = [l.strip() for l in fh if not l.startswith(">")]
+        consensus = orig_spoa(reads_path, spoa_out_file, spoa_path)
+        spoa_cases["rows"].append("\t".join([consensus, *seqs]))
+        return consensus
+
+    car.run_spoa = wrapped_spoa
+    ion.create_augmented_reference.run_spoa = wrapped_spoa
+
     ion.get_minimizers_and_positions = wrapped_minpos
     ion.get_minimizer_combinations_database = wrapped_db
     ion.solve_WIS = wrapped_wis
@@ -213,6 +230,12 @@ def main() -> int:
         if exc.code not in (0, None):
             print(f"isONcorrect exited with {exc.code}", file=sys.stderr)
             return int(exc.code)
+
+    with open(os.path.join(args.outdir, "spoa_cases.tsv"), "w") as fh:
+        fh.write("#consensus\tseq...\n")
+        fh.write("\n".join(spoa_cases["rows"]))
+        fh.write("\n" if spoa_cases["rows"] else "")
+    BATCH["meta"].append(f"spoa calls={len(spoa_cases['rows'])}")
 
     with open(os.path.join(args.outdir, "spans.tsv"), "w") as fh:
         fh.write("#r_id\tm1\tp1\tstart\tstop\tweight\tinstance\n")

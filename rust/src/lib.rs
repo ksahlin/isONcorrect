@@ -15,6 +15,7 @@ pub mod editdist;
 pub mod fastq;
 pub mod minimizers;
 pub mod params;
+pub mod poa;
 pub mod quality;
 pub mod regions;
 pub mod support;
