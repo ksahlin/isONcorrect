@@ -35,7 +35,8 @@ Two binaries must keep their exact current names, flags, and defaults:
 | minimizers (`lex`) | done, byte-identical dumps across 6 parameter settings |
 | minimizer-pair database | done, byte-identical dumps across 6 parameter settings; stores 1 459 keys where the reference holds 23 260 |
 | `solve_WIS` + `fill_p2` | done; replayed against every recorded reference call |
-| `find_most_supported_span` | next; first stage needing edlib |
+| bounded edit distance (edlib `'dist'`) | done natively, no C++; 4 000 real pairs verified against Python edlib |
+| `find_most_supported_span` | next |
 | consensus / POA, MSA, PFM | not started |
 | structural-overcorrection guard | not started |
 
@@ -94,6 +95,26 @@ description, argparse with usage — which is cosmetic and outside the contract.
 cargo build --release --manifest-path rust/Cargo.toml
 cargo test --manifest-path rust/Cargo.toml
 ```
+
+### edlib: native for distance, bindings needed for CIGAR
+
+isONcorrect calls edlib two ways, and they have **different portability**:
+
+| Call site | Uses | Native Rust? |
+| --- | --- | --- |
+| `edlib_alignment` → `edlib.align(x, y, "NW", 'dist', k)` | the **distance** only | **Yes.** Edit distance is a uniquely defined number, so any correct implementation agrees with edlib by definition. Done: `editdist.rs` on `triple_accel`, verified against Python edlib over 4 000 real substring pairs. |
+| `get_best_corrections` → `edlib.align(seq, spoa_ref, task="path", mode="NW")` | the **CIGAR** | **No.** Many alignments achieve the same optimal distance and edlib picks one by its own tie-breaking. A different implementation returns a different, equally optimal alignment — changing the MSA and the corrected output. |
+
+There is no native Rust port of edlib; `edlib_rs` and `rsedlib` are both C++ bindings.
+`edlib_rs` additionally fails to build against CMake 4 (its vendored `CMakeLists.txt` requires
+`cmake_minimum_required` compatibility that CMake 4 removed) — it only builds with
+`CMAKE_POLICY_VERSION_MINIMUM=3.5` set, and pulls in `xz2`, `winapi` and `buf_redux`. Avoided for
+the distance path.
+
+**TODO for the consensus stage:** decide between (a) `edlib_rs`/`rsedlib` bindings with the CMake
+workaround, or (b) reimplementing edlib's NW traceback natively and validating the CIGAR against
+edlib byte-for-byte over a large corpus. (b) keeps the build dependency-free and is the only route
+to an all-Rust binary, but the tie-breaking has to be replicated exactly, not merely optimally.
 
 ### Porting gotchas found so far
 

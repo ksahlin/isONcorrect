@@ -11,6 +11,7 @@
 
 pub mod anchors;
 pub mod cli;
+pub mod editdist;
 pub mod fastq;
 pub mod minimizers;
 pub mod params;
