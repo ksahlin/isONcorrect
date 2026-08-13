@@ -10,5 +10,7 @@
 //! ported yet and the binaries exit non-zero when asked to do real work.
 
 pub mod cli;
+pub mod fastq;
+pub mod minimizers;
 pub mod params;
 pub mod validate;

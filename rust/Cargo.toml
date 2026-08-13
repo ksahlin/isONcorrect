@@ -27,6 +27,12 @@ path = "src/bin/isoncorrect.rs"
 name = "run_isoncorrect"
 path = "src/bin/run_isoncorrect.rs"
 
+# Development tool for stage-by-stage diffing against the reference; not part
+# of the shipped CLI contract.
+[[bin]]
+name = "isoncorrect-dump"
+path = "src/bin/dump_stages.rs"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

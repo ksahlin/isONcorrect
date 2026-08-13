@@ -28,9 +28,35 @@ Two binaries must keep their exact current names, flags, and defaults:
 
 ## Port status
 
-**CLI parity only.** Argument names, defaults, validation order, stderr text and exit codes match
-the reference and are locked by unit tests. The correction algorithm is not ported: both binaries
-validate their arguments and then exit non-zero saying so.
+| Stage | State |
+| --- | --- |
+| CLI parity (both binaries) | done, locked by unit tests |
+| fastq reading + `r_id` order | done, byte-identical dumps |
+| minimizers (`lex`) | done, byte-identical dumps across 6 parameter settings |
+| minimizer-pair database | next |
+| `find_most_supported_span`, WIS | not started |
+| consensus / POA, MSA, PFM | not started |
+| structural-overcorrection guard | not started |
+
+Argument names, defaults, validation order, stderr text and exit codes match the reference. The
+correction algorithm is not ported: both binaries validate their arguments and then exit non-zero
+saying so.
+
+### Stage-by-stage verification
+
+End-to-end equivalence says *that* the port is wrong, never *where*. `bench/dump_reference.py`
+wraps the reference (without modifying it) and writes each stage's structures in a stable,
+line-oriented format; `isoncorrect-dump` writes the same format from the Rust side. Diff them
+directly:
+
+```bash
+bench/dump_reference.py --fastq test_data/isoncorrect/0.fastq --outdir /tmp/py
+rust/target/release/isoncorrect-dump --fastq test_data/isoncorrect/0.fastq --outdir /tmp/rs
+diff -r /tmp/py/batch_000 /tmp/rs/batch_000
+```
+
+Verified identical so far: `reads.tsv` (100 reads) and `minimizers.tsv` at
+`--k/--w` of 9/20, 9/10, 11/20, 7/15, 15/40 and 9/9 (3 230 to 19 008 minimizers).
 
 Current `bench/equivalence.sh verify`: **7 passed, 22 failed** — the 7 are the unsupported-flag
 cases, and the 22 failures are the supported cases with no algorithm behind them yet. That is the
@@ -55,6 +81,19 @@ cargo test --manifest-path rust/Cargo.toml
 - `--T` and `--t` are different flags, and `--t` exists only on `run_isoncorrect`. Case matters.
 - `Cargo.toml` cannot hold the four-component version `0.1.3.5`; the crate is `0.1.3` and the CLI
   string lives in `cli::VERSION`. Keep them in step.
+- **Python slices clamp, Rust slices panic.** `seq[i:i+k]` past the end silently truncates, and the
+  truncated k-mer then takes part in lexicographic comparison — an empty string sorts before
+  everything. Consequence, verified against the reference: **any read too short to fill the opening
+  window returns exactly `[("", 11)]` at `--k 9 --w 20`** — one minimizer, empty k-mer, at a
+  position that does not exist in the read. Nonsense, but reproducing it is required. `minimizers.rs`
+  has a test pinning it.
+- **`del M2[m1][m2]` does not delete.** `get_minimizer_combinations_database` deletes singleton
+  anchors, then immediately evaluates `M2[m1][m2]` again on the next line — and because `M2` is a
+  `defaultdict`, that *recreates* the key with an empty array. Measured on cluster 0 at default
+  parameters: **23 260 keys, of which 21 801 are empty** — 94% of the index is dead weight. The only
+  access anywhere is a lookup (`isONcorrect.py:1022`), never an iteration, so genuinely removing
+  them is output-neutral and is a large memory win. Confirm against the harness, then see
+  *Deferred improvements*.
 
 ## The pipeline, in one pass
 
