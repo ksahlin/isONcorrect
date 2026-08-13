@@ -205,17 +205,24 @@ Before you push, understand what this does:
     to run gc if the data is sensitive. It is public paper data here, so this is
     a tidiness issue rather than a disclosure one.
 
-Recommended order:
+Recommended order (skip anything already done):
 
-  1. Archive the data first, so it is not lost:
+  1. Archive the data, so it is not lost:
        tools/repo-slim/archive_data.sh
+     ...and verify it comes back before continuing:
+       tools/fetch_data.sh --dest /tmp/datacheck
 
-  2. Tag the current state so the pre-rewrite history stays reachable:
-       git -C "$REPO_ROOT" tag pre-slim-\$(date +%Y%m%d)
-       git -C "$REPO_ROOT" push origin pre-slim-\$(date +%Y%m%d)
+  2. Back up the pre-rewrite history LOCALLY. Do not rely on a tag pushed to
+     origin for this: filter-repo rewrites tags too, so the mirror push moves
+     any such tag onto the rewritten commit. Worse, a tag left pointing at the
+     old history would keep every stripped byte alive on the server AND get
+     fetched by \`git clone\` (which pulls tags by default), undoing the whole
+     exercise. Keep the old history off origin:
+       git clone --mirror "$REPO_ROOT" ~/isONcorrect-preslim-backup.git
 
-  3. Push the rewritten history:
-       git -C "$MIRROR" push --force --mirror origin
+  3. Push the rewritten history. filter-repo removes the 'origin' remote from
+     the mirror, so push to the URL rather than to a remote name:
+       git -C "$MIRROR" push --force --mirror $ORIGIN
 
   4. Re-clone fresh and confirm:
        git clone $ORIGIN /tmp/isONcorrect-verify
