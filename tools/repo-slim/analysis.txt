@@ -1,0 +1,63 @@
+Repository slimming analysis
+============================================================
+
+total distinct blob bytes in history :    2.935 GB
+  to be stripped                     :    2.920 GB  (99.5%)
+  retained (source, scripts, docs)   :    0.015 GB
+  retained fixtures under test_data/ :    0.267 MB
+
+paths stripped: 90
+
+Largest paths being removed
+------------------------------------------------------------
+       97.95 MB  data/isONcorrect_sirv_iso_cov.csv
+       97.60 MB  data/results/drosophila_full.csv.c.bz2
+       97.60 MB  data/results/drosophila_full.csv.a.bz2
+       97.60 MB  data/results/drosophila_full.csv.b.bz2
+       96.13 MB  data/results/sirv_subsample_Dec_08.csv.a.bz2
+       96.13 MB  data/results/sirv_subsample_Dec_08.csv.b.bz2
+       94.37 MB  test_data/results_NA12878_1M_Sept_24.csv.tar.gz.part-aa
+       80.73 MB  data/comp_sirv_full.csv.tar.bz2
+       79.19 MB  data/results/sim_exponential_abundance.csv.bz2
+       78.91 MB  data/results/sirv_full.csv.bz2
+       78.79 MB  data/results/full_sirv.csv.bz2
+       63.80 MB  test_data/sample_analysis_output_100k_human_new_corr.csv
+       60.52 MB  data/results/sirv_error_analysis_Dec_02.csv.bz2
+       58.19 MB  test_data/sample_analysis_output_100k_sirv_new_corr.csv
+       51.38 MB  data/comp_dros_file.tar.bz2.partaa
+       51.38 MB  data/comp_dros_file.tar.bz2.partab
+       51.38 MB  data/comp_dros_file.tar.bz2.partac
+       51.38 MB  data/comp_dros_file.tar.bz2.partad
+       51.38 MB  data/comp_dros_file.tar.bz2.partae
+       51.38 MB  data/isoncorrect_eval_files.tar.bz2.partaa
+       51.38 MB  data/isoncorrect_eval_files.tar.bz2.partab
+       51.38 MB  data/isoncorrect_eval_files.tar.bz2.partac
+       51.38 MB  data/isoncorrect_eval_files.tar.bz2.partad
+       51.38 MB  data/isoncorrect_eval_files.tar.bz2.partae
+       51.38 MB  data/isoncorrect_eval_files.tar.bz2.partaf
+
+Note: git stores each distinct blob once, so identical files at different
+paths are counted under whichever path reaches them first. This is not
+cosmetic -- it reflects real storage. Two consequences worth knowing:
+
+  * test_data/chr6_ensemble.fa and data/chr6_transcripts.fa are byte-identical.
+    Both are stripped, so the shared blob genuinely goes away.
+
+  * test_data/isoncorrect/0.fastq, test_data/isoncorrect/1.fastq and
+    test_data/100reads.fq are ALL THE SAME FILE (one blob, three paths).
+    The 'two test clusters' used by CI and by bench/ are one cluster twice.
+    Stripping is path-based, so keeping them is still correct -- but do not
+    mistake them for independent test coverage.
+
+Fixtures explicitly retained
+------------------------------------------------------------
+       40.61 KB  test_data/isoncorrect/0.fastq
+             shares content with: test_data/100reads.fq,test_data/isoncorrect/1.fastq
+       40.61 KB  test_data/isoncorrect/1.fastq
+             shares content with: test_data/100reads.fq,test_data/isoncorrect/0.fastq
+       40.61 KB  test_data/100reads.fq
+             shares content with: test_data/isoncorrect/0.fastq,test_data/isoncorrect/1.fastq
+        0.31 KB  test_data/six_exons.fa
+       77.19 KB  test_data/sirv_transcriptome.fasta
+       76.15 KB  test_data/sirv_transcriptome_flat.fasta
+       72.78 KB  test_data/sirv_transcriptome_flat_non_redundant.fasta

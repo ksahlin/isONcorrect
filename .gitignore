@@ -35,3 +35,47 @@
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Python build artifacts #
+##########################
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Rust #
+########
+target/
+
+# Sequence and result data #
+############################
+# History is ~2.4 GB and 99.7% of that is committed data. Large fixtures and
+# paper data belong in a GitHub Release or on Zenodo, fetched by a script.
+# The small cluster fixtures under test_data/isoncorrect/ are already tracked
+# and are unaffected by these patterns.
+*.fastq
+*.fq
+*.fa
+*.fasta
+*.sam
+*.bam
+*.cram
+*.paf
+*.vcf
+*.bz2
+*.part[a-z][a-z]
+!test_data/isoncorrect/*.fastq
+
+# Output of tools/repo-slim/archive_data.sh (~1.1 GB of tarballs bound for Zenodo)
+repo-slim-archive/
+# Download cache of tools/fetch_data.sh
+.zenodo-download/
+# Restored paper data (fetched with tools/fetch_data.sh, never committed)
+/data/
+
+# Local Claude Code entry point; the content lives in PORTING.md
+CLAUDE.md

@@ -1,0 +1,18 @@
+# Never commit data into the repo — history bloat is what we are digging out of.
+corpus/*
+!corpus/.gitkeep
+golden/
+results/
+
+# Belt and braces: no sequence or result data under bench/, ever.
+*.fastq
+*.fq
+*.fa
+*.fasta
+*.bam
+*.sam
+*.paf
+*.csv
+*.prof
+*.tar.bz2
+*.tar.gz

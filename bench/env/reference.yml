@@ -1,0 +1,22 @@
+# Pinned reference environment for the isONcorrect Python implementation.
+#
+# This environment defines the *normative* behaviour the Rust port must reproduce
+# byte for byte. Do not float these versions casually: spoa in particular decides
+# every consensus, so a spoa upgrade can legitimately change output and invalidate
+# every recorded golden.
+#
+# spoa is only published for osx-arm64 / linux-aarch64 from 4.1.4 onward, so 4.1.5
+# is the floor on Apple Silicon. Recorded goldens are tagged with the resolved
+# versions written to env/resolved-<platform>.txt by setup_reference_env.sh.
+name: isoncorrect-ref
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.12
+  - pip
+  - spoa=4.1.5
+  - parasail-python=1.3.4
+  - numpy=2.1.3
+  - pip:
+      - edlib==1.3.9.post1
