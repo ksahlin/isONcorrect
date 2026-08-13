@@ -36,7 +36,9 @@ Two binaries must keep their exact current names, flags, and defaults:
 | minimizer-pair database | done, byte-identical dumps across 6 parameter settings; stores 1 459 keys where the reference holds 23 260 |
 | `solve_WIS` + `fill_p2` | done; replayed against every recorded reference call |
 | bounded edit distance (edlib `'dist'`) | done natively, no C++; 4 000 real pairs verified against Python edlib |
-| `find_most_supported_span` | next |
+| quality-value prefix sums (`get_qvs`) | done; `D` table cross-checked against the reference |
+| `find_most_supported_span` | **implemented, unit-tested, NOT yet verified against the reference** — see below |
+| main correction loop (`previously_corrected_regions`) | next; blocks span verification |
 | consensus / POA, MSA, PFM | not started |
 | structural-overcorrection guard | not started |
 
@@ -76,6 +78,13 @@ WIS_DUMP=/tmp/wd cargo test --manifest-path rust/Cargo.toml wis::replay -- --noc
 
 Replayed clean at `--k/--w` of 9/20 (100 calls, 1 342 intervals), 9/10 (100 calls, 20 689) and
 11/25 (78 calls, 313). The test skips silently when `WIS_DUMP` is unset.
+
+`spans.tsv` records what every `find_most_supported_span` call appended to `all_intervals`,
+tagged with the anchor that produced it and the full payload — 985 intervals on cluster 0 at
+defaults. **The Rust side cannot be compared against it yet.** Reproducing those calls needs the
+per-read anchor iteration and the `previously_corrected_regions` / `pos_group` filtering from
+`isoncorrect_main`, which is not ported. Until that lands, `support.rs` rests on unit tests only,
+and should be treated as unverified.
 
 **The dump tool must apply the same argument massaging `main` does.** A mismatch at
 `--xmin 14 --k 9` turned out to be the dump binary, not the anchor logic: `main` clamps `--xmin` up

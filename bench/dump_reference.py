@@ -176,9 +176,31 @@ def main() -> int:
         wis_calls["n"] += 1
         return result
 
+    # find_most_supported_span appends to `all_intervals` in place. Recording
+    # what each call appends, tagged with the anchor that produced it, pins both
+    # the candidate intervals and the order supporting segments were collected
+    # in --- the latter reaches the consensus, which is order-sensitive.
+    orig_span = ion.find_most_supported_span
+    spans = {"rows": []}
+
+    def wrapped_span(
+        r_id, m1, p1, m1_curr_spans, db, reads_, all_intervals, k_size, *rest
+    ):
+        before = len(all_intervals)
+        result = orig_span(
+            r_id, m1, p1, m1_curr_spans, db, reads_, all_intervals, k_size, *rest
+        )
+        for start, stop, weight, instance in all_intervals[before:]:
+            payload = ",".join(str(x) for x in instance)
+            spans["rows"].append(
+                f"{r_id}\t{m1}\t{p1}\t{start}\t{stop}\t{weight}\t{payload}"
+            )
+        return result
+
     ion.get_minimizers_and_positions = wrapped_minpos
     ion.get_minimizer_combinations_database = wrapped_db
     ion.solve_WIS = wrapped_wis
+    ion.find_most_supported_span = wrapped_span
 
     argv = ["isONcorrect", "--fastq", args.fastq, "--outfolder", os.path.join(args.outdir, "_run")]
     argv += [a for a in args.passthrough if a != "--"]
@@ -191,6 +213,12 @@ def main() -> int:
         if exc.code not in (0, None):
             print(f"isONcorrect exited with {exc.code}", file=sys.stderr)
             return int(exc.code)
+
+    with open(os.path.join(args.outdir, "spans.tsv"), "w") as fh:
+        fh.write("#r_id\tm1\tp1\tstart\tstop\tweight\tinstance\n")
+        fh.write("\n".join(spans["rows"]))
+        fh.write("\n" if spans["rows"] else "")
+    BATCH["meta"].append(f"find_most_supported_span intervals={len(spans['rows'])}")
 
     with open(os.path.join(args.outdir, "wis_input.tsv"), "w") as fh:
         fh.write("#call\tj\tstart\tstop\tw\n")
