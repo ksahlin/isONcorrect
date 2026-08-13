@@ -24,7 +24,7 @@ Two binaries must keep their exact current names, flags, and defaults:
 | `test_data/isoncorrect/{0,1}.fastq` | The CI / harness fixture. **These two files are byte-identical** — see below |
 | `tools/repo-slim/` | Staged tooling to strip committed data from history |
 | `paper/` | The snakemake evaluations behind the paper (`evaluation*`, `ont_error_rates`). Not part of the port. Do not modify. |
-| `scripts/`, `cemetary/` | Paper experiment scripts and dead code. Not part of the port. `scripts/correction_pipeline.sh` is linked from README and must keep its path. |
+| `scripts/` | Paper experiment scripts. Not part of the port. `scripts/correction_pipeline.sh` is linked from README and must keep its path. |
 
 ## The pipeline, in one pass
 
@@ -276,7 +276,7 @@ failure).
 
 ## Working agreements
 
-- Don't touch `paper/`, `scripts/`, or `cemetary/` — those reproduce
+- Don't touch `paper/` or `scripts/` — those reproduce
   published figures.
 - Don't "improve" the algorithm while porting. Behaviour changes and the port must not land in the
   same commit; an intentional divergence needs its own commit and a note here.
