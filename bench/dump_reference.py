@@ -73,11 +73,16 @@ def dump_anchors(m2):
     """M2: {m1: {m2: array('I', [r_id, p1, p2, ...])}} after filtering.
 
     Two files. `anchors.tsv` is the payload; `anchor_keys.tsv` records the key
-    set with its entry count, which is what exposes the defaultdict quirk: the
+    set with its entry count.
+
+    Empty keys are skipped in both files. They exist only as an artefact: the
     filtering loop does `del M2[m1][m2]` and then immediately reads
     `M2[m1][m2]`, which on a defaultdict *recreates* the key with an empty
-    array. Deleted singletons therefore come back as zero-entry keys rather
-    than disappearing.
+    array, so deleted singletons come back as zero-entry keys. A lookup on one
+    is indistinguishable from a lookup on an absent key --- both mean "no
+    support" --- so the port stores only non-empty entries, and dumping them
+    here would make every diff fail for no reason. The count is reported in
+    `meta.txt` instead, since it is the memory story.
     """
     d = _batch_dir()
     n_triples = 0
@@ -92,10 +97,11 @@ def dump_anchors(m2):
             for m2k in m2[m1]:
                 payload = m2[m1][m2k]
                 n = len(payload) // 3
-                kh.write(f"{m1}\t{m2k}\t{n}\n")
-                n_keys += 1
                 if n == 0:
                     n_empty += 1
+                    continue
+                kh.write(f"{m1}\t{m2k}\t{n}\n")
+                n_keys += 1
                 for i in range(0, len(payload), 3):
                     fh.write(
                         f"{m1}\t{m2k}\t{payload[i]}\t{payload[i + 1]}\t{payload[i + 2]}\n"

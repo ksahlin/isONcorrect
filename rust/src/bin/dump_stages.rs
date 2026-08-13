@@ -17,9 +17,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
+use isoncorrect::anchors::{self, Minimizer};
 use isoncorrect::fastq::read_fastq;
 use isoncorrect::minimizers::minimizers_lex;
 use isoncorrect::params::Params;
+use isoncorrect::validate::clamp_xmin;
 
 #[derive(Parser)]
 #[command(
@@ -39,6 +41,10 @@ struct Args {
     max_seqs: usize,
     #[arg(long = "set_w_dynamically", default_value_t = false)]
     set_w_dynamically: bool,
+    #[arg(long, default_value_t = 18)]
+    xmin: usize,
+    #[arg(long, default_value_t = 80)]
+    xmax: usize,
 }
 
 fn main() -> ExitCode {
@@ -59,11 +65,18 @@ fn main() -> ExitCode {
         }
     };
 
+    // isONcorrect.py::main clamps --xmin up to 2*k before anything else runs,
+    // so the dump has to do it too or the anchor spans diverge.
+    let (xmin, notice) = clamp_xmin(args.k, args.xmin);
+    if let Some(n) = notice {
+        eprintln!("{n}");
+    }
+
     let params = Params {
         k: args.k,
         w: args.w,
-        xmin: 18,
-        xmax: 80,
+        xmin,
+        xmax: args.xmax,
         t_threshold: 0.1,
         max_seqs: args.max_seqs,
         max_seqs_to_spoa: 200,
@@ -97,11 +110,11 @@ fn main() -> ExitCode {
         let mut mf = BufWriter::new(fs::File::create(dir.join("minimizers.tsv")).unwrap());
         writeln!(mf, "#r_id\tidx\tkmer\tpos").unwrap();
         let mut total = 0usize;
+        let mut by_read: Vec<(usize, Vec<Minimizer>)> = Vec::new();
         for r in chunk {
-            for (i, (m, p)) in minimizers_lex(r.seq.as_bytes(), params.k, w)
-                .into_iter()
-                .enumerate()
-            {
+            let mins = minimizers_lex(r.seq.as_bytes(), params.k, w);
+            by_read.push((r.r_id, mins.clone()));
+            for (i, (m, p)) in mins.into_iter().enumerate() {
                 writeln!(
                     mf,
                     "{}\t{}\t{}\t{}",
@@ -115,6 +128,32 @@ fn main() -> ExitCode {
             }
         }
         mf.flush().unwrap();
+
+        // Anchor index, dumped in the same format as bench/dump_reference.py.
+        let db = anchors::build(&by_read, params.k, params.xmin, params.xmax, chunk.len());
+        let mut af = BufWriter::new(fs::File::create(dir.join("anchors.tsv")).unwrap());
+        let mut kf = BufWriter::new(fs::File::create(dir.join("anchor_keys.tsv")).unwrap());
+        writeln!(af, "#m1\tm2\tr_id\tp1\tp2").unwrap();
+        writeln!(kf, "#m1\tm2\tn_entries").unwrap();
+        let mut n_entries = 0usize;
+        for (m1, m2, occ) in db.iter() {
+            let (m1s, m2s) = (String::from_utf8_lossy(m1), String::from_utf8_lossy(m2));
+            writeln!(kf, "{}\t{}\t{}", m1s, m2s, occ.len()).unwrap();
+            for (r_id, p1, p2) in occ {
+                writeln!(af, "{}\t{}\t{}\t{}\t{}", m1s, m2s, r_id, p1, p2).unwrap();
+                n_entries += 1;
+            }
+        }
+        af.flush().unwrap();
+        kf.flush().unwrap();
+        eprintln!(
+            "batch {batch_id:03}: anchor_keys={} entries={} generated={} singletons={} high_abundance={}",
+            db.len(),
+            n_entries,
+            db.generated,
+            db.singletons,
+            db.high_abundance
+        );
 
         eprintln!(
             "batch {batch_id:03}: reads={} w={} k={} minimizers={}",

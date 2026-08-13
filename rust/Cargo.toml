@@ -12,6 +12,7 @@ license = "GPL-3.0-only"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+indexmap = "2.11.4"
 
 [lib]
 name = "isoncorrect"

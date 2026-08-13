@@ -9,6 +9,7 @@
 //! order and exit codes match the reference; the correction algorithm is not
 //! ported yet and the binaries exit non-zero when asked to do real work.
 
+pub mod anchors;
 pub mod cli;
 pub mod fastq;
 pub mod minimizers;
