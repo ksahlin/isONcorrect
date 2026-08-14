@@ -92,6 +92,83 @@ pub fn global(query: &[u8], target: &[u8]) -> Alignment {
     }
 }
 
+/// One run of a CIGAR: `(length, operation)`.
+pub type CigarOp = (usize, u8);
+
+/// Parse an extended CIGAR into runs, matching `help_functions.cigar_to_seq`'s
+/// `re.split(r'[=DXSMI]+', cigar)` walk.
+///
+/// The reference's regex tolerates `S` and `M` when splitting but its loop then
+/// falls through to `print("error"); sys.exit()` for anything that is not
+/// `=`, `X`, `I` or `D`. Nothing in the pipeline produces those operations —
+/// edlib emits only the extended four — so this returns `None` instead of
+/// aborting the process, and callers treat it as a bug rather than an input.
+pub fn parse_cigar(cigar: &str) -> Option<Vec<CigarOp>> {
+    let mut ops = Vec::new();
+    let mut len = 0usize;
+    let mut seen_digit = false;
+    for c in cigar.bytes() {
+        if c.is_ascii_digit() {
+            len = len * 10 + usize::from(c - b'0');
+            seen_digit = true;
+        } else {
+            if !seen_digit || !matches!(c, b'=' | b'X' | b'I' | b'D') {
+                return None;
+            }
+            ops.push((len, c));
+            len = 0;
+            seen_digit = false;
+        }
+    }
+    if seen_digit {
+        return None; // trailing length with no operation
+    }
+    Some(ops)
+}
+
+/// Expand a CIGAR into the two gapped strings, matching
+/// `help_functions.cigar_to_seq(cigar, query, ref)`.
+///
+/// Returns `(query_aligned, ref_aligned)` — the reference's return order, which
+/// `get_best_corrections` immediately unpacks as `read_alignment,
+/// ref_alignment`. `I` is an insertion with respect to the reference (a gap in
+/// `ref_aligned`); `D` is a deletion (a gap in `query_aligned`).
+///
+/// Returns `None` if the CIGAR does not parse or does not cover both sequences.
+pub fn cigar_to_seq(cigar: &str, query: &[u8], reference: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
+    let ops = parse_cigar(cigar)?;
+    let (mut q_index, mut r_index) = (0usize, 0usize);
+    let (mut q_aln, mut r_aln) = (Vec::new(), Vec::new());
+
+    for (len, op) in ops {
+        match op {
+            b'=' | b'X' => {
+                q_aln.extend_from_slice(query.get(q_index..q_index + len)?);
+                r_aln.extend_from_slice(reference.get(r_index..r_index + len)?);
+                q_index += len;
+                r_index += len;
+            }
+            b'I' => {
+                r_aln.extend(std::iter::repeat_n(b'-', len));
+                q_aln.extend_from_slice(query.get(q_index..q_index + len)?);
+                q_index += len;
+            }
+            b'D' => {
+                r_aln.extend_from_slice(reference.get(r_index..r_index + len)?);
+                q_aln.extend(std::iter::repeat_n(b'-', len));
+                r_index += len;
+            }
+            _ => return None,
+        }
+    }
+    // Python would silently accept a CIGAR that stops short; nothing produces
+    // one, and a partial alignment would corrupt the MSA rather than fail.
+    if q_index != query.len() || r_index != reference.len() {
+        return None;
+    }
+    Some((q_aln, r_aln))
+}
+
 /// `[b'=', b'=', b'X']` becomes `"2=1X"`.
 fn run_length_encode(ops: &[u8]) -> String {
     let mut out = String::new();
@@ -178,6 +255,53 @@ mod tests {
         assert_eq!(tn, t.len(), "target coverage");
     }
 
+    fn expand(cigar: &str, q: &str, r: &str) -> (String, String) {
+        let (qa, ra) = cigar_to_seq(cigar, q.as_bytes(), r.as_bytes()).unwrap();
+        (
+            String::from_utf8(qa).unwrap(),
+            String::from_utf8(ra).unwrap(),
+        )
+    }
+
+    #[test]
+    fn cigar_parses_into_runs() {
+        assert_eq!(
+            parse_cigar("2=1X10I").unwrap(),
+            vec![(2, b'='), (1, b'X'), (10, b'I')]
+        );
+        assert_eq!(parse_cigar("").unwrap(), vec![]);
+        assert!(parse_cigar("3M").is_none(), "M is not in the pipeline");
+        assert!(parse_cigar("3").is_none(), "length with no operation");
+        assert!(parse_cigar("=").is_none(), "operation with no length");
+    }
+
+    #[test]
+    fn insertion_gaps_the_reference_and_deletion_gaps_the_query() {
+        let (q, r) = expand("2=2I2=", "ACGTAC", "ACAC");
+        assert_eq!((q.as_str(), r.as_str()), ("ACGTAC", "AC--AC"));
+        let (q, r) = expand("2=2D2=", "ACAC", "ACGTAC");
+        assert_eq!((q.as_str(), r.as_str()), ("AC--AC", "ACGTAC"));
+    }
+
+    #[test]
+    fn an_expanded_cigar_round_trips_its_own_alignment() {
+        let (q, r) = ("ACGTACGTAA", "ACGTTACGT");
+        let a = global(q.as_bytes(), r.as_bytes());
+        let (qa, ra) = expand(&a.cigar, q, r);
+        assert_eq!(qa.len(), ra.len());
+        assert_eq!(qa.replace('-', ""), q);
+        assert_eq!(ra.replace('-', ""), r);
+        // Gapped columns account for exactly the edit distance.
+        let diffs = qa.bytes().zip(ra.bytes()).filter(|(a, b)| a != b).count();
+        assert_eq!(diffs, a.edit_distance);
+    }
+
+    #[test]
+    fn a_cigar_that_does_not_cover_both_sequences_is_rejected() {
+        assert!(cigar_to_seq("2=", b"ACGT", b"ACGT").is_none());
+        assert!(cigar_to_seq("4=", b"ACGT", b"ACG").is_none());
+    }
+
     /// Tie cases verified directly against Python edlib, not assumed.
     ///
     /// The preference is applied walking *backwards*, so the gap lands at the
@@ -238,5 +362,52 @@ mod oracle {
         assert_eq!(bad_ed, 0, "{bad_ed} of {n} edit distances differed");
         assert_eq!(bad_cigar, 0, "{bad_cigar} of {n} CIGARs differed");
         eprintln!("matched edlib on all {n} recorded path alignments");
+    }
+
+    /// Replay `help_functions.cigar_to_seq`: `#cigar query ref q_aln r_aln`.
+    ///
+    /// Separate from the CIGAR oracle above because the two can fail
+    /// independently — expansion is deterministic given a CIGAR, so a mismatch
+    /// here is this function's bug and not the aligner's.
+    ///
+    /// ```bash
+    /// CIGAR_TO_SEQ_CASES=/tmp/cg/cigar_to_seq_cases.tsv \
+    ///   cargo test --manifest-path rust/Cargo.toml align::oracle -- --nocapture
+    /// ```
+    #[test]
+    fn expands_cigars_like_the_reference() {
+        let Ok(path) = std::env::var("CIGAR_TO_SEQ_CASES") else {
+            return;
+        };
+        let data = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("CIGAR_TO_SEQ_CASES={path} unreadable: {e}"));
+
+        let (mut n, mut bad) = (0usize, 0usize);
+        for line in data
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.is_empty())
+        {
+            let f: Vec<&str> = line.split('\t').collect();
+            assert!(f.len() >= 5, "short row: {line}");
+            let (q_aln, r_aln) = cigar_to_seq(f[0], f[1].as_bytes(), f[2].as_bytes())
+                .unwrap_or_else(|| panic!("rejected a CIGAR the reference expanded: {}", f[0]));
+            if q_aln != f[3].as_bytes() || r_aln != f[4].as_bytes() {
+                if bad < 3 {
+                    eprintln!(
+                        "mismatch on {}:\n  python: {} / {}\n  rust  : {} / {}",
+                        f[0],
+                        f[3],
+                        f[4],
+                        String::from_utf8_lossy(&q_aln),
+                        String::from_utf8_lossy(&r_aln)
+                    );
+                }
+                bad += 1;
+            }
+            n += 1;
+        }
+        assert!(n > 0, "no cases in {path}");
+        assert_eq!(bad, 0, "{bad} of {n} expansions differed");
+        eprintln!("expanded all {n} recorded CIGARs identically");
     }
 }

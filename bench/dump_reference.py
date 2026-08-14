@@ -26,6 +26,15 @@ Output, one directory per batch (`--max_seqs` chunk):
     batch_000/anchor_keys.tsv m1, m2, n_entries      -- key set and multiplicity
     meta.txt                  parameters and totals
 
+Whole-run oracles, written once at the end rather than per batch:
+
+    cigar_cases.tsv           edlib task="path" query, target, distance, CIGAR
+    cigar_to_seq_cases.tsv    CIGAR expanded into its two gapped strings
+    spoa_cases.tsv            consensus and the sequences it came from
+    msa_cases.tsv             pairwise alignments in, multialignment rows out
+    spans.tsv                 what find_most_supported_span appended
+    wis_input.tsv/.tsv        solve_WIS inputs and chosen indices
+
 Every file is emitted in the reference's own iteration order, NOT sorted:
 Python dicts are insertion-ordered and that order feeds later stages, so the
 port has to reproduce it. Diff these files directly.
@@ -235,6 +244,50 @@ def main() -> int:
     car.run_spoa = wrapped_spoa
     ion.create_augmented_reference.run_spoa = wrapped_spoa
 
+    # cigar_to_seq expands a CIGAR into the two gapped strings. Deterministic
+    # given its inputs, so recording both sides makes it directly replayable.
+    from isoncorrect import help_functions as hf
+
+    orig_cigar_to_seq = hf.cigar_to_seq
+    cigar_seq_cases = {"rows": []}
+
+    def wrapped_cigar_to_seq(cigar, query, ref):
+        q_aln, r_aln = orig_cigar_to_seq(cigar, query, ref)
+        cigar_seq_cases["rows"].append(f"{cigar}\t{query}\t{ref}\t{q_aln}\t{r_aln}")
+        return q_aln, r_aln
+
+    hf.cigar_to_seq = wrapped_cigar_to_seq
+    ion.help_functions.cigar_to_seq = wrapped_cigar_to_seq
+
+    # The multialignment matrix stacks the pairwise alignments into shared
+    # columns. Several non-unique choices land here at once --- edlib's CIGAR
+    # tie-break, which insertion is widest, and get_best_solution's four-way
+    # fallthrough --- so real cases are worth much more than constructed ones.
+    #
+    # The partition's tuple keys are not recorded: the matrix depends only on
+    # the pairwise alignments and their order. Note create_multialignment_matrix
+    # calls position_query_to_alignment(s_alignment, m_alignment), i.e. query
+    # first, target second, which is the reverse of the tuple's own order.
+    from isoncorrect import correct_seqs as cs
+
+    orig_mam = cs.create_multialignment_matrix
+    msa_cases = {"rows": [], "n": 0}
+
+    def wrapped_mam(partition):
+        matrix = orig_mam(partition)
+        case = msa_cases["n"]
+        msa_cases["n"] += 1
+        for i, q_acc in enumerate(partition):
+            (_ed, m_alignment, s_alignment, _degree) = partition[q_acc]
+            row = "".join(matrix[q_acc])
+            msa_cases["rows"].append(
+                f"{case}\t{i}\t{s_alignment}\t{m_alignment}\t{row}"
+            )
+        return matrix
+
+    cs.create_multialignment_matrix = wrapped_mam
+    ion.correct_seqs.create_multialignment_matrix = wrapped_mam
+
     ion.get_minimizers_and_positions = wrapped_minpos
     ion.get_minimizer_combinations_database = wrapped_db
     ion.solve_WIS = wrapped_wis
@@ -263,6 +316,20 @@ def main() -> int:
         fh.write("\n".join(spoa_cases["rows"]))
         fh.write("\n" if spoa_cases["rows"] else "")
     BATCH["meta"].append(f"spoa calls={len(spoa_cases['rows'])}")
+
+    with open(os.path.join(args.outdir, "cigar_to_seq_cases.tsv"), "w") as fh:
+        fh.write("#cigar\tquery\tref\tquery_aligned\tref_aligned\n")
+        fh.write("\n".join(cigar_seq_cases["rows"]))
+        fh.write("\n" if cigar_seq_cases["rows"] else "")
+    BATCH["meta"].append(f"cigar_to_seq calls={len(cigar_seq_cases['rows'])}")
+
+    with open(os.path.join(args.outdir, "msa_cases.tsv"), "w") as fh:
+        fh.write("#case\trow\tquery_aligned\ttarget_aligned\taln_row\n")
+        fh.write("\n".join(msa_cases["rows"]))
+        fh.write("\n" if msa_cases["rows"] else "")
+    BATCH["meta"].append(
+        f"multialignment matrices={msa_cases['n']} rows={len(msa_cases['rows'])}"
+    )
 
     with open(os.path.join(args.outdir, "spans.tsv"), "w") as fh:
         fh.write("#r_id\tm1\tp1\tstart\tstop\tweight\tinstance\n")

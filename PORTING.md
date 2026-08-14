@@ -40,8 +40,12 @@ Two binaries must keep their exact current names, flags, and defaults:
 | `find_most_supported_span` | done; 52 558 intervals byte-identical to the reference |
 | anchor filtering (`previously_corrected_regions`, `pos_group`) | implemented; inert under `--exact`, so verified only in that mode |
 | correction driver (`correct_read`, consensus) | next; needed to exercise the non-`--exact` filtering |
-| consensus POA (`run_spoa`) | done via `spoars`; oracle green on 505 real intervals |
-| MSA matrix, PFM, correction | not started |
+| consensus POA (`run_spoa`) | done via `spoars`; oracle green on 674 real intervals |
+| NW CIGAR (edlib `task="path"`) | done natively, no C++; 6 378 real alignments byte-identical |
+| `cigar_to_seq` | done; 6 269 real expansions byte-identical |
+| MSA matrix (`create_multialignment_matrix`) | done; 16 572 rows across 1 622 real matrices byte-identical |
+| PFM (`get_best_corrections`) | done; unit-tested only — no reference oracle yet, see below |
+| variant contexts + correction (`get_alternative_ref_contexts`, the `PFM` loop) | not started |
 | structural-overcorrection guard | not started |
 
 Argument names, defaults, validation order, stderr text and exit codes match the reference. The
@@ -99,6 +103,47 @@ Still unverified: the `previously_corrected_regions` / `pos_group` filtering its
 under `--exact`. It has unit tests, but exercising it against the reference needs the correction
 driver.
 
+`cigar_to_seq_cases.tsv` and `msa_cases.tsv` do the same for the two stages that turn pairwise
+alignments into columns. Both are pure functions of their recorded inputs, so the Rust side replays
+them rather than diffing a dump:
+
+```bash
+bench/dump_reference.py --fastq test_data/isoncorrect/0.fastq --outdir /tmp/d -- --k 9 --w 10
+CIGAR_TO_SEQ_CASES=/tmp/d/cigar_to_seq_cases.tsv MSA_CASES=/tmp/d/msa_cases.tsv \
+  cargo test --manifest-path rust/Cargo.toml oracle -- --nocapture
+```
+
+Green over a 16-run sweep (both clusters × `--k/--w` of 9/20, 9/10, 11/25, 7/15, 15/40, plus
+`--max_seqs_to_spoa 3`, `--T 0.05` and `--xmin 30 --xmax 120`): **6 269 CIGAR expansions** and
+**16 572 matrix rows across 1 622 multialignments**, byte-identical. The same sweep re-ran the two
+older oracles on a wider corpus than they were recorded against — 6 378 edlib CIGARs and 674 spoa
+consensus sequences, both still clean.
+
+Three facts that sweep settled, each of which would otherwise have been a guess:
+
+- **`get_best_solution`'s fourth branch is never reached.** Counting branch hits inside the
+  reference at `--k 9 --w 10`: 165 "no insertion", 238 substring, 31 threaded through `min_ed`,
+  and **0** for the shift-left fallback. So the corpus exercises three of four strategies, and the
+  fallback rests on unit tests alone. It is also the branch whose Python is loosest — a `max_p > 0`
+  guard whose false case falls through to code producing the same string — so a corpus that reaches
+  it is worth having.
+- **`min_ed` calls edlib again, and it shows up in the counts.** At default parameters the
+  reference makes 677 `task="path"` calls but only 650 `cigar_to_seq` calls; the 27-call gap is
+  `min_ed` fitting insertions into a widened slot. The CIGAR tie-break therefore reaches the matrix
+  through two independent paths.
+- **Partition keys cannot collide.** `partition[(q_id, pos1, pos2)]` looks like it could silently
+  drop a duplicate segment, but `find_most_supported_span` builds `to_add` keyed by `r_id`, so an
+  instance holds each read at most once. Confirmed on the corpus: matrix rows equal
+  `cigar_to_seq` calls plus one consensus row per matrix, in every run. No dedup ever happens, and
+  the port does not need an order-preserving map here.
+
+**The PFM has no reference oracle.** It is six mechanical lines (`isONcorrect.py:837`) over a
+matrix that *is* oracle-verified, and it is unit-tested — including the seven-symbol alphabet with
+`N`, and the fact that the consensus row is excluded — but nothing yet compares it to the
+reference's own counts. It cannot be captured without reimplementing it in the harness, which would
+weaken the check rather than strengthen it; the honest fix is an end-to-end oracle on
+`get_best_corrections`, which is the next stage's work.
+
 **The dump tool must apply the same argument massaging `main` does.** A mismatch at
 `--xmin 14 --k 9` turned out to be the dump binary, not the anchor logic: `main` clamps `--xmin` up
 to `2*k` before anything runs, so the reference was building spans at 18 while the port used 14.
@@ -118,16 +163,23 @@ cargo build --release --manifest-path rust/Cargo.toml
 cargo test --manifest-path rust/Cargo.toml
 ```
 
-### edlib: native for distance, bindings needed for CIGAR
+### edlib: native for distance, native for the CIGAR too
 
-isONcorrect calls edlib two ways, and they have **different portability**:
+isONcorrect calls edlib two ways, and they start from **different portability**:
 
-| Call site | Uses | Native Rust? |
+| Call site | Uses | Uniquely defined? |
 | --- | --- | --- |
 | `edlib_alignment` → `edlib.align(x, y, "NW", 'dist', k)` | the **distance** only | **Yes.** Edit distance is a uniquely defined number, so any correct implementation agrees with edlib by definition. Done: `editdist.rs` on `triple_accel`, verified against Python edlib over 4 000 real substring pairs. |
-| `get_best_corrections` → `edlib.align(seq, spoa_ref, task="path", mode="NW")` | the **CIGAR** | **No.** Many alignments achieve the same optimal distance and edlib picks one by its own tie-breaking. A different implementation returns a different, equally optimal alignment — changing the MSA and the corrected output. |
+| `get_best_corrections` → `edlib.align(seq, spoa_ref, task="path", mode="NW")` and `correct_seqs.min_ed` | the **CIGAR** | **No.** Many alignments achieve the same optimal distance and edlib picks one by its own tie-breaking. A different tie-break returns a different, equally optimal alignment — changing the MSA and the corrected output. |
 
-There is no native Rust port of edlib; `edlib_rs` and `rsedlib` are both C++ bindings.
+**Resolved: the CIGAR is reproduced natively**, by `align.rs`, and the tie-break was *measured*
+rather than reasoned about. Running the traceback under all six preference orderings against the
+recorded corpus, only one — insertion, then deletion, then the diagonal, walking backwards from
+`(n, m)` — reproduces edlib; the intuitive diagonal-first ordering gets 8%. Byte-identical on
+**6 378 real `task="path"` calls**. The rest of this section records how that decision was reached,
+since the alternatives are what to fall back on if the tie-break ever proves incomplete.
+
+There is no native Rust *port* of edlib; `edlib_rs` and `rsedlib` are both C++ bindings.
 `edlib_rs` additionally fails to build against CMake 4 (its vendored `CMakeLists.txt` requires
 `cmake_minimum_required` compatibility that CMake 4 removed) — it only builds with
 `CMAKE_POLICY_VERSION_MINIMUM=3.5` set, and pulls in `xz2`, `winapi` and `buf_redux`. Avoided for
@@ -141,19 +193,24 @@ against that oracle:
 | --- | --- |
 | `edlib_rs` 0.1.2 | **677/677 CIGARs identical**, edit distances too. But only builds with `CMAKE_POLICY_VERSION_MINIMUM=3.5` set, because its vendored `CMakeLists.txt` requires compatibility CMake 4 removed. Pulls in `xz2`, `winapi`, `buf_redux`. |
 | `rsedlib` 0.1.1 | Compiles, then **fails to link** — its build script does not produce the vendored library (`ld: library 'edlib' not found`). Unusable here. |
-| native Rust | No candidate. The traceback is not unique, so an independent implementation gives a different-but-equally-optimal CIGAR. |
+| native Rust (`align.rs`) | **Chosen.** 6 378/6 378 CIGARs identical once the tie-break was measured. Pure Rust, no toolchain, no vendored source. |
 
-So the CIGAR *can* be reproduced exactly, but only through C++ bindings that need a build-time
-workaround. **This decision is still open**, and it is the last one blocking `get_best_corrections`:
+So three options existed. The one taken was **(2)**, because the oracle made the tie-break an
+empirical question rather than a guess:
 
-1. **`edlib_rs` + documented CMake workaround.** Correct today, at the cost of a C++ toolchain and
-   an env var users must know about (or a `build.rs` that sets it).
+1. **`edlib_rs` + documented CMake workaround.** Correct, at the cost of a C++ toolchain and an env
+   var users must know about (or a `build.rs` that sets it).
 2. **Reimplement edlib's NW traceback natively**, validated against `cigar_cases.tsv`. Keeps the
    build pure Rust — the port is otherwise C++-free — but the tie-breaking must be replicated
-   exactly, not merely optimally. The oracle makes this checkable; 677 cases is a starting corpus,
-   not a sufficient one.
+   exactly, not merely optimally.
 3. **Vendor edlib's C source directly** with a `cc`-based build, skipping CMake entirely. edlib is a
    single self-contained `.cpp`, so this sidesteps the toolchain fragility while keeping exactness.
+
+**The corpus is the guarantee, and it is still small.** `align.rs` is plain `O(n*m)`
+Needleman-Wunsch, not edlib's bit-parallel Myers, so agreement rests entirely on the recorded cases
+— all of which come from one 100-read cluster and segments bounded by `--xmax`. If a mismatch ever
+appears, options 1 and 3 above are the fallback, and the `cigar_cases.tsv` oracle is what would
+catch it.
 
 ### Porting gotchas found so far
 
@@ -459,6 +516,16 @@ goldens must be re-recorded afterwards.
   intervals, which matters because POA runs once per correction interval. `poa.rs` already isolates
   the surface (`consensus`), and `poa::oracle` is the acceptance test — 505 real intervals against
   the `spoa` binary. Deferred because `spoars` is already byte-identical on that corpus.
+- **The positioned vector allocates one `Vec<u8>` per slot**, i.e. `2 * len(consensus) + 1` small
+  allocations per supporting segment per correction interval — the shape the reference's list of
+  strings has. Nearly all of them are the one-byte `"-"`. A slot is either a single character or a
+  contiguous range of the query, so an enum of `(char)` / `(start, len)` would remove essentially
+  all of it. Deferred because it is an inner-loop rewrite with no output change, and `msa.rs` has
+  the oracle that makes it safe to do later.
+- `create_multialignment_format_NEW` takes `start`/`stop` and filters to rows covering that window,
+  but the only caller passes the full vector, so the filter always admits everything and
+  `t_vector_start`/`t_vector_end` are constants. The port drops the parameters. Deleting them from
+  the Python is a separate commit.
 - The `hash_fcn` parameter is threaded through but hardcoded to `"lex"`; `get_kmer_minimizers`
   (random) and `get_kmer_maximizers` are dead in the default path.
 - Dropping the flags listed under *Scope* leaves a large amount of now-unreachable Python

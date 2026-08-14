@@ -15,6 +15,7 @@ pub mod cli;
 pub mod editdist;
 pub mod fastq;
 pub mod minimizers;
+pub mod msa;
 pub mod params;
 pub mod poa;
 pub mod quality;
