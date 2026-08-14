@@ -46,6 +46,22 @@ import argparse
 import os
 import sys
 
+# Pin the hash seed before anything imports the reference.
+#
+# `os.environ["PYTHONHASHSEED"] = ...` inside a running interpreter does
+# NOTHING --- CPython reads the variable once at startup and the string hash key
+# is already fixed by the time any Python code runs. This file used to do
+# exactly that, which made the dumps look pinned while they were in fact
+# randomly seeded on every run.
+#
+# That matters more than it sounds: `get_alternative_ref_contexts` returns a
+# `set`, and `get_best_corrections` iterates it, so the reference's *output*
+# depends on the seed. See PORTING.md and `check_seed_sensitivity.py`.
+# Re-exec is the only way to fix it from inside the script.
+if os.environ.get("PYTHONHASHSEED") != "0":
+    os.environ["PYTHONHASHSEED"] = "0"
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
 BATCH = {"n": 0, "outdir": None, "meta": []}
 
 
@@ -128,10 +144,6 @@ def main() -> int:
     ap.add_argument("--outdir", required=True)
     ap.add_argument("passthrough", nargs="*")
     args = ap.parse_args()
-
-    # The default path is deterministic; pin the seed anyway so dumps taken at
-    # different times are comparable. See PORTING.md.
-    os.environ.setdefault("PYTHONHASHSEED", "0")
 
     try:
         from isoncorrect import isONcorrect as ion
@@ -322,6 +334,34 @@ def main() -> int:
     ion.get_contexts = wrapped_contexts
     ion.get_alternative_ref_contexts = wrapped_alt
 
+    # get_best_corrections end to end: the interval's segments in, the corrected
+    # spans out. This is the only oracle that covers the PFM, which the
+    # reference never returns and which cannot be captured without
+    # reimplementing it here.
+    #
+    # Segments are recorded rather than whole reads: `seq` below is exactly what
+    # the function reads out of `reads`, so a case replays without the fastq.
+    orig_best = ion.get_best_corrections
+    corr_cases = {"rows": [], "n": 0}
+
+    def wrapped_best(curr_best_seqs, reads_, k_size, work_dir, *rest, **kw):
+        curr, others = orig_best(curr_best_seqs, reads_, k_size, work_dir, *rest, **kw)
+        v_depth = rest[0] if rest else kw.get("v_depth_ratio_threshold", 0.1)
+        max_spoa = rest[1] if len(rest) > 1 else kw.get("max_seqs_to_spoa", 200)
+        case = corr_cases["n"]
+        corr_cases["n"] += 1
+        rows = corr_cases["rows"]
+        rows.append(f"C\t{case}\t{k_size}\t{v_depth!r}\t{max_spoa}\t{curr}")
+        for q_id, pos1, pos2 in ion.grouper(curr_best_seqs, 3):
+            seq = reads_[q_id][1][pos1 : pos2 + k_size]
+            rows.append(f"S\t{case}\t{q_id}\t{pos1}\t{pos2}\t{seq}")
+        for q_id, regions in others.items():
+            for start, stop, weight, corrected in regions:
+                rows.append(f"O\t{case}\t{q_id}\t{start}\t{stop}\t{weight}\t{corrected}")
+        return curr, others
+
+    ion.get_best_corrections = wrapped_best
+
     ion.get_minimizers_and_positions = wrapped_minpos
     ion.get_minimizer_combinations_database = wrapped_db
     ion.solve_WIS = wrapped_wis
@@ -372,6 +412,12 @@ def main() -> int:
     BATCH["meta"].append(
         f"alternative-context calls={ctx_cases['n']} alternatives={ctx_cases['alts']}"
     )
+
+    with open(os.path.join(args.outdir, "correction_cases.tsv"), "w") as fh:
+        fh.write("#C case k_size T max_seqs_to_spoa curr / S case q_id pos1 pos2 segment / O case q_id start stop weight corrected\n")
+        fh.write("\n".join(corr_cases["rows"]))
+        fh.write("\n" if corr_cases["rows"] else "")
+    BATCH["meta"].append(f"get_best_corrections calls={corr_cases['n']}")
 
     with open(os.path.join(args.outdir, "spans.tsv"), "w") as fh:
         fh.write("#r_id\tm1\tp1\tstart\tstop\tweight\tinstance\n")

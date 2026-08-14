@@ -105,9 +105,11 @@ def main() -> int:
     ap.add_argument("passthrough", nargs="*", help="extra isONcorrect flags")
     args = ap.parse_args()
 
-    # The reference is only deterministic on the default path; pin the hash seed
-    # so repeat profiles are comparable. See PORTING.md.
-    os.environ.setdefault("PYTHONHASHSEED", "0")
+    # No hash-seed pin here, deliberately. Setting PYTHONHASHSEED from inside a
+    # running interpreter does nothing --- CPython reads it at startup --- so the
+    # line that used to sit here was decorative. Timings do not depend on it;
+    # `dump_reference.py` re-execs itself because its *output* does. See
+    # PORTING.md.
 
     try:
         import edlib

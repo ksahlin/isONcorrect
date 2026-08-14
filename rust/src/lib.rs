@@ -13,6 +13,7 @@ pub mod align;
 pub mod anchors;
 pub mod cli;
 pub mod contexts;
+pub mod corrections;
 pub mod editdist;
 pub mod fastq;
 pub mod minimizers;

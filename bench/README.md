@@ -24,6 +24,9 @@ Before the Rust binaries exist, `record` and the profiler are still useful on th
 | `equivalence.sh` | `record` / `verify` / `both` / `list`. The acceptance gate. |
 | `benchmark.sh` | Wall clock and peak RSS, Python vs Rust, with a thread sweep. |
 | `profile_python.py` | Stage attribution for the reference: self vs inclusive time per stage. |
+| `dump_reference.py` | Per-stage dumps and oracles. Re-execs with `PYTHONHASHSEED=0`, since the reference's output depends on it. |
+| `make_sirv_corpus.py` | Splits a simulated SIRV fastq into per-cluster files by read header. |
+| `check_seed_sensitivity.py` | Decides whether a correction mismatch is a port bug or the reference disagreeing with itself. |
 | `corpus/` | Test clusters. Gitignored — never commit fastq here. |
 | `golden/` | Recorded reference outputs. Gitignored. |
 | `results/` | Benchmark CSVs and logs. Gitignored. |
@@ -117,6 +120,11 @@ Record the numbers here so later claims about bottlenecks can be checked rather 
 - A non-empty diff in `verify` is a failure. There is no tolerance threshold.
 - Goldens are only comparable to the environment that produced them; `PROVENANCE.txt` is written
   alongside them for exactly this reason. Re-record after any dependency change.
-- `PYTHONHASHSEED=0` is exported by the harness so the `--randstrobes` path is stable run to run.
-  It is *not* stable in ordinary Python usage — see the determinism section in `PORTING.md`.
+- `PYTHONHASHSEED=0` is exported by the harness, and it matters on the **default** path, not just
+  under `--randstrobes`: `get_best_corrections` iterates a `set`, so corrected regions depend on the
+  seed. See *The reference disagrees with itself* in `PORTING.md`.
+- **Export it in the shell, never set it from inside Python.** CPython reads the variable once at
+  startup, so `os.environ["PYTHONHASHSEED"] = "0"` in a running interpreter does nothing. That
+  mistake sat in `dump_reference.py` for a while and made every dump silently randomly-seeded;
+  it now re-execs itself instead.
 - Performance numbers are meaningless without a passing equivalence run alongside them.
