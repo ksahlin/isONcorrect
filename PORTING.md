@@ -45,7 +45,10 @@ Two binaries must keep their exact current names, flags, and defaults:
 | `cigar_to_seq` | done; 6 269 real expansions byte-identical |
 | MSA matrix (`create_multialignment_matrix`) | done; 16 572 rows across 1 622 real matrices byte-identical |
 | PFM (`get_best_corrections`) | done; unit-tested only — no reference oracle yet, see below |
-| variant contexts + correction (`get_alternative_ref_contexts`, the `PFM` loop) | not started |
+| context windows (`get_contexts`) | done; 5 616 real vectors byte-identical |
+| frequency context matrix (`test_numba`) | done, no numpy; verified through the alternatives it feeds |
+| alternative references (`get_alternative_ref_contexts`) | done; 636 real alternatives replayed |
+| the correction loop over `PFM` | not started |
 | structural-overcorrection guard | not started |
 
 Argument names, defaults, validation order, stderr text and exit codes match the reference. The
@@ -143,6 +146,42 @@ matrix that *is* oracle-verified, and it is unit-tested — including the seven-
 reference's own counts. It cannot be captured without reimplementing it in the harness, which would
 weaken the check rather than strengthen it; the honest fix is an end-to-end oracle on
 `get_best_corrections`, which is the next stage's work.
+
+`context_cases.tsv` records every `get_alternative_ref_contexts` call: the matrix it was given, the
+context windows, and the alternatives it returned. The Rust side rebuilds the windows and the
+frequency context matrix from the same rows and replays it.
+
+```bash
+CONTEXT_CASES=/tmp/d/context_cases.tsv \
+  cargo test --manifest-path rust/Cargo.toml contexts::oracle -- --nocapture
+```
+
+Green on **5 616 context vectors and 636 alternatives** across 19 runs. Two things that corpus
+made obvious, and neither would have shown up on the fixture:
+
+- **Alternatives need isoform variation to appear at all.** One transcript per cluster at 7% error
+  gives 68 alternatives across 1 987 calls; putting the isoforms of one gene together gives 568
+  across 3 398. The stage exists for allelic difference, and a corpus without any barely tests it.
+- **Error-free reads produce exactly zero.** All three `err0` clusters returned no alternatives from
+  125 calls: with no errors every row carries the same context, so every column fails the
+  "more than one variant" guard immediately. A clean corpus is the wrong corpus here.
+
+The frequency context matrix has no oracle of its own — it is an intermediate the reference never
+returns. It is verified transitively: a wrong count, a wrong eligibility cutoff or a wrong order
+changes which alternatives come out, and those are compared exactly.
+
+**Alternatives are compared as a set, deliberately.** `get_alternative_ref_contexts` returns a
+Python `set` per column, and `get_best_corrections` iterates it with a `break` on an exact match and
+a strict `<` on edit distance — so the reference's own behaviour depends on set iteration order,
+which for tuples of strings depends on `PYTHONHASHSEED`. Ordering the comparison would be testing
+the harness's dump order, not the algorithm.
+
+That is a **latent non-determinism in the reference**, and it is worth being precise about how far
+it goes. Measured: columns with two and three alternatives do occur (15 and 2 respectively on a
+342-read SIRV cluster), so the set is not always a singleton. But corrected output was
+byte-identical across `PYTHONHASHSEED` 0, 1 and 2 on that cluster — the alternatives have to *tie*
+on edit distance against the read's context before order can change the answer. The port emits
+insertion order, which is deterministic and, on everything measured, the same answer.
 
 **The dump tool must apply the same argument massaging `main` does.** A mismatch at
 `--xmin 14 --k 9` turned out to be the dump binary, not the anchor logic: `main` clamps `--xmin` up
@@ -450,6 +489,42 @@ Equivalence is the acceptance criterion, and it is checked, not assumed.
 > cluster 0 and cluster 1 are identical for that reason. This is a smoke test and nothing more.
 > Building a real corpus (large clusters, exon variation, low coverage, repeated anchors) is a
 > prerequisite for trusting the port, not a nice-to-have. See `bench/README.md`.
+
+### The SIRV corpus
+
+`bench/make_sirv_corpus.py` builds a real one from simulated SIRV reads, splitting a fastq by the
+source transcript in each header (`@read_1_from_SIRV612`). No aligner, no isONclust run, and
+reproducible from the fastq alone.
+
+Two groupings, and they are not interchangeable: `--group gene` puts isoforms of one gene in one
+cluster, so reads differ by **whole exons**, and the largest cluster crosses `--max_seqs`;
+`--group transcript` gives one transcript per cluster, where every difference is sequencing error.
+On the 10k-read 7%-error set that is 7 clusters of 713–2242 reads, or 68 of 20–342.
+
+What that buys, beyond size: **62 of the 68 transcript clusters are above the
+`--exact_instance_limit` of 50**, so they run the non-`--exact` path — which the 100-read fixture
+never does, because `isoncorrect_main` forces `--exact` at or below the limit. The
+`previously_corrected_regions` filtering is live on this corpus for the first time.
+
+Every oracle was re-run against it, and all four stages held on the first try:
+
+| Run | matrices | matrix rows |
+| --- | --- | --- |
+| 9 transcript clusters at defaults | 5 210 | 377 704 |
+| `--k 9 --w 10`, `--k 11 --w 25`, `--exact` on one cluster | 2 390 | 97 850 |
+| 3 gene clusters, 200 reads each | 3 398 | 103 747 |
+| 3 error-free transcript clusters | 125 | 32 956 |
+
+That is well over 100× the previous corpus, on a different organism, at 7% error rather than the
+fixture's much cleaner reads — and `cigar_to_seq`, the CIGAR tie-break, the multialignment matrix
+and the spoa consensus were all byte-identical throughout, every run, first try.
+
+The error-free set (`reads_10k_err0.fastq`) is worth keeping as a *contrast*, not as the main
+corpus: it drives the consensus and MSA hard but produces zero alternative contexts, because with
+no errors every read carries the same context. Corpora have to be chosen per stage.
+
+Simulated reads are still not real ones: uniform error, no chimeras, no adapters. Real ONT cDNA
+through isONclust remains worth adding.
 
 Performance is measured on the same corpus: wall clock and peak RSS, Rust vs Python, single-core
 and at `--t N`.

@@ -31,19 +31,46 @@ Before the Rust binaries exist, `record` and the profiler are still useful on th
 ## Corpus
 
 `bench/corpus/` is empty by default and the harness falls back to `test_data/isoncorrect`
-(two 100-read clusters). **That fallback is a smoke test, not proof of equivalence** — the scripts
-say so on every run.
+(two 100-read clusters, which are in fact **one** cluster under two names — see `PORTING.md`).
+**That fallback is a smoke test, not proof of equivalence** — the scripts say so on every run.
 
 A real corpus needs clusters that exercise the paths the small fixtures don't:
 
 - large clusters (>2000 reads) so the `--max_seqs` batching path runs for real
+- clusters above the `--exact_instance_limit` of 50, since at or below it `isoncorrect_main`
+  forces `--exact` and the `previously_corrected_regions` filtering never runs
 - clusters with genuine exon variation, which is what the structural-overcorrection guard exists for
 - low-coverage clusters where interval support is thin
 - clusters with repeated anchors within a read, the only thing that triggers edlib in
   `find_most_supported_span`
 
-Populate it from isONclust output on real ONT cDNA data. Anything committed to git is a mistake;
-`.gitignore` here is deliberately aggressive.
+### Building one from simulated SIRV reads
+
+`make_sirv_corpus.py` splits a simulated fastq into per-cluster files by the source transcript in
+the read header (`@read_1_from_SIRV612`), so it needs no aligner and no clustering run — and unlike
+an isONclust pass it is reproducible from the fastq alone, which is what a verification corpus
+wants.
+
+```bash
+bench/make_sirv_corpus.py --fastq reads_10k_err7%.fastq --outdir $CORPUS/gene       --group gene
+bench/make_sirv_corpus.py --fastq reads_10k_err7%.fastq --outdir $CORPUS/transcript --group transcript
+```
+
+The two groupings stress different things, and both are worth having:
+
+| Grouping | On the 10k 7%-error SIRV set | What it exercises |
+| --- | --- | --- |
+| `gene` | 7 clusters, 713–2242 reads | isoforms of one gene in one cluster, so reads differ by whole exons; the largest crosses `--max_seqs`, so batching runs |
+| `transcript` | 68 clusters, 20–342 reads | one transcript each: deep coverage where every difference is sequencing error. 62 of the 68 are above the `--exact` limit |
+
+Output is isONclust's layout (`0.fastq`, `1.fastq`, … largest first, plus `clusters.tsv`), so
+`run_isoncorrect --fastq_folder` reads it directly.
+
+Write it **outside the repo** — anything committed to git is a mistake, and `.gitignore` here is
+deliberately aggressive.
+
+Real ONT cDNA through isONclust is still worth adding: simulated reads have uniform error and no
+chimeras, so they under-represent exactly the messy cases the guard exists for.
 
 ## Interpreting the profiler
 

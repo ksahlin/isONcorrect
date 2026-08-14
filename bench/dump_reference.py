@@ -288,6 +288,40 @@ def main() -> int:
     cs.create_multialignment_matrix = wrapped_mam
     ion.correct_seqs.create_multialignment_matrix = wrapped_mam
 
+    # Context windows and alternative references. get_contexts is called
+    # immediately before get_alternative_ref_contexts and its k_size is not
+    # passed on, so it is picked up here and paired by call order.
+    orig_contexts = ion.get_contexts
+    orig_alt = ion.get_alternative_ref_contexts
+    ctx_cases = {"rows": [], "n": 0, "k_size": None, "alts": 0}
+
+    def wrapped_contexts(alignment_matrix, k_size):
+        ctx_cases["k_size"] = k_size
+        return orig_contexts(alignment_matrix, k_size)
+
+    def wrapped_alt(alignment_matrix, contexts_per_pos, context_threshold, disable_numpy):
+        result = orig_alt(alignment_matrix, contexts_per_pos, context_threshold, disable_numpy)
+        case = ctx_cases["n"]
+        ctx_cases["n"] += 1
+        rows = ctx_cases["rows"]
+        ref_aln = "".join(alignment_matrix["ref"])
+        rows.append(f"C\t{case}\t{ctx_cases['k_size']}\t{context_threshold!r}\t{ref_aln}")
+        # Every row, consensus included: test_numba counts A over all of them.
+        for aln in alignment_matrix.values():
+            rows.append(f"R\t{case}\t{''.join(aln)}")
+        windows = ",".join(f"{a}:{b}" for a, b in contexts_per_pos)
+        rows.append(f"W\t{case}\t{windows}")
+        for col, alts in enumerate(result):
+            for variant, aln_seq, depth, threshold in alts:
+                rows.append(
+                    f"A\t{case}\t{col}\t{variant}\t{''.join(aln_seq)}\t{depth}\t{threshold!r}"
+                )
+                ctx_cases["alts"] += 1
+        return result
+
+    ion.get_contexts = wrapped_contexts
+    ion.get_alternative_ref_contexts = wrapped_alt
+
     ion.get_minimizers_and_positions = wrapped_minpos
     ion.get_minimizer_combinations_database = wrapped_db
     ion.solve_WIS = wrapped_wis
@@ -329,6 +363,14 @@ def main() -> int:
         fh.write("\n" if msa_cases["rows"] else "")
     BATCH["meta"].append(
         f"multialignment matrices={msa_cases['n']} rows={len(msa_cases['rows'])}"
+    )
+
+    with open(os.path.join(args.outdir, "context_cases.tsv"), "w") as fh:
+        fh.write("#C case k_size threshold ref_aln / R case row / W case start:stop,... / A case col variant context depth threshold\n")
+        fh.write("\n".join(ctx_cases["rows"]))
+        fh.write("\n" if ctx_cases["rows"] else "")
+    BATCH["meta"].append(
+        f"alternative-context calls={ctx_cases['n']} alternatives={ctx_cases['alts']}"
     )
 
     with open(os.path.join(args.outdir, "spans.tsv"), "w") as fh:
