@@ -39,7 +39,7 @@ Two binaries must keep their exact current names, flags, and defaults:
 | quality-value prefix sums (`get_qvs`) | done; `D` table cross-checked against the reference |
 | `find_most_supported_span` | done; 52 558 intervals byte-identical to the reference |
 | anchor filtering (`previously_corrected_regions`, `pos_group`) | implemented; inert under `--exact`, so verified only in that mode |
-| correction driver (`correct_read`) | next; the last piece before end-to-end output |
+| correction driver (`correct_read`) | done, see below |
 | consensus POA (`run_spoa`) | done via `spoars`; oracle green on 5 922 real intervals |
 | NW CIGAR (edlib `task="path"`) | done natively, no C++; 187 744 real alignments byte-identical |
 | `cigar_to_seq` | done; 186 330 real expansions byte-identical |
@@ -49,7 +49,10 @@ Two binaries must keep their exact current names, flags, and defaults:
 | frequency context matrix (`test_numba`) | done, no numpy; verified through the alternatives it feeds |
 | alternative references (`get_alternative_ref_contexts`) | done; 636 real alternatives replayed, order included |
 | the correction loop over `PFM` (`get_best_corrections`) | done; 5 922 of 5 922 real calls byte-identical |
-| structural-overcorrection guard | not started |
+| semi-global alignment (parasail `sg_trace_scan_16`) | done natively, no C++; tie-break measured, 200 real alignments byte-identical |
+| `fix_correction` | done; replayed against every recorded call |
+| `correct_read` (stitching + guard) | done; replayed end to end against every recorded read |
+| per-read driver (`isoncorrect_main`) | next; the last piece before end-to-end output |
 
 Argument names, defaults, validation order, stderr text and exit codes match the reference. The
 correction algorithm is not ported: both binaries validate their arguments and then exit non-zero
@@ -268,6 +271,73 @@ variable once at startup, so the call did nothing and every dump was randomly se
 re-execs itself, and repeat dumps are byte-identical. `profile_python.py` had the same line;
 timings do not depend on it, so it is simply gone. `equivalence.sh` and `benchmark.sh` export the
 variable in the shell before launching Python, which does work.
+
+### The structural-overcorrection guard
+
+Three oracles, because the three pieces fail independently:
+
+```bash
+bench/dump_reference.py --fastq cluster.fastq --outdir /tmp/d
+PARASAIL_CASES=/tmp/d/parasail_cases.tsv \
+  FIX_CORRECTION_CASES=/tmp/d/fix_correction_cases.tsv \
+  CORRECT_READ_CASES=/tmp/d/correct_read_cases.tsv \
+  CORRECTION_CASES=/tmp/d/correction_cases.tsv \
+  cargo test --manifest-path rust/Cargo.toml oracle -- --nocapture
+```
+
+Over the fixture plus 3 gene clusters, 3 transcript clusters and two parameter settings:
+
+| Stage | Cases, all byte-identical |
+| --- | --- |
+| parasail semi-global alignment | 2 408 (scores **and** CIGARs) |
+| `fix_correction` | 1 204 |
+| `correct_read`, stitching and guard end to end | 1 204 reads |
+
+`correct_read_cases.tsv` records intervals by **source** rather than by value — `c:<n>` for the
+n-th `get_best_corrections` call, `s:<literal>` for a region carried over in
+`previously_corrected_regions` — so the harness never has to reimplement any of the reference's
+logic to say what a corrected span should be.
+
+**parasail is reproduced natively, and both facts it rests on were measured.** First, what `sg`
+means: plain `sg` leaves gaps free at **both ends of both sequences**, confirmed by running the
+library — `sg("ACGTACGT", "TTTACGTACGTTTT")` returns `3D8=3D` scoring 32, exactly 8 matches at +4
+with nothing charged for the end gaps. Second, the tie-break. Affine costs plus free end gaps leave
+many alignments at the optimal score, so the same problem as edlib's CIGAR appears again — and the
+same method settles it. Sweeping all 96 combinations of four tie-break parameters:
+
+| | CIGARs matching |
+| --- | --- |
+| diagonal, insert, delete + **extend** over open | **200 / 200** |
+| diagonal, insert, delete + **open** over extend | 182 / 200 |
+| everything else | worse |
+
+So parasail prefers the diagonal, then a gap in `s2`, then a gap in `s1`, and on a tie inside a gap
+chain it **extends rather than opens**. The naive open-first choice scores 91%, which is exactly the
+kind of near-miss that end-to-end testing would have found late and localised badly.
+
+Two of the four parameters — which of the last row and last column to scan first, and whether to
+keep the first or last of several equally-good end cells — are **unpinned by the corpus**, and the
+sweep reports all four combinations as perfect. That is not laziness: the two sequences are a read
+and its own correction, so a full-length alignment always beats stopping early and the end-cell tie
+never arises. The values are recorded as arbitrary in `parasail.rs`, and the sweep is the tool to
+re-run if a corpus ever reaches one.
+
+`PARASAIL_SWEEP` doubles as a case cap (`PARASAIL_SWEEP=40`), because 96 configurations over
+1 400 bp reads is hours of quadratic DP and ties are what matter, not volume.
+
+**The port is now free of C++ entirely.** edlib, spoa and parasail were the three native libraries
+the reference depends on; the first and third are reimplemented natively and the second goes through
+`spoars`, which is pure Rust. No CMake, no vendored source, no toolchain beyond cargo.
+
+Two things about `fix_correction` worth knowing before touching it:
+
+- **an indel run mixes both directions.** `l` counts columns of either kind while both `o_segm` and
+  `c_segm` accumulate, so a deletion immediately followed by an insertion is *one* run — and when it
+  flushes, only one side survives. Reading it as two independent runs gives the wrong answer, and a
+  unit test pins the case.
+- **the fourth branch is dead.** `else: raise("Parsing alignment error...")` cannot be reached: the
+  `elif o == '-'` above already absorbs the gap-aligned-to-gap case. It would also raise a
+  `TypeError` rather than the intended error, since `raise` needs an exception, not a string.
 
 **The dump tool must apply the same argument massaging `main` does.** A mismatch at
 `--xmin 14 --k 9` turned out to be the dump binary, not the anchor logic: `main` clamps `--xmin` up
@@ -678,9 +748,6 @@ goldens must be re-recorded afterwards.
 
 ### Performance and structure
 
-- `correct_read` recomputes the parasail alignment after `fix_correction`
-  (`src/isoncorrect/isONcorrect.py:1312`) and discards the result — it feeds nothing. Removing it
-  is output-neutral, but confirm that against the equivalence harness before dropping it.
 - `run_isoncorrect` shells out to `python isONcorrect.py` per batch via `subprocess`, with four
   near-duplicate `check_call` branches for the flag combinations. In Rust this should be in-process
   work distribution, which also removes the per-batch interpreter startup.
@@ -689,6 +756,18 @@ goldens must be re-recorded afterwards.
   intervals, which matters because POA runs once per correction interval. `poa.rs` already isolates
   the surface (`consensus`), and `poa::oracle` is the acceptance test — 505 real intervals against
   the `spoa` binary. Deferred because `spoars` is already byte-identical on that corpus.
+- **The guard's semi-global alignment is `O(n*m)` in time and memory**, on the full read against its
+  own correction — roughly 2 M cells and 24 MB of scratch for a 1 400 bp read, once per read.
+  `parasail.rs` is a plain three-matrix Gotoh; parasail itself is striped SIMD. Two ways out, both
+  output-neutral and both checkable against `parasail_cases.tsv`: keep only two rows plus a
+  traceback-direction byte per cell, which drops the 24 MB to ~2 MB, or band the DP, since the two
+  sequences differ by very little. Deferred because it changes nothing observable and the oracle
+  makes it safe to do later. Profile first — the guard runs once per read, while spoa runs once per
+  correction interval.
+- **The reference realigns after `fix_correction` and discards the result**
+  (`isONcorrect.py:1312`). The port omits that second call. It is output-neutral by inspection — the
+  return value feeds nothing — and the `correct_read` oracle agrees on 1 204 reads, but deleting it
+  from the Python is a separate commit.
 - **The positioned vector allocates one `Vec<u8>` per slot**, i.e. `2 * len(consensus) + 1` small
   allocations per supporting segment per correction interval — the shape the reference's list of
   strings has. Nearly all of them are the one-byte `"-"`. A slot is either a single character or a

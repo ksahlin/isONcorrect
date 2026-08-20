@@ -362,6 +362,73 @@ def main() -> int:
 
     ion.get_best_corrections = wrapped_best
 
+    # The structural-overcorrection guard, in three pieces.
+    #
+    # parasail's alignment is the one part of this that is NOT uniquely
+    # defined --- affine gaps with free end gaps leave many optimal alignments,
+    # and parasail picks one --- so it gets its own oracle, exactly like edlib's
+    # task="path" CIGAR did.
+    orig_parasail = ion.parasail_alignment
+    parasail_cases = {"rows": []}
+
+    def wrapped_parasail(s1, s2, **kw):
+        s1_aln, s2_aln, cigar, tuples, score = orig_parasail(s1, s2, **kw)
+        parasail_cases["rows"].append(
+            "\t".join(
+                [
+                    s1,
+                    s2,
+                    cigar,
+                    str(score),
+                    str(kw.get("match_score", 2)),
+                    str(kw.get("mismatch_penalty", -2)),
+                    str(kw.get("opening_penalty", 24)),
+                    str(kw.get("gap_ext", 1)),
+                ]
+            )
+        )
+        return s1_aln, s2_aln, cigar, tuples, score
+
+    # fix_correction is a pure function of the two aligned strings, so recording
+    # both sides makes it replayable without parasail in the loop.
+    orig_fix = ion.fix_correction
+    fix_cases = {"rows": []}
+
+    def wrapped_fix(orig, corr):
+        adjusted = orig_fix(orig, corr)
+        fix_cases["rows"].append(f"{orig}\t{corr}\t{adjusted}")
+        return adjusted
+
+    # correct_read stitches the corrected intervals back into the read and then
+    # runs the guard. Intervals are recorded by *source* rather than by value:
+    # `c:<n>` means the n-th get_best_corrections call (whose output is in
+    # correction_cases.tsv), `s:<literal>` a region carried over from
+    # previously_corrected_regions. That keeps the harness from reimplementing
+    # any of the reference's logic.
+    orig_correct_read = ion.correct_read
+    read_cases = {"rows": [], "n": 0}
+
+    def wrapped_correct_read(seq, reads_, intervals, *rest):
+        case = read_cases["n"]
+        read_cases["n"] += 1
+        next_call = corr_cases["n"]
+        rows = read_cases["rows"]
+        rows.append(f"R\t{case}\t{seq}")
+        for idx, (start, stop, _weights, instance) in enumerate(intervals):
+            if isinstance(instance, str):
+                source = f"s:{instance}"
+            else:
+                source = f"c:{next_call}"
+                next_call += 1
+            rows.append(f"I\t{case}\t{idx}\t{start}\t{stop}\t{source}")
+        adjusted, others = orig_correct_read(seq, reads_, intervals, *rest)
+        rows.append(f"A\t{case}\t{adjusted}")
+        return adjusted, others
+
+    ion.parasail_alignment = wrapped_parasail
+    ion.fix_correction = wrapped_fix
+    ion.correct_read = wrapped_correct_read
+
     ion.get_minimizers_and_positions = wrapped_minpos
     ion.get_minimizer_combinations_database = wrapped_db
     ion.solve_WIS = wrapped_wis
@@ -418,6 +485,24 @@ def main() -> int:
         fh.write("\n".join(corr_cases["rows"]))
         fh.write("\n" if corr_cases["rows"] else "")
     BATCH["meta"].append(f"get_best_corrections calls={corr_cases['n']}")
+
+    with open(os.path.join(args.outdir, "parasail_cases.tsv"), "w") as fh:
+        fh.write("#s1\ts2\tcigar\tscore\tmatch\tmismatch\topen\text\n")
+        fh.write("\n".join(parasail_cases["rows"]))
+        fh.write("\n" if parasail_cases["rows"] else "")
+    BATCH["meta"].append(f"parasail calls={len(parasail_cases['rows'])}")
+
+    with open(os.path.join(args.outdir, "fix_correction_cases.tsv"), "w") as fh:
+        fh.write("#orig_aligned\tcorr_aligned\tadjusted\n")
+        fh.write("\n".join(fix_cases["rows"]))
+        fh.write("\n" if fix_cases["rows"] else "")
+    BATCH["meta"].append(f"fix_correction calls={len(fix_cases['rows'])}")
+
+    with open(os.path.join(args.outdir, "correct_read_cases.tsv"), "w") as fh:
+        fh.write("#R case seq / I case idx start stop c:<call>|s:<literal> / A case adjusted\n")
+        fh.write("\n".join(read_cases["rows"]))
+        fh.write("\n" if read_cases["rows"] else "")
+    BATCH["meta"].append(f"correct_read calls={read_cases['n']}")
 
     with open(os.path.join(args.outdir, "spans.tsv"), "w") as fh:
         fh.write("#r_id\tm1\tp1\tstart\tstop\tweight\tinstance\n")
