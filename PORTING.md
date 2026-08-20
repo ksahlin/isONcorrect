@@ -726,6 +726,12 @@ failure).
 
 ## Working agreements
 
+- **Never run `git commit`, `git push`, or any other history-changing git command. Ever.** Stage
+  nothing, commit nothing, rewrite nothing. Leave finished work in the working tree, say what
+  changed and why, and let a human commit it. This holds even when the work is complete, verified,
+  and obviously correct, and even when a note below says a change "needs its own commit" — those
+  notes describe how commits should be *organised* when a human makes them, not permission to make
+  one. If a commit seems warranted, propose the message and stop.
 - Don't touch `paper/` or `scripts/` — those reproduce
   published figures.
 - Don't "improve" the algorithm while porting. Behaviour changes and the port must not land in the
