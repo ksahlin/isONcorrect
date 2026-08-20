@@ -664,7 +664,15 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
     # print(len(FCM), len(FCM3))
     # assert len(FCM) == len(FCM3)
 
-    alternative_contexts = [set() for j in range(nr_columns)]
+    # A list, not a set: get_best_corrections iterates this and picks a winner
+    # with `break` on an exact match and a strict `<` on edit distance, so the
+    # iteration order decides the answer whenever two alternatives tie. Set
+    # iteration order over tuples of strings depends on PYTHONHASHSEED, which
+    # made corrected output vary between runs of the same command --- measured at
+    # 51 of 267 corrected regions on one real interval taking 2 to 5 different
+    # values across 24 hash seeds. eligible_contexts_hcomp below is a dict, so
+    # its insertion order is deterministic and highest-depth-first.
+    alternative_contexts = [[] for j in range(nr_columns)]
     for j in range(len(FCM)):
         # eligible_contexts2 = [ (variant, tuple([c for c in cn]) , dep) for (variant,cn), dep in FCM[j].items() if dep > max(context_threshold/10, 5)] # remove very low abundant noise before calculation
         eligible_contexts = FCM[j]
@@ -696,7 +704,7 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
         # elif len(eligible_contexts) == 1:
         #     # print(eligible_contexts)
         #     # print(eligible_contexts[0])
-        #     alternative_contexts[j].add(eligible_contexts[0])
+        #     alternative_contexts[j].append(eligible_contexts[0])
         else:
             eligible_contexts_hcomp = {}
             context_start, context_stop = contexts_per_pos[j][0], contexts_per_pos[j][1]
@@ -748,7 +756,7 @@ def get_alternative_ref_contexts(alignment_matrix, contexts_per_pos, context_thr
 
             if len(eligible_contexts_hcomp) > 0:
                 for seq_tmp_hcomp, (variant, depth, aln_seq, threshold, seq) in eligible_contexts_hcomp.items():
-                    alternative_contexts[j].add( (variant, aln_seq, depth, threshold) )
+                    alternative_contexts[j].append( (variant, aln_seq, depth, threshold) )
 
             # if len( {v for (v, ref_tmp, dep, thresh_) in alternative_contexts[j]}) > 0:
             #     print("MAAAAAAAAAADE IT", j, len(alignment_matrix), context_threshold, [(variant,depth,threshold, "".join([c for c in aln_seq if c != '-']))  for (variant, aln_seq, depth, threshold)  in alternative_contexts[j]] )

@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Decide whether a `get_best_corrections` mismatch is a port bug or the
-reference disagreeing with itself.
+"""Replay `get_best_corrections` cases under several hash seeds and report which
+records the reference itself does not agree on.
 
-`get_alternative_ref_contexts` returns a **`set`** per column, and
-`get_best_corrections` iterates it with a `break` on an exact context match and
-a strict `<` on edit distance. Set iteration order over tuples of strings
-depends on `PYTHONHASHSEED`, so on a column with two or more alternatives that
-tie, the reference's answer depends on the hash seed — there is no single
-correct output to port to.
+This exists because `get_alternative_ref_contexts` used to return a **`set`**
+per column, which `get_best_corrections` iterates with a `break` on an exact
+context match and a strict `<` on edit distance. Set iteration order over tuples
+of strings depends on `PYTHONHASHSEED`, so on a column where two alternatives
+tied, the reference's answer depended on the hash seed and there was no single
+correct output to port to. Measured: 51 of 267 corrected regions on one real
+interval took 2 to 5 different values across 24 seeds.
 
-This replays the recorded cases the Rust oracle flagged, once per seed, and
-reports for each whether the reference is stable and whether the port's answer
-is one the reference produces:
+That is fixed — the reference returns a list in insertion order — so this is now
+a **regression check**: every record should have exactly one reference answer,
+and a Rust-oracle mismatch should mean a port bug rather than a coin toss.
+
+Point it at whatever the Rust oracle flagged, if anything:
 
     bench/dump_reference.py --fastq cluster.fastq --outdir /tmp/d
     CORRECTION_CASES=/tmp/d/correction_cases.tsv \
@@ -103,6 +106,12 @@ def main() -> int:
     ap.add_argument("--mismatches", required=True, help="the Rust oracle's output")
     ap.add_argument("--seeds", type=int, default=8)
     args = ap.parse_args()
+
+    if not os.path.exists(args.mismatches):
+        # The normal case now that the reference's ordering is fixed: the oracle
+        # writes this file only when it has something to report.
+        print(f"{args.mismatches} does not exist --- the oracle reported no mismatches")
+        return 0
 
     port: dict[str, list[str]] = {}
     for line in open(args.mismatches):

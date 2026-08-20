@@ -30,17 +30,18 @@
 //! * both the raw context and its homopolymer-compressed form compete for that
 //!   minimum, and whichever wins becomes the key.
 //!
-//! # The reference's own set-iteration order
+//! # Why this returns a list
 //!
-//! `get_alternative_ref_contexts` returns a **`set`** per column, and
-//! `get_best_corrections` iterates it with a `break` on an exact match and a
-//! strict `<` on edit distance. Set iteration order over tuples of strings
-//! depends on `PYTHONHASHSEED`, so the reference is order-dependent here by
-//! construction. Measured: columns with two and three alternatives do occur
-//! (15 and 2 respectively on a 342-read SIRV cluster), but corrected output was
-//! byte-identical across three hash seeds — the alternatives have to *tie* on
-//! edit distance before the order can bite. This port emits insertion order,
-//! which is deterministic; see PORTING.md.
+//! The reference used to return a **`set`** per column, which
+//! `get_best_corrections` then iterated with a `break` on an exact match and a
+//! strict `<` on edit distance — so its answer depended on set iteration order,
+//! and for tuples of strings that depends on `PYTHONHASHSEED`. Same command,
+//! same data, different corrected reads.
+//!
+//! That was fixed in the reference to a list in insertion order, which is what
+//! this module has always produced. `alternative_ref_contexts` therefore has one
+//! defined answer now, and the oracle below compares it exactly rather than as a
+//! set. See PORTING.md.
 
 use indexmap::IndexMap;
 
@@ -494,11 +495,11 @@ mod oracle {
     /// A <case> <col> <variant> <context> <depth> <threshold>
     /// ```
     ///
-    /// Alternatives are compared as a **set**: the reference returns a Python
-    /// `set` per column, whose iteration order depends on `PYTHONHASHSEED`. The
-    /// port's order is its own choice, so ordering it here would test the
-    /// harness's dump order rather than the algorithm. Everything else — which
-    /// alternatives exist, their depths and thresholds — is compared exactly.
+    /// Alternatives are compared **in order**. They used to be compared as a
+    /// set, because the reference returned one and its iteration order depended
+    /// on `PYTHONHASHSEED`; now that the reference returns a list, the order is
+    /// part of the answer and is checked as such — which is the point of the
+    /// fix, since that order decides which alternative a read is corrected to.
     ///
     /// Thresholds are compared as `f64`, after both sides go through Rust's
     /// formatter, so Python's `repr` conventions do not leak into the check.
@@ -574,12 +575,8 @@ mod oracle {
             let got = alternative_ref_contexts(&fcm, &case.ref_aln, &got_windows, case.threshold);
 
             for (col, column) in got.iter().enumerate() {
-                let want: std::collections::BTreeSet<String> = case
-                    .alts
-                    .get(col)
-                    .map(|v| v.iter().cloned().collect())
-                    .unwrap_or_default();
-                let mine: std::collections::BTreeSet<String> = column
+                let want: Vec<String> = case.alts.get(col).cloned().unwrap_or_default();
+                let mine: Vec<String> = column
                     .iter()
                     .map(|a| {
                         format!(

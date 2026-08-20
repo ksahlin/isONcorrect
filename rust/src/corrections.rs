@@ -37,21 +37,18 @@
 //!   it. Nothing downstream depends on that today, but the reference's order is
 //!   free to preserve here.
 //!
-//! # The reference disagrees with itself here
+//! # The alternatives loop used to be non-deterministic
 //!
-//! The alternatives loop iterates a Python **`set`**, breaks on an exact match
-//! and compares with a strict `<`. Set order depends on `PYTHONHASHSEED`, so
-//! this function's output does too — measured, not deduced: on one interval of
-//! a gene-level SIRV cluster, **51 of 267 corrected regions took between two
-//! and five different values** across 24 hash seeds.
+//! It iterates the alternatives with a `break` on an exact match and a strict
+//! `<`, so **the order they arrive in decides the answer** whenever two of them
+//! tie on edit distance. The reference supplied them as a Python `set`, whose
+//! iteration order depends on `PYTHONHASHSEED` — measured, not deduced: on one
+//! interval of a gene-level SIRV cluster, 51 of 267 corrected regions took
+//! between two and five different values across 24 hash seeds.
 //!
-//! There is therefore no single reference answer to match on those regions.
-//! This port emits [`contexts::alternative_ref_contexts`]'s insertion order,
-//! which is deterministic, and every answer it produces has been checked to be
-//! one the reference also produces under some seed —
-//! `bench/check_seed_sensitivity.py` is what checks it. See PORTING.md, which
-//! records this as a reference defect awaiting a decision rather than something
-//! the port should imitate.
+//! The reference now returns a list in insertion order, so there is a single
+//! defined answer and this port reproduces it. `bench/check_seed_sensitivity.py`
+//! is the regression check; PORTING.md has the measurements.
 
 use indexmap::IndexMap;
 

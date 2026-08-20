@@ -47,8 +47,8 @@ Two binaries must keep their exact current names, flags, and defaults:
 | PFM (`get_best_corrections`) | done; covered by the `get_best_corrections` oracle below |
 | context windows (`get_contexts`) | done; 5 922 real vectors byte-identical |
 | frequency context matrix (`test_numba`) | done, no numpy; verified through the alternatives it feeds |
-| alternative references (`get_alternative_ref_contexts`) | done; 636 real alternatives replayed |
-| the correction loop over `PFM` (`get_best_corrections`) | done; 5 916 of 5 922 real calls byte-identical, 6 residual all proven to be reference non-determinism |
+| alternative references (`get_alternative_ref_contexts`) | done; 636 real alternatives replayed, order included |
+| the correction loop over `PFM` (`get_best_corrections`) | done; 5 922 of 5 922 real calls byte-identical |
 | structural-overcorrection guard | not started |
 
 Argument names, defaults, validation order, stderr text and exit codes match the reference. The
@@ -150,8 +150,8 @@ CORRECTION_CASES=/tmp/d/correction_cases.tsv \
   cargo test --manifest-path rust/Cargo.toml corrections::oracle -- --nocapture
 ```
 
-**5 916 of 5 922 recorded calls are byte-identical.** The remaining 6 are the subject of the next
-section, and none of them is a port bug.
+**All 5 922 recorded calls are byte-identical.** They were 5 916 of 5 922 until the reference's own
+non-determinism was fixed — see the next section.
 
 Because this oracle runs the whole of `get_best_corrections`, one run of it re-checks every stage
 underneath at once. Over the 12-run corpus (the fixture, 4 SIRV transcript clusters, 3 gene
@@ -164,7 +164,7 @@ clusters, and `--k 9 --w 10`, `--T 0.05`, `--max_seqs_to_spoa 5`, `--exact`):
 | `cigar_to_seq` expansions | 186 330 |
 | multialignment rows | 192 252 across 5 922 matrices |
 | context vectors | 5 922, carrying 636 alternatives |
-| `get_best_corrections` | 5 916 of 5 922 |
+| `get_best_corrections` | 5 922 |
 
 `context_cases.tsv` records every `get_alternative_ref_contexts` call: the matrix it was given, the
 context windows, and the alternatives it returned. The Rust side rebuilds the windows and the
@@ -189,27 +189,22 @@ The frequency context matrix has no oracle of its own — it is an intermediate 
 returns. It is verified transitively: a wrong count, a wrong eligibility cutoff or a wrong order
 changes which alternatives come out, and those are compared exactly.
 
-**Alternatives are compared as a set, deliberately.** `get_alternative_ref_contexts` returns a
-Python `set` per column, and `get_best_corrections` iterates it with a `break` on an exact match and
-a strict `<` on edit distance — so the reference's own behaviour depends on set iteration order,
-which for tuples of strings depends on `PYTHONHASHSEED`. Ordering the comparison would be testing
-the harness's dump order, not the algorithm.
+**Alternatives are compared in order**, and that only became meaningful once the reference was
+fixed. It used to return a Python `set` per column, whose iteration order depends on
+`PYTHONHASHSEED` — so there was no defined order to compare against, and the oracle compared the
+alternatives as a set. `get_alternative_ref_contexts` now returns a list in insertion order, the
+order is part of the answer, and the oracle checks it as such. That matters because the order is
+exactly what `get_best_corrections` uses to pick a winner. See *The reference used to disagree with
+itself* below.
 
-That is a **latent non-determinism in the reference**, and it is worth being precise about how far
-it goes. Measured: columns with two and three alternatives do occur (15 and 2 respectively on a
-342-read SIRV cluster), so the set is not always a singleton. But corrected output was
-byte-identical across `PYTHONHASHSEED` 0, 1 and 2 on that cluster — the alternatives have to *tie*
-on edit distance against the read's context before order can change the answer. The port emits
-insertion order, which is deterministic and, on everything measured, the same answer.
+### The reference used to disagree with itself, and that is now fixed
 
-### The reference disagrees with itself, and this is where it shows
+**`get_best_corrections` was not deterministic.** Same input, same flags, different corrected
+regions, depending on `PYTHONHASHSEED`. That was a defect in the reference, not a porting problem,
+and it accounted for every mismatch the correction oracle ever reported.
 
-**`get_best_corrections` is not deterministic.** Same input, same flags, different corrected
-regions, depending on `PYTHONHASHSEED`. This is a defect in the reference, not a porting problem,
-and it is the reason 6 of 5 922 recorded calls do not match.
-
-The mechanism is one line. `get_alternative_ref_contexts` returns a **`set`** per column
-(`isONcorrect.py:751`), and the correction loop iterates it:
+The mechanism was one line. `get_alternative_ref_contexts` returned a **`set`** per column, and the
+correction loop iterates it:
 
 ```python
 for (variant, ref_context, depth, thresh_) in alternative_refs[i]:
@@ -219,9 +214,9 @@ for (variant, ref_context, depth, thresh_) in alternative_refs[i]:
 ```
 
 Set iteration order over tuples of strings depends on the per-process hash seed, so when two
-alternatives tie on edit distance against a read's context, which one wins is decided by the seed.
+alternatives tied on edit distance against a read's context, which one won was decided by the seed.
 
-Measured on one interval of a gene-level SIRV cluster, across 24 hash seeds:
+Measured before the fix, on one interval of a gene-level SIRV cluster, across 24 hash seeds:
 
 | | |
 | --- | --- |
@@ -229,21 +224,27 @@ Measured on one interval of a gene-level SIRV cluster, across 24 hash seeds:
 | regions that are **identical under every seed** | 216 |
 | regions that take **2 to 5 different values** | 51 |
 
-Two things bound how bad this is, and both matter:
+**The fix** (its own commit, as *Working agreements* requires): `alternative_contexts` is a list in
+insertion order rather than a set. `eligible_contexts_hcomp` is a dict, so that order is
+deterministic and highest-depth-first — which is the order the *intent* of the code implies, and the
+order the port already produced.
 
-- **The read's own correction was never affected** in anything measured — only
-  `other_corrections`, the spans computed for the *other* reads supporting the interval. Across
-  5 922 calls, `curr_read` matched every time.
-- **The final `corrected_reads.fastq` was byte-identical across hash seeds** on every cluster
-  tried (4 seeds × the gene cluster with 51 unstable regions, 3 seeds × two more clusters). The
-  unstable values land in `previously_corrected_regions`, and on this corpus none of them was ever
-  reused. **That is an observation, not a guarantee** — `correct_read`'s
-  `if isinstance(instance, str): best_corr = instance` path feeds a stored region straight into the
-  output, so a propagation route exists.
+Two measurements make this a safe change rather than a hopeful one:
 
-**What the port does:** emits `alternative_ref_contexts`'s insertion order, which is deterministic.
-`bench/check_seed_sensitivity.py` replays each mismatching case under N seeds and classifies every
-record as *stable and agreeing*, *seed-dependent*, or *stable and wrong*:
+- **Every one of the 43 recorded golden outputs is byte-identical after the fix.** The goldens did
+  not need re-recording. Re-check with `bench/equivalence.sh record --golden /tmp/after` and diff.
+- **The final `corrected_reads.fastq` was already seed-independent** on every cluster tried, before
+  the fix (3–4 seeds each, including the gene cluster with 51 unstable regions). The unstable values
+  land in `previously_corrected_regions` and were never reused on this corpus. That was never a
+  guarantee, though — `correct_read`'s `if isinstance(instance, str): best_corr = instance` path
+  feeds a stored region straight into the output, so a propagation route existed. The fix closes it.
+
+Also worth recording, since it bounded the blast radius: **the read's own correction was never
+affected**, only `other_corrections`, the spans computed for the *other* reads supporting an
+interval. Across 5 922 calls, `curr_read` matched under every seed.
+
+`bench/check_seed_sensitivity.py` is the regression check. It replays recorded cases under N seeds
+and classifies every record as *stable and agreeing*, *seed-dependent*, or *stable and wrong*:
 
 ```bash
 CORRECTION_CASES=/tmp/d/correction_cases.tsv CORRECTION_MISMATCHES=/tmp/d/mismatches.tsv \
@@ -252,23 +253,14 @@ bench/check_seed_sensitivity.py --cases /tmp/d/correction_cases.tsv \
   --mismatches /tmp/d/mismatches.tsv --seeds 24
 ```
 
-Result over both affected clusters: **0 stable mismatches**, and every value the port produces is
-one the reference also produces under some seed. Note the seed count matters — at 6 seeds, 6
-records looked like the port had invented an answer; at 24 all of them turned out to be reference
-answers that the smaller sample had missed. Do not draw conclusions from a short run.
+**The seed count matters** — a lesson worth keeping. Before the fix, at 6 seeds, 6 records looked
+like the port had invented an answer; at 24 all of them turned out to be reference answers the
+smaller sample had missed. Do not draw conclusions from a short run.
 
-**This needs a decision, and it is not the port's to make.** Three options:
-
-1. **Fix the reference** — make the order deterministic (a list in insertion order, or sorted by
-   depth). Cheapest, removes a real defect from a published tool, and the port already matches this
-   behaviour. Changes reference output, so it needs its own commit and re-recorded goldens.
-2. **Reproduce CPython's set order in Rust** — SipHash-1-3 with the `PYTHONHASHSEED=0` key, tuple
-   hashing, and CPython's set probing. Exact, and permanently strange.
-3. **Exclude these regions from the equivalence contract**, as `--randstrobes` already is for the
-   same reason (see *Scope*): where the reference has no fixed behaviour, there is nothing to be
-   equivalent to.
-
-Recommended: (1). Until then the residual is 6 of 5 922, each individually accounted for.
+The two options not taken, for the record: reproducing CPython's set order in Rust (SipHash-1-3 with
+the `PYTHONHASHSEED=0` key, tuple hashing, CPython's set probing — exact, and permanently strange),
+or excluding these regions from the equivalence contract as `--randstrobes` is. Fixing the reference
+was cheapest, removed a real defect from a published tool, and cost nothing in output.
 
 **The harness's hash-seed pin was fake, which is how this stayed hidden.** `dump_reference.py` did
 `os.environ.setdefault("PYTHONHASHSEED", "0")` *inside* the running interpreter — CPython reads that
@@ -558,11 +550,10 @@ The default code path is deterministic and must be reproduced exactly.
   A Rust port cannot be bit-identical to an arbitrary Python run here. Either exclude it from the
   equivalence contract, or pin the Python reference with `PYTHONHASHSEED=0` and port SipHash-1-3
   with Python's exact string-hashing. Decide this explicitly; do not paper over it.
-- **The default path is not fully deterministic either**, which is newer knowledge than the line
-  above. `get_alternative_ref_contexts` returns a `set` and `get_best_corrections` iterates it, so
-  corrected regions depend on `PYTHONHASHSEED` — measured, 51 of 267 regions on one real interval.
-  See *The reference disagrees with itself* under *Stage-by-stage verification*. Everything else in
-  this section still holds; this is one specific leak, not a general one.
+- **The default path had one leak of its own, now closed.** `get_alternative_ref_contexts` returned
+  a `set` and `get_best_corrections` iterates it, so corrected regions depended on `PYTHONHASHSEED`
+  — measured, 51 of 267 regions on one real interval. It returns a list in insertion order now. See
+  *The reference used to disagree with itself* under *Stage-by-stage verification*.
 - Ties in minimizer selection go to the **last** position in the window.
 - `sorted(reads)` is a numeric sort on 1-based r_id.
 - Dict iteration in the reference is insertion-ordered (Python 3.7+). Where iteration order feeds
@@ -652,13 +643,13 @@ These are **defects in the Python implementation**, not porting notes. Fixing th
 or behaviour, so they must not ride along with the port — each needs its own commit, and the
 goldens must be re-recorded afterwards.
 
-- **`get_best_corrections` is non-deterministic on the default path.** `get_alternative_ref_contexts`
-  returns a `set`, and the correction loop's `break` and strict `<` make the answer depend on its
-  iteration order, hence on `PYTHONHASHSEED`. Measured: 51 of 267 corrected regions on one real
-  interval take 2–5 different values across 24 seeds. **This is the one open decision blocking a
-  clean equivalence claim** — see *The reference disagrees with itself* for the evidence, the three
-  options, and the recommendation (make the order deterministic, which is what the port already
-  does). `bench/check_seed_sensitivity.py` is the tool for re-measuring it.
+- ~~**`get_best_corrections` is non-deterministic on the default path.**~~ **Fixed.**
+  `get_alternative_ref_contexts` returned a `set`, and the correction loop's `break` and strict `<`
+  made the answer depend on its iteration order, hence on `PYTHONHASHSEED` — 51 of 267 corrected
+  regions on one real interval took 2–5 different values across 24 seeds. It now returns a list in
+  insertion order. All 43 golden outputs are byte-identical after the change, so this was a defect
+  removed at no cost in output. See *The reference used to disagree with itself*;
+  `bench/check_seed_sensitivity.py` is the regression check.
 - **`--disable_numpy` is broken and always has been.** `test_numba` (numpy path) builds `FCM`
   entries as 3-tuples `(variant, context, depth)`; `sep_function` (non-numpy path) builds a
   `defaultdict(int)` keyed by 2-tuples. The unpack at `src/isoncorrect/isONcorrect.py:693` then
