@@ -411,3 +411,119 @@ mod oracle {
         eprintln!("expanded all {n} recorded CIGARs identically");
     }
 }
+
+/// Could `block-aligner` replace this? A measurement.
+///
+/// After block-aligner took the guard from 65% of runtime to 0.9%, this became
+/// the largest single cost — 31.4% over ten real clusters, ~61 000 alignments
+/// per cluster. The obvious move is to reuse the same SIMD aligner here.
+///
+/// The catch is length. These are anchor-bounded segments against a consensus:
+/// **median 55 x 57 bp, max 89 x 94**, where block-aligner's minimum block size
+/// is 32. It won 99x on 1.4 kb guard alignments but only 8x on short ones, so
+/// the speedup here has to be measured, not assumed — and it pays per-call setup
+/// for `PaddedBytes` and `Block` across tens of thousands of calls.
+///
+/// Unit-cost edit distance is expressed as `match 0, mismatch -1, gap open -1,
+/// extend -1`, which makes gaps linear and the score the negated distance.
+///
+/// ```bash
+/// CIGAR_CASES=/tmp/d/cigar_cases.tsv \
+///   cargo test --release --manifest-path rust/Cargo.toml align::block_option -- --nocapture
+/// ```
+#[cfg(test)]
+mod block_option {
+    use block_aligner::{cigar::*, scan_block::*, scores::*};
+
+    fn cases() -> Option<Vec<(Vec<u8>, Vec<u8>, String, usize)>> {
+        let path = std::env::var("CIGAR_CASES").ok()?;
+        let data = std::fs::read_to_string(path).ok()?;
+        Some(
+            data.lines()
+                .filter(|l| !l.starts_with('#') && !l.is_empty())
+                .filter_map(|l| {
+                    let f: Vec<&str> = l.split('\t').collect();
+                    if f.len() < 4 {
+                        return None;
+                    }
+                    Some((
+                        f[0].as_bytes().to_vec(),
+                        f[1].as_bytes().to_vec(),
+                        f[3].to_string(),
+                        f[2].parse().ok()?,
+                    ))
+                })
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn speed_and_agreement_against_the_scalar_dp() {
+        let Some(cases) = cases() else { return };
+        if cases.is_empty() {
+            return;
+        }
+
+        // Exact edit-distance scoring: linear gaps of 1, mismatch 1.
+        let matrix = NucMatrix::new_simple(0, -1);
+        let gaps = Gaps {
+            open: -1,
+            extend: -1,
+        };
+        let max_block = 32;
+        let longest = cases
+            .iter()
+            .map(|(a, b, _, _)| a.len().max(b.len()))
+            .max()
+            .unwrap_or(0);
+
+        let t0 = std::time::Instant::now();
+        for (q, r, _, _) in &cases {
+            std::hint::black_box(super::global(q, r));
+        }
+        let scalar_ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        // Allocations reused across calls, as block-aligner's docs recommend;
+        // otherwise per-call setup dominates at these lengths.
+        let mut block = Block::<true, false>::new(longest, longest, max_block);
+        let t0 = std::time::Instant::now();
+        let mut same_cigar = 0usize;
+        let mut same_dist = 0usize;
+        let mut cigar_buf = Cigar::new(longest, longest);
+        for (q, r, want_cigar, want_ed) in &cases {
+            let pq = PaddedBytes::from_bytes::<NucMatrix>(q, max_block);
+            let pr = PaddedBytes::from_bytes::<NucMatrix>(r, max_block);
+            block.align(&pq, &pr, &matrix, gaps, max_block..=max_block, 0);
+            let res = block.res();
+            if res.query_idx != q.len() || res.reference_idx != r.len() {
+                continue;
+            }
+            if (-res.score) as usize == *want_ed {
+                same_dist += 1;
+            }
+            cigar_buf.clear(res.query_idx, res.reference_idx);
+            block
+                .trace()
+                .cigar_eq(&pq, &pr, res.query_idx, res.reference_idx, &mut cigar_buf);
+            if cigar_buf.to_string() == *want_cigar {
+                same_cigar += 1;
+            }
+        }
+        let block_ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        eprintln!(
+            "{} recorded segment-vs-consensus alignments (median ~55x57 bp)",
+            cases.len()
+        );
+        eprintln!("  scalar DP     {scalar_ms:>8.1} ms");
+        eprintln!(
+            "  block-aligner {block_ms:>8.1} ms   ({:.2}x)",
+            scalar_ms / block_ms.max(0.001)
+        );
+        eprintln!(
+            "  edit distance matches edlib on {same_dist}/{}, CIGAR on {same_cigar}/{}",
+            cases.len(),
+            cases.len()
+        );
+    }
+}

@@ -46,6 +46,7 @@ const SIMD_MIN_LEN: usize = 64;
 /// DP, which is byte-identical to the reference. `bench/equivalence.sh` runs in
 /// that mode, so the equivalence gate still covers the whole pipeline.
 fn align(seq: &[u8], corr: &[u8]) -> (Vec<u8>, Vec<u8>) {
+    let _t = crate::profile::scope("guard alignment");
     let use_exact = exact_guard() || seq.len() < SIMD_MIN_LEN || corr.len() < SIMD_MIN_LEN;
     let cigar = if use_exact {
         parasail::semiglobal(seq, corr, Scoring::GUARD).cigar
@@ -201,6 +202,7 @@ pub fn stitch(seq: &[u8], intervals: &[Interval]) -> Vec<u8> {
 pub fn correct_read(seq: &[u8], intervals: &[Interval]) -> Vec<u8> {
     let corr = stitch(seq, intervals);
     let (orig_aln, corr_aln) = align(seq, &corr);
+    let _t = crate::profile::scope("fix_correction");
     fix_correction(&orig_aln, &corr_aln)
 }
 

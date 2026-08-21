@@ -24,6 +24,7 @@ pub mod msa;
 pub mod params;
 pub mod parasail;
 pub mod poa;
+pub mod profile;
 pub mod quality;
 pub mod regions;
 pub mod support;

@@ -98,7 +98,9 @@ fn main() -> ExitCode {
     };
     eprintln!("Total cluster of {} reads.", reads.len());
 
+    let started = std::time::Instant::now();
     let (corrected, _stats) = driver::correct_cluster(&reads, &params);
+    let elapsed = started.elapsed();
 
     // The reference always writes into --outfolder; argparse defaults it, so a
     // missing one here means the caller passed an empty value.
@@ -123,6 +125,8 @@ fn main() -> ExitCode {
         eprintln!("error: could not flush {}: {e:?}", path.display());
         return ExitCode::FAILURE;
     }
+
+    isoncorrect::profile::report(elapsed);
 
     let (checked, differed) = isoncorrect::parasail::band_check_report();
     if checked > 0 {

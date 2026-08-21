@@ -109,18 +109,27 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
         // are corrected --- `find_most_supported_span` only ever looks up reads
         // that share an anchor, and anchors are built per batch.
         let seqs: Vec<Vec<u8>> = reads.iter().map(|r| r.seq.as_bytes().to_vec()).collect();
-        let qvs: Vec<Vec<f64>> = reads
-            .iter()
-            .map(|r| quality::prefix_sums(r.qual.as_bytes()))
-            .collect();
+        let qvs: Vec<Vec<f64>> = {
+            let _t = crate::profile::scope("get_qvs");
+            reads
+                .iter()
+                .map(|r| quality::prefix_sums(r.qual.as_bytes()))
+                .collect()
+        };
 
         // `(r_id, minimizers)` in r_id order: `anchors::build` iterates it in
         // order and that order reaches the payload.
         let mins: Vec<(usize, Vec<anchors::Minimizer>)> = batch
             .iter()
-            .map(|r| (r.r_id, minimizers::minimizers_lex(r.seq.as_bytes(), p.k, w)))
+            .map(|r| {
+                let _t = crate::profile::scope("get_minimizers_and_positions");
+                (r.r_id, minimizers::minimizers_lex(r.seq.as_bytes(), p.k, w))
+            })
             .collect();
-        let db = anchors::build(&mins, p.k, p.xmin, p.xmax, reads.len());
+        let db = {
+            let _t = crate::profile::scope("get_minimizer_combinations_database");
+            anchors::build(&mins, p.k, p.xmin, p.xmax, reads.len())
+        };
 
         // Per batch, exactly as the reference rebuilds it.
         let mut previously_corrected: HashMap<usize, Vec<Correction>> = HashMap::new();
@@ -156,7 +165,10 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
                     continue;
                 }
                 let mut found = Vec::new();
-                finder.find(r_id, m1, p1, &kept, &db, &mut found);
+                {
+                    let _t = crate::profile::scope("find_most_supported_span");
+                    finder.find(r_id, m1, p1, &kept, &db, &mut found);
+                }
                 all.extend(found.into_iter().map(|c| Pending {
                     start: c.start,
                     stop: c.stop,
@@ -194,7 +206,10 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
                     support: iv.support,
                 })
                 .collect();
-            let chosen = wis::solve(&intervals);
+            let chosen = {
+                let _t = crate::profile::scope("solve_WIS");
+                wis::solve(&intervals)
+            };
             if chosen.is_empty() {
                 stats.uncorrected += 1;
                 out.push(Corrected {
@@ -213,6 +228,7 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
                     Payload::Literal(s) => s.clone(),
                     Payload::Instance(instance) => {
                         stats.intervals += 1;
+                        let _t = crate::profile::scope("get_best_corrections");
                         let Some(c) = corrections::best_corrections(
                             instance,
                             &seqs,
@@ -245,6 +261,7 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
                 stats.uncorrected += 1;
                 seq.to_vec()
             } else {
+                let _t = crate::profile::scope("correct_read");
                 guard::correct_read(seq, &to_correct)
             };
             out.push(Corrected {

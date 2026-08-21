@@ -106,12 +106,16 @@ pub fn best_corrections(
         })
         .collect();
 
-    let consensus = poa::consensus(&poa::apply_spoa_cutoff(&segments, max_seqs_to_spoa))?;
+    let consensus = {
+        let _t = crate::profile::scope("run_spoa");
+        poa::consensus(&poa::apply_spoa_cutoff(&segments, max_seqs_to_spoa))?
+    };
     let consensus = consensus.into_bytes();
 
     // The partition: the consensus aligned to itself, then every segment.
     let mut aligned: Vec<(Vec<u8>, Vec<u8>)> = Vec::with_capacity(segments.len() + 1);
     aligned.push((consensus.clone(), consensus.clone()));
+    let _align_t = crate::profile::scope("align (NW cigar)");
     for seg in &segments {
         let cigar = align::global(seg, &consensus).cigar;
         let (read_aln, ref_aln) =
@@ -123,18 +127,29 @@ pub fn best_corrections(
         .iter()
         .map(|(q, t)| (q.as_slice(), t.as_slice()))
         .collect();
-    let matrix = msa::multialignment_matrix(&rows);
+    drop(_align_t);
+    let matrix = {
+        let _t = crate::profile::scope("create_multialignment_matrix");
+        msa::multialignment_matrix(&rows)
+    };
     let (ref_aln, supporting) = matrix.split_first().expect("the consensus row");
 
     let pfm = msa::pfm(supporting);
-    let windows = contexts::contexts(ref_aln, k_size / 2);
+    let windows = {
+        let _t = crate::profile::scope("get_contexts");
+        contexts::contexts(ref_aln, k_size / 2)
+    };
 
     // `max(3, weight * T)` --- the reference computes the same number twice,
     // as variant_threshold and context_threshold.
     let threshold = (weight as f64 * v_depth_ratio_threshold).max(3.0);
-    let fcm = contexts::frequency_context_matrix(&matrix, &windows, threshold);
-    let alternatives = contexts::alternative_ref_contexts(&fcm, ref_aln, &windows, threshold);
+    let alternatives = {
+        let _t = crate::profile::scope("get_alternative_ref_contexts");
+        let fcm = contexts::frequency_context_matrix(&matrix, &windows, threshold);
+        contexts::alternative_ref_contexts(&fcm, ref_aln, &windows, threshold)
+    };
 
+    let _loop_t = crate::profile::scope("correction loop over PFM");
     let mut corrected: Vec<Vec<u8>> = vec![Vec::with_capacity(ref_aln.len()); supporting.len()];
 
     for (i, &ref_nucl) in ref_aln.iter().enumerate() {
