@@ -16,6 +16,7 @@ pub mod contexts;
 pub mod corrections;
 pub mod driver;
 pub mod editdist;
+pub mod fanout;
 pub mod fastq;
 pub mod guard;
 pub mod minimizers;

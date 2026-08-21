@@ -53,11 +53,10 @@ Two binaries must keep their exact current names, flags, and defaults:
 | `fix_correction` | done; replayed against every recorded call |
 | `correct_read` (stitching + guard) | done; replayed end to end against every recorded read |
 | per-read driver (`isoncorrect_main`) | done; `corrected_reads.fastq` byte-identical on 1 204 reads |
-| `run_isoncorrect` (batch driver) | next; the last unported piece |
+| `run_isoncorrect` (batch driver) | done; in-process threads, all 29 equivalence cases green |
 
 Argument names, defaults, validation order, stderr text and exit codes match the reference.
-**`isONcorrect` now corrects for real** and writes byte-identical output; `run_isoncorrect` still
-validates its arguments and exits non-zero, since the batch driver is not ported yet.
+**Both binaries now do real work**, and `bench/equivalence.sh verify` is fully green.
 
 ### Stage-by-stage verification
 
@@ -342,16 +341,37 @@ Two things about `fix_correction` worth knowing before touching it:
   `elif o == '-'` above already absorbs the gap-aligned-to-gap case. It would also raise a
   `TypeError` rather than the intended error, since `raise` needs an exception, not a string.
 
+### The batch driver
+
+`run_isoncorrect` is orchestration rather than algorithm: enumerate the cluster fastqs, optionally
+split large ones, correct each, optionally join the pieces back. The per-cluster result is already
+byte-identical, so what is left to get right is *which reads end up in which file*.
+
+**Clusters are independent**, which is what makes the parallelism safe to reorder: each one reads a
+single fastq and writes a single output folder, with no shared state. The reference hands them to a
+`multiprocessing.Pool` that spawns `python isONcorrect.py` per cluster; the port runs the same work
+on an in-process thread pool, so one interpreter startup per cluster disappears.
+
+`bench/equivalence.sh` compares **every `corrected_reads.fastq` by relative path**, so the folder
+layout is as much part of the contract as the bytes. Four quirks decide it, and all four are
+reproduced rather than tidied up — see *Known bugs* for why each is a defect:
+
+- the size test in `split_cluster_in_batches` **latches** after the first cluster that fits;
+- `--split_wrt_batches` builds `<cl_id>_<i>.fastq`, and *unsplit* clusters are symlinked as
+  `<cl_id>_0.fastq`, so they too go through the join;
+- joining concatenates in `sorted(glob(...))` order, which is lexicographic — batch 10 before batch
+  2;
+- `--keep_old` compares `wc -l` of output against input, so a truncated output with a coincidentally
+  matching line count would be kept.
+
 **The dump tool must apply the same argument massaging `main` does.** A mismatch at
 `--xmin 14 --k 9` turned out to be the dump binary, not the anchor logic: `main` clamps `--xmin` up
 to `2*k` before anything runs, so the reference was building spans at 18 while the port used 14.
 Anything added to `main`'s preamble has to be mirrored in `dump_stages.rs` or the comparison lies.
 
-Current `bench/equivalence.sh verify`: **23 passed, 6 failed.** All 16 single-cluster cases are
-byte-identical — `default`, `paper`, `k11`, `k7`, `w15`, `w_eq_k_plus1`, `xspan_narrow`,
-`xspan_wide`, `T_low`, `T_high`, `batched`, `spoa_cap`, `spoa_cap_tiny`, `exact`, `exact_limit`,
-`dynamic_w` — plus the 7 unsupported-flag cases. **Every remaining failure is a `folder_*` case**,
-i.e. `run_isoncorrect`, which is the last unported piece.
+Current `bench/equivalence.sh verify`: **29 passed, 0 failed.** All 16 single-cluster cases, all 6
+`run_isoncorrect` folder cases — including `--split_wrt_batches`, `--split_mod`/`--residual` and
+`--t 1` — and the 7 unsupported-flag cases. That is the whole sweep, byte-identical.
 
 Verified equal to the reference by hand: `--version` on both binaries, exit codes for
 `--w 150` (1), `--split_mod 2 --residual 5` (1), `--version` (0), no-args (0), and the exact stderr
@@ -719,6 +739,37 @@ the shape of the numbers says exactly why:
   read against its own correction — ~24 MB per read at 1.4 kb — and `align.rs` allocates a table per
   segment alignment. Both are transient, but they set the peak.
 
+Now that `run_isoncorrect` works, the same question can be asked of a realistic workload: 68 SIRV
+transcript clusters (20–342 reads each, ~1.4 kb), `--t 8`, both implementations parallel:
+
+| | wall |
+| --- | --- |
+| Python `run_isoncorrect --t 8` | 83.7 s |
+| Rust `run_isoncorrect --t 8` | 84.1 s |
+
+**Dead even** — and all 68 `corrected_reads.fastq` byte-identical. That result is worth stating
+plainly, because it corrects the assumption that motivated porting the batch driver first: the
+reference is *already* parallel via `multiprocessing`, so removing the subprocess and interpreter
+startup buys back only what per-cluster inefficiency gives away. Per-cluster speed is the lever, and
+it multiplies through the whole pipeline.
+
+A profile of the port on one cluster says where that speed is (5 064 samples, 200-read gene
+cluster):
+
+| component | share |
+| --- | --- |
+| `find_most_supported_span` → **bounded edit distance** | **67%** |
+| the parasail guard | 19% |
+| `get_best_corrections` in total (spoa 2%, NW CIGAR 3%, MSA <1%) | ~10% |
+| everything else (minimizers, anchors, WIS, I/O) | <1% |
+
+And the reason the top entry is so large is worth knowing before optimising anything else:
+**`triple_accel` ships SIMD for `x86`/`x86_64` only** — 67 `target_arch` guards for those two, none
+for `aarch64` — so on Apple Silicon or any ARM host every call falls back to naive scalar DP. Edit
+distance is *uniquely defined*, so replacing it carries no tie-break risk at all, and
+`bench/gen_editdist_cases.py` already provides the oracle. That makes it both the largest and the
+safest of the remaining wins.
+
 None of this is new information about *what* to do; every item is already in *Deferred improvements*
 (band or linear-space the guard alignment, replace the scalar NW, drop the per-slot `Vec<u8>` in the
 MSA). What is new is that they are now measured rather than suspected, and that the equivalence
@@ -747,6 +798,20 @@ These are **defects in the Python implementation**, not porting notes. Fixing th
 or behaviour, so they must not ride along with the port — each needs its own commit, and the
 goldens must be re-recorded afterwards.
 
+Eight found so far. "Reproduced" means the port deliberately behaves the same way, because the
+behaviour reaches the output:
+
+| # | Defect | Affects | Port's stance |
+| --- | --- | --- | --- |
+| 1 | `get_alternative_ref_contexts` returned a `set`, so corrected regions depended on `PYTHONHASHSEED` | corrected output | **fixed in the reference** (271be1b); output unchanged on all 43 goldens |
+| 2 | `solve_WIS`'s `fill_p2` is off by one, so compatible intervals look incompatible | corrects fewer regions than intended | reproduced; conservative, but worth measuring before fixing |
+| 3 | `split_cluster_in_batches` latches its size test after the first small cluster | which files `--split_wrt_batches` creates | reproduced |
+| 4 | Joining batched clusters concatenates in lexicographic order (batch 10 before batch 2) | read order in the joined fastq | reproduced |
+| 5 | `--split_wrt_batches` raises `ValueError` on any non-numeric filename in the input folder | crashes on real isONclust folders | **diverged**: skipped instead |
+| 6 | `--disable_numpy` raises `ValueError` on any eligible context — the flag has never worked | the flag is unusable | flag removed from the Rust CLI |
+| 7 | `batch()` raises `UnboundLocalError` on an empty fastq | error path | **diverged**: writes an empty output |
+| 8 | `args.flnc` / `args.ccs` are read but never defined by argparse, so no-`--fastq` raises | error path | **diverged**: prints help, exits 0 |
+
 - ~~**`get_best_corrections` is non-deterministic on the default path.**~~ **Fixed.**
   `get_alternative_ref_contexts` returned a `set`, and the correction loop's `break` and strict `<`
   made the answer depend on its iteration order, hence on `PYTHONHASHSEED` — 51 of 267 corrected
@@ -754,6 +819,32 @@ goldens must be re-recorded afterwards.
   insertion order. All 43 golden outputs are byte-identical after the change, so this was a defect
   removed at no cost in output. See *The reference used to disagree with itself*;
   `bench/check_seed_sensitivity.py` is the regression check.
+- **`split_cluster_in_batches` latches its size test.** `smaller_than_max_seqs` is set once a
+  cluster fits in one batch and then never re-measured, so every *later* cluster is symlinked whole
+  instead of being split. It only works because isONclust numbers clusters largest-first, making
+  sizes descend in numeric-id order. A folder not in that order silently under-splits. The port
+  reproduces it (`fanout::split_clusters`); fixing it changes which files exist and therefore the
+  output layout.
+- **`--split_wrt_batches` crashes on any non-numeric filename.** The sort key
+  `int(x.split('.')[0])` is applied to *every* directory entry before the `.fastq` filter, so
+  isONclust's own `clusters.tsv` — or any stray file — raises `ValueError`. Confirmed by running it:
+
+  ```text
+  ValueError: invalid literal for int() with base 10: 'clusters'
+  ```
+
+  This matters practically: the reference cannot run `--split_wrt_batches` on a directory that has
+  anything but numerically-named fastqs in it. **Intentional divergence:** the port sorts such
+  entries last and skips them, so the same command succeeds. Error path only, and the alternative
+  would be reproducing a crash.
+- **Joining batched clusters concatenates in lexicographic order.**
+  `sorted(glob.glob(cl_id + '_*'))` puts batch 10 before batch 2, so a cluster split into ten or
+  more batches comes back with its reads in the order 0, 1, 10, 11, 2, … The file is still a valid
+  fastq and holds every read, but the order is neither the input's nor numeric. Reproduced, since it
+  is the bytes of the output file.
+- **`batch()` crashes on an empty fastq.** The loop variable `i` is used after the loop
+  (`if i/size != 0`), so a zero-read input raises `UnboundLocalError` rather than writing an empty
+  output. Error path only. The port writes an empty output file instead.
 - **`--disable_numpy` is broken and always has been.** `test_numba` (numpy path) builds `FCM`
   entries as 3-tuples `(variant, context, depth)`; `sep_function` (non-numpy path) builds a
   `defaultdict(int)` keyed by 2-tuples. The unpack at `src/isoncorrect/isONcorrect.py:693` then
@@ -782,9 +873,6 @@ goldens must be re-recorded afterwards.
 
 ### Performance and structure
 
-- `run_isoncorrect` shells out to `python isONcorrect.py` per batch via `subprocess`, with four
-  near-duplicate `check_call` branches for the flag combinations. In Rust this should be in-process
-  work distribution, which also removes the per-batch interpreter startup.
 - **Write a native linear-gap kSW POA + heaviest-bundle consensus**, replacing `spoars`. Removes the
   only low-usage dependency on the critical path and allows reusing graph allocations across
   intervals, which matters because POA runs once per correction interval. `poa.rs` already isolates
