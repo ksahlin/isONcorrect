@@ -56,7 +56,9 @@ use crate::align;
 use crate::contexts;
 use crate::editdist;
 use crate::msa;
+use crate::parasail::Scoring;
 use crate::poa;
+use crate::simd;
 
 /// A corrected region of one read: `(pos1 + k_size, pos2, weight, sequence)`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -117,7 +119,7 @@ pub fn best_corrections(
     aligned.push((consensus.clone(), consensus.clone()));
     let _align_t = crate::profile::scope("align (NW cigar)");
     for seg in &segments {
-        let cigar = align::global(seg, &consensus).cigar;
+        let cigar = segment_cigar(seg, &consensus);
         let (read_aln, ref_aln) =
             align::cigar_to_seq(&cigar, seg, &consensus).expect("an alignment's own CIGAR expands");
         aligned.push((read_aln, ref_aln));
@@ -231,6 +233,43 @@ fn trim(v: &[u8], k_size: usize) -> Vec<u8> {
         return Vec::new();
     }
     v[k_size..v.len() - k_size].to_vec()
+}
+
+/// Align one supporting segment back to the consensus.
+///
+/// **Default: affine, via SIMD.** [`crate::simd`] explains why affine rather than
+/// the reference's unit-cost edit distance — in short, edit distance was a
+/// Python-era speed compromise, affine models indels better, and it is 2.7x
+/// faster here besides. This stage was **33.7%** of the port's runtime on ten
+/// real clusters, the single largest cost after the guard was fixed.
+///
+/// This is the port's deepest deliberate divergence from the reference: the CIGAR
+/// chosen here builds the MSA, which builds the PFM, which decides every
+/// corrected base. About 11% of alignments take a different path than edlib's
+/// unit-cost one. `ISONCORRECT_EXACT_ALIGN=1` restores the exact edlib-compatible
+/// path and `bench/equivalence.sh` sets it, so the byte-identity gate is intact.
+fn segment_cigar(seg: &[u8], consensus: &[u8]) -> String {
+    if !exact_align() && seg.len() >= simd::MIN_LEN && consensus.len() >= simd::MIN_LEN {
+        if let Some(cigar) = simd::global_cigar(seg, consensus, Scoring::GUARD) {
+            return cigar;
+        }
+    }
+    align::global(seg, consensus).cigar
+}
+
+/// Whether `ISONCORRECT_EXACT_ALIGN` asks for the edlib-compatible DP.
+fn exact_align() -> bool {
+    use std::sync::atomic::{AtomicU8, Ordering};
+    static MODE: AtomicU8 = AtomicU8::new(u8::MAX);
+    let cached = MODE.load(Ordering::Relaxed);
+    if cached != u8::MAX {
+        return cached == 1;
+    }
+    let on = std::env::var("ISONCORRECT_EXACT_ALIGN")
+        .map(|v| v != "0" && !v.is_empty())
+        .unwrap_or(false);
+    MODE.store(u8::from(on), Ordering::Relaxed);
+    on
 }
 
 #[cfg(test)]

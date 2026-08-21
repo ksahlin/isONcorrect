@@ -26,16 +26,11 @@
 
 use crate::align;
 use crate::parasail::{self, Scoring};
-
-/// Shortest sequence the SIMD aligner is used on.
-///
-/// Below this the exact DP is already trivial and block-aligner's minimum block
-/// size (32) would dominate, so there is nothing to gain.
-const SIMD_MIN_LEN: usize = 64;
+use crate::simd;
 
 /// Align the read against its correction, for the guard.
 ///
-/// **Default: [`block_aligner`], which is SIMD and adaptively banded.** It finds
+/// **Default: [`simd::global_cigar`], which is SIMD and adaptively banded.** It finds
 /// an optimal-scoring alignment — verified on 1 400 of 1 400 recorded
 /// alignments, zero suboptimal — but reports a *different* equally-optimal path
 /// than parasail in most cases, which shifts the guard's answer on roughly 1% of
@@ -47,11 +42,11 @@ const SIMD_MIN_LEN: usize = 64;
 /// that mode, so the equivalence gate still covers the whole pipeline.
 fn align(seq: &[u8], corr: &[u8]) -> (Vec<u8>, Vec<u8>) {
     let _t = crate::profile::scope("guard alignment");
-    let use_exact = exact_guard() || seq.len() < SIMD_MIN_LEN || corr.len() < SIMD_MIN_LEN;
+    let use_exact = exact_guard() || seq.len() < simd::MIN_LEN || corr.len() < simd::MIN_LEN;
     let cigar = if use_exact {
         parasail::semiglobal(seq, corr, Scoring::GUARD).cigar
     } else {
-        match block_aligner(seq, corr, Scoring::GUARD) {
+        match simd::global_cigar(seq, corr, Scoring::GUARD) {
             Some(cigar) => cigar,
             // Falling back rather than failing: an alignment that does not span
             // both sequences cannot be expanded, and the exact DP always can.
@@ -74,44 +69,6 @@ fn exact_guard() -> bool {
         .unwrap_or(false);
     MODE.store(u8::from(on), Ordering::Relaxed);
     on
-}
-
-/// Affine global alignment via `block-aligner`, returning an extended CIGAR.
-///
-/// Gap penalties translate directly: block-aligner charges
-/// `open + extend * (n - 1)`, the same convention parasail uses, and its `I`/`D`
-/// mean the same thing (`I` consumes the query, `D` the reference). Returns
-/// `None` if the result does not span both sequences, which the caller treats as
-/// "use the exact DP instead".
-fn block_aligner(seq: &[u8], corr: &[u8], sc: Scoring) -> Option<String> {
-    use block_aligner::{cigar::*, scan_block::*, scores::*};
-
-    // The block grows adaptively up to this bound; larger costs nothing when the
-    // alignment stays near the diagonal, which for a read against its own
-    // correction it does.
-    let max_block = 256;
-    let matrix = NucMatrix::new_simple(
-        i8::try_from(sc.match_score).ok()?,
-        i8::try_from(sc.mismatch).ok()?,
-    );
-    let gaps = Gaps {
-        open: i8::try_from(-sc.open).ok()?,
-        extend: i8::try_from(-sc.ext).ok()?,
-    };
-
-    let q = PaddedBytes::from_bytes::<NucMatrix>(seq, max_block);
-    let r = PaddedBytes::from_bytes::<NucMatrix>(corr, max_block);
-    let mut block = Block::<true, false>::new(seq.len(), corr.len(), max_block);
-    block.align(&q, &r, &matrix, gaps, 32..=max_block, 0);
-    let res = block.res();
-    if res.query_idx != seq.len() || res.reference_idx != corr.len() {
-        return None;
-    }
-    let mut cigar = Cigar::new(res.query_idx, res.reference_idx);
-    block
-        .trace()
-        .cigar_eq(&q, &r, res.query_idx, res.reference_idx, &mut cigar);
-    Some(cigar.to_string())
 }
 
 /// Longest indel run, in alignment columns, that keeps its correction.

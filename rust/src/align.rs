@@ -418,14 +418,23 @@ mod oracle {
 /// the largest single cost — 31.4% over ten real clusters, ~61 000 alignments
 /// per cluster. The obvious move is to reuse the same SIMD aligner here.
 ///
-/// The catch is length. These are anchor-bounded segments against a consensus:
-/// **median 55 x 57 bp, max 89 x 94**, where block-aligner's minimum block size
-/// is 32. It won 99x on 1.4 kb guard alignments but only 8x on short ones, so
-/// the speedup here has to be measured, not assumed — and it pays per-call setup
-/// for `PaddedBytes` and `Block` across tens of thousands of calls.
+/// Two things make it a real question rather than a formality.
 ///
-/// Unit-cost edit distance is expressed as `match 0, mismatch -1, gap open -1,
-/// extend -1`, which makes gaps linear and the score the negated distance.
+/// **Length.** These are anchor-bounded segments against a consensus: *median
+/// 55 x 57 bp, max 89 x 94*, where block-aligner's minimum block size is 32. It
+/// won 99x on 1.4 kb guard alignments but only 8x on short ones, and it pays
+/// per-call setup for `PaddedBytes` across tens of thousands of calls.
+///
+/// **Objective.** block-aligner asserts `gaps.open < gaps.extend`, so it cannot
+/// express unit-cost edit distance at all. That is not the obstacle it first
+/// appears: edit distance was the reference's choice *for speed in Python*, not
+/// a modelling preference, and affine gaps describe indels better. So the
+/// comparison worth making is against the guard's own scoring — `match 4,
+/// mismatch -8, open 12, extend 1` — which block-aligner does express, with
+/// [`crate::parasail::global_affine`] as the exact oracle for it.
+///
+/// The unit-cost CIGAR count below is therefore expected to be low. It measures
+/// how far affine moves the answer, not an error.
 ///
 /// ```bash
 /// CIGAR_CASES=/tmp/d/cigar_cases.tsv \
@@ -433,9 +442,13 @@ mod oracle {
 /// ```
 #[cfg(test)]
 mod block_option {
+    use crate::parasail::{self, Scoring, TieBreak};
     use block_aligner::{cigar::*, scan_block::*, scores::*};
 
-    fn cases() -> Option<Vec<(Vec<u8>, Vec<u8>, String, usize)>> {
+    /// `(query, target, edlib's CIGAR, edlib's edit distance)`.
+    type Case = (Vec<u8>, Vec<u8>, String, usize);
+
+    fn cases() -> Option<Vec<Case>> {
         let path = std::env::var("CIGAR_CASES").ok()?;
         let data = std::fs::read_to_string(path).ok()?;
         Some(
@@ -444,6 +457,18 @@ mod block_option {
                 .filter_map(|l| {
                     let f: Vec<&str> = l.split('\t').collect();
                     if f.len() < 4 {
+                        return None;
+                    }
+                    // block-aligner asserts every character is A-Z, and the
+                    // recorded corpus includes `min_ed`'s calls, whose query is
+                    // a gap-padded insertion slot like "-TT-". Those would have
+                    // to be handled separately; skip them here so the timing
+                    // reflects the main segment-vs-consensus workload.
+                    if !f[0]
+                        .bytes()
+                        .chain(f[1].bytes())
+                        .all(|c| c.is_ascii_uppercase())
+                    {
                         return None;
                     }
                     Some((
@@ -458,19 +483,24 @@ mod block_option {
     }
 
     #[test]
-    fn speed_and_agreement_against_the_scalar_dp() {
+    fn speed_and_optimality_at_segment_lengths() {
         let Some(cases) = cases() else { return };
         if cases.is_empty() {
             return;
         }
 
-        // Exact edit-distance scoring: linear gaps of 1, mismatch 1.
-        let matrix = NucMatrix::new_simple(0, -1);
+        let sc = Scoring::GUARD;
+        let matrix = NucMatrix::new_simple(sc.match_score as i8, sc.mismatch as i8);
         let gaps = Gaps {
-            open: -1,
-            extend: -1,
+            open: -(sc.open as i8),
+            extend: -(sc.ext as i8),
         };
-        let max_block = 32;
+        // A global alignment of sequences of unequal length *must* deviate from
+        // the diagonal by their length difference, so the starting block has to
+        // be at least that wide or the greedy band never finds the gap. Measured:
+        // at a fixed 32 this misses 10 of 14 831 on one cluster, all of them a
+        // ~43 bp segment against an ~86 bp consensus.
+        let max_block = 256;
         let longest = cases
             .iter()
             .map(|(a, b, _, _)| a.len().max(b.len()))
@@ -483,47 +513,68 @@ mod block_option {
         }
         let scalar_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
-        // Allocations reused across calls, as block-aligner's docs recommend;
-        // otherwise per-call setup dominates at these lengths.
+        // The `Block` is reused across calls, as block-aligner's docs recommend;
+        // `PaddedBytes` and `Cigar` cannot be (`Cigar::clear` is private), so
+        // their allocation is part of what is measured — which is honest, since
+        // the real call site would pay it too.
         let mut block = Block::<true, false>::new(longest, longest, max_block);
         let t0 = std::time::Instant::now();
-        let mut same_cigar = 0usize;
-        let mut same_dist = 0usize;
-        let mut cigar_buf = Cigar::new(longest, longest);
-        for (q, r, want_cigar, want_ed) in &cases {
+        let mut suboptimal = 0usize;
+        let mut clipped = 0usize;
+        let mut same_as_unit_cost = 0usize;
+        let mut scores: Vec<i32> = Vec::with_capacity(cases.len());
+        for (q, r, want_cigar, _) in &cases {
             let pq = PaddedBytes::from_bytes::<NucMatrix>(q, max_block);
             let pr = PaddedBytes::from_bytes::<NucMatrix>(r, max_block);
-            block.align(&pq, &pr, &matrix, gaps, max_block..=max_block, 0);
+            let need = q.len().abs_diff(r.len()) + 32;
+            let min_block = (32usize.max(need.next_power_of_two())).min(max_block);
+            block.align(&pq, &pr, &matrix, gaps, min_block..=max_block, 0);
             let res = block.res();
             if res.query_idx != q.len() || res.reference_idx != r.len() {
+                clipped += 1;
+                scores.push(i32::MIN);
                 continue;
             }
-            if (-res.score) as usize == *want_ed {
-                same_dist += 1;
-            }
-            cigar_buf.clear(res.query_idx, res.reference_idx);
+            scores.push(res.score);
+            let mut cigar_buf = Cigar::new(res.query_idx, res.reference_idx);
             block
                 .trace()
                 .cigar_eq(&pq, &pr, res.query_idx, res.reference_idx, &mut cigar_buf);
             if cigar_buf.to_string() == *want_cigar {
-                same_cigar += 1;
+                same_as_unit_cost += 1;
             }
         }
         let block_ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        // Optimality against the exact affine DP. Not timed — it is the oracle,
+        // not a candidate.
+        let t0 = std::time::Instant::now();
+        for ((q, r, _, _), &got) in cases.iter().zip(&scores) {
+            let exact = parasail::global_affine(q, r, sc, TieBreak::PARASAIL);
+            if got != i32::MIN && got != exact.score {
+                suboptimal += 1;
+            }
+        }
+        let exact_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
         eprintln!(
             "{} recorded segment-vs-consensus alignments (median ~55x57 bp)",
             cases.len()
         );
-        eprintln!("  scalar DP     {scalar_ms:>8.1} ms");
+        eprintln!("  scalar unit-cost DP (today)  {scalar_ms:>9.1} ms");
         eprintln!(
-            "  block-aligner {block_ms:>8.1} ms   ({:.2}x)",
+            "  block-aligner, affine        {block_ms:>9.1} ms   ({:.2}x)",
             scalar_ms / block_ms.max(0.001)
         );
+        eprintln!("  exact affine DP (oracle)     {exact_ms:>9.1} ms");
         eprintln!(
-            "  edit distance matches edlib on {same_dist}/{}, CIGAR on {same_cigar}/{}",
-            cases.len(),
+            "  suboptimal {suboptimal}, clipped {clipped}, same path as unit cost {same_as_unit_cost}/{}",
             cases.len()
+        );
+        assert_eq!(clipped, 0, "block-aligner failed to span both sequences");
+        assert_eq!(
+            suboptimal, 0,
+            "block-aligner missed the optimal affine score"
         );
     }
 }

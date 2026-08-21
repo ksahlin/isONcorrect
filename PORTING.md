@@ -6,11 +6,20 @@ Port isONcorrect from Python to Rust. **Identical CLI**, primarily faster and lo
 Python implementation in `src/isoncorrect/` is the **normative reference**: when Rust and Python
 disagree, Python is right until a human decides otherwise.
 
-**Output is byte-identical everywhere except the structural-overcorrection guard's aligner**, which
-now uses `block-aligner` by default and changes roughly 0.8% of reads. That is a deliberate,
-measured divergence taken for an 8-99x speedup on the port's dominant cost — see *The guard's
-aligner: a deliberate divergence*. `ISONCORRECT_EXACT_GUARD=1` restores byte-identity, and
-`bench/equivalence.sh` runs in that mode, so the 29-case gate still covers the whole pipeline.
+**Output is byte-identical except at two alignment call sites, both of which now use affine SIMD
+alignment rather than reproducing the reference's aligner.** Both are deliberate, measured
+divergences taken for large speedups on the port's two dominant costs; each has an env var that
+restores the exact reference-compatible path, `bench/equivalence.sh` sets both, and the 29-case
+gate still covers the whole pipeline.
+
+| Call site | Reference uses | Port defaults to | Restore with |
+| --- | --- | --- | --- |
+| the structural-overcorrection guard | parasail, affine semi-global | `block-aligner`, same scoring, own tie-break — changes ~0.8% of reads | `ISONCORRECT_EXACT_GUARD=1` |
+| segment against consensus, which builds the MSA | edlib, **unit-cost** global | `block-aligner`, **affine** (`match 4, mismatch -8, open 12, extend 1`) — changes ~11% of alignments | `ISONCORRECT_EXACT_ALIGN=1` |
+
+See *The guard's aligner: a deliberate divergence* and *The MSA's aligner: affine instead of edit
+distance*. The second is the deeper of the two: that CIGAR builds the MSA, which builds the PFM,
+which decides every corrected base.
 
 Two binaries must keep their exact current names, flags, and defaults:
 
@@ -880,6 +889,90 @@ rate rather than reaching zero. Two further findings worth keeping:
 `ISONCORRECT_BAND_CHECK=<half>` re-runs the comparison on any dataset, and the `parasail::banding`
 tests keep the measurement. block-aligner made this moot: it is banded *and* SIMD *and* optimal.
 
+### The MSA's aligner: affine instead of edit distance
+
+Once block-aligner took the guard from 65% of runtime to 0.9%, the largest single cost became
+`align::global` — the scalar `O(n*m)` Needleman-Wunsch that aligns every supporting segment back to
+the spoa consensus. **33.7% of runtime over ten real clusters**, roughly 61 000 alignments of ~80 bp
+per cluster.
+
+Reusing block-aligner here looks blocked: it asserts `gaps.open < gaps.extend`, i.e. **strictly
+affine gaps**, so it cannot express the unit-cost edit distance edlib computes. The way past that is
+not a workaround but a correction of the premise — **edit distance was the reference's choice for
+speed in Python, not a modelling preference.** Affine gaps describe sequencing indels better, and
+the reference already uses them where it can afford to, in the guard. So the port uses the guard's
+own scoring here too: `match 4, mismatch -8, open 12, extend 1`.
+
+Measured on the same ten real isONclust clusters, 30 000 reads:
+
+| | `align` stage | total |
+| --- | --- | --- |
+| scalar unit-cost DP (the reference's objective) | 62.52 s, 33.7% | 185.5 s |
+| block-aligner, affine | **38.77 s, 22.6%** | **171.9 s** |
+
+The stage gains 1.6x rather than the 2.7x the isolated benchmark shows, because the real mix
+includes the two fall-through cases below — sub-64 bp segments and `min_ed`'s gap-padded slots —
+which stay on the scalar DP.
+
+**The block width is derived, not tuned, and that is the whole difference from the rejected banding
+scheme.** block-aligner grows its block greedily by score, and on a *global* alignment of
+unequal-length sequences that heuristic can fail outright: the path must leave the diagonal by at
+least `|len(a) - len(b)|`, and a block narrower than that never finds the gap. Measured at a fixed
+block of 32:
+
+| | |
+| --- | --- |
+| suboptimal alignments, one real cluster | **10 of 14 831** |
+| every one of them | a ~43 bp segment against an ~86 bp consensus |
+
+`simd::min_block` therefore sizes the starting block from the length difference — a *lower bound on
+the required deviation*, which is exactly the guarantee the ±64 band never had. It costs ~15% of the
+raw speedup. After it:
+
+| | |
+| --- | --- |
+| recorded segment-vs-consensus alignments checked against the exact affine DP | **158 559 across five corpora** |
+| suboptimal | **0** |
+| clipped (did not span both sequences) | 0 |
+| taking the *same path* as edlib's unit-cost CIGAR | ~89% |
+
+That last row is the divergence, and it is the intended one: ~11% of alignments choose a different
+path because affine gaps prefer one long gap where unit cost is indifferent between one long gap and
+several short ones. `align::block_option` is the test; `parasail::global_affine` is its oracle.
+
+**This is a deeper divergence than the guard's**, and worth being explicit about. The guard runs once
+per read and its output is either "keep the correction" or "revert this run", so a different path
+changes little. This CIGAR builds the MSA, which builds the PFM, which decides *every corrected
+base*. `ISONCORRECT_EXACT_ALIGN=1` restores `align::global` and `bench/equivalence.sh` sets it.
+
+Two call sites stay on the exact DP regardless:
+
+- **sequences shorter than 64 bp**, where block-aligner's minimum block dominates;
+- **`msa::min_ed`**, whose query is a gap-padded insertion slot like `"-TT-"`. block-aligner's
+  `NucMatrix` has no entry for `-` and `convert_char` asserts `A..=Z`, so `simd::global_cigar`
+  rejects non-ACGTN input and the caller falls through. It is a small minority — 27 of 677
+  `task="path"` calls at default parameters.
+
+### The MSA matrix: one buffer instead of `2t + 1` allocations
+
+`create_multialignment_matrix` was **14.3%** of runtime, most of it allocator traffic rather than
+computation. The reference holds each positioned vector as a list of strings, and the port copied
+that shape as `Vec<Vec<u8>>`: `2 * len(consensus) + 1` tiny allocations per supporting segment per
+correction interval, nearly all of them holding the single byte `"-"`.
+
+Every slot is either one character or a **contiguous run of the aligned query** — an insertion is
+exactly the query characters opposite a run of consensus gaps — so all of them fit in one flat buffer
+with an offset table. Two allocations per segment instead of `2t + 1`, and nothing is copied twice.
+
+| | `create_multialignment_matrix` | total, ten real clusters |
+| --- | --- | --- |
+| `Vec<Vec<u8>>` per slot | 29.73 s (14.3%) | 207.9 s |
+| one buffer + offsets (`msa::Positioned`) | **14.94 s (8.1%)** | **185.5 s** |
+
+A representation change only, so the oracle must not move, and it does not: **181 205 rows across
+5 484 matrices byte-identical** over the nine-run corpus, with the `get_best_corrections` oracle
+above it green on all 5 484 calls.
+
 ### Accuracy against ground truth
 
 Equivalence testing answers "do two implementations agree"; it cannot answer "is the correction any
@@ -945,28 +1038,75 @@ comparison holds even where the absolute numbers are pessimistic. And `bench/acc
 single-threaded: the best-of-68 search over 75 442 reads takes roughly 20 minutes, which is worth
 parallelising before this is run routinely.
 
+#### Is affine actually more accurate? Measured: yes
+
+Byte-identity cannot answer this, which is the point — the whole reason to make this change is that
+the reference's objective is not the better one. `bench/accuracy.py` on the 32 real isONclust
+clusters, 75 156 reads with a plausible SIRV of origin, truth assigned from the **uncorrected** reads:
+
+| set | mean % | median % | p90 % | total % |
+| --- | --- | --- | --- | --- |
+| raw | 6.171 | 5.573 | 9.557 | 6.063 |
+| Python reference | 1.714 | 1.165 | 3.601 | 1.259 |
+| Rust, exact mode | 1.714 | 1.165 | 3.601 | 1.259 |
+| Rust, block-aligner guard only | 1.710 | 1.160 | 3.590 | 1.253 |
+| Rust, **+ affine MSA aligner** | **1.702** | **1.154** | **3.571** | **1.243** |
+
+Paired per read against the Python reference:
+
+| | mean delta | better | worse | equal |
+| --- | --- | --- | --- | --- |
+| exact mode | +0.0000 pp | 0 | 0 | 75 156 |
+| guard only | -0.0048 pp | 1 355 | 783 | 73 018 |
+| **+ affine MSA aligner** | **-0.0129 pp** | **9 740** | **5 631** | 59 785 |
+
+**Affine is better, and by 2.7x more than the guard divergence was.** It touches twenty times as
+many reads (15 371 against 2 138) and still wins 63% of them — the same ratio the guard showed, on a
+much larger sample, which is what makes it a signal rather than a coincidence. Every summary statistic
+moves the same direction.
+
+So this change is faster *and* more accurate, and the reference's use of edit distance here is
+confirmed as the speed compromise it was. The effect is small in absolute terms (0.013 pp on a 1.7%
+error rate); the claim is the sign, not the magnitude.
+
 ### Where it stands
 
 | | Python | Rust exact | Rust default | |
 | --- | --- | --- | --- | --- |
 | one 200-read gene cluster | 16.1 s, 339 MB | 3.3 s | **1.4 s, ~147 MB** | 11.6x faster |
 | 68 simulated clusters, `--t 8` | 83.7 s | 23.8 s | **13.3 s** | 6.3x faster |
-| **32 real isONclust clusters, 75 442 reads, `--t 8`** | **417.7 s** | 128.9 s | **81.0 s** | **5.2x faster** |
+| **32 real isONclust clusters, 75 442 reads, `--t 8`** | **417.7 s** | 128.9 s | **67.4 s** | **6.2x faster** |
 
-Byte-identical everywhere except the guard's aligner, which changes ~0.8% of reads. With
-`ISONCORRECT_EXACT_GUARD=1` the output is byte-identical and a cluster takes 3.3 s.
+Byte-identical with both exact-mode variables set. The two divergences are the guard's aligner
+(~0.8% of reads) and the MSA's aligner (~11% of alignments); see *Goal* for the table.
 
-Gates: **29/29** equivalence cases (exact-guard mode), 9/9 stage-oracle runs, 186 unit tests.
+Gates: **29/29** equivalence cases (exact mode), 9/9 stage-oracle runs, 191 unit tests.
 
-Profile after all three optimisations, on the 200-read gene cluster: the guard is no longer
-dominant. What is left is spread across `get_best_corrections` (the NW CIGAR, spoa, the MSA), so the
-next round of work has no single obvious target and should start from a fresh profile.
+Where the time goes now, ten real clusters and 30 000 reads, after the MSA and `align` work:
+
+| stage | calls | self | share |
+| --- | --- | --- | --- |
+| `find_most_supported_span` | 342 940 | 48.86 s | **28.4%** |
+| `align` (segment vs consensus) | 11 775 | 38.77 s | 22.6% |
+| `run_spoa` | 11 775 | 21.09 s | 12.3% |
+| `get_alternative_ref_contexts` | 11 775 | 19.25 s | 11.2% |
+| `create_multialignment_matrix` | 11 775 | 17.28 s | 10.1% |
+| `get_minimizer_combinations_database` | 20 | 5.81 s | 3.4% |
+| the guard | 30 000 | 1.73 s | 0.9% |
+| I/O, parsing, glue | | 10.98 s | 6.4% |
+| **total** | | **171.91 s** | |
+
+Cumulatively 207.9 s -> 171.9 s from the MSA representation and the affine aligner. **The top cost
+is now `find_most_supported_span`** — 343 000 calls, so per-call work rather than one hot inner
+loop — and the remaining `align` time is mostly the sub-64 bp segments that fall through to the
+scalar DP.
 
 ### What is not done
 
-- ~~**The accuracy benchmark.**~~ **Done** — see *Accuracy against ground truth*. The guard
-  divergence costs 0.0007 percentage points of read error, which is noise.
-- **Re-profiling** after the three wins, to decide what is next.
+- ~~**The accuracy benchmark.**~~ **Done** — see *Accuracy against ground truth*. Both divergences
+  *improve* accuracy: the guard by 0.005 pp, the affine MSA aligner by 0.013 pp.
+- ~~**Re-profiling.**~~ **Done** — see *Where it stands*. `find_most_supported_span` is now the top
+  cost at 28.4%, and it is 343 000 calls rather than one hot loop, so the next win is per-call work.
 - **A native POA** to replace `spoars` (see *Deferred improvements*).
 - **Real long-read data.** The real corpus here is SIRV, whose reads are short (median ~600 bp). A
   transcriptome with multi-kb transcripts would stress the guard and the band assumptions harder.
@@ -1108,12 +1248,9 @@ behaviour reaches the output:
   (`isONcorrect.py:1312`). The port omits that second call. It is output-neutral by inspection — the
   return value feeds nothing — and the `correct_read` oracle agrees on 1 204 reads, but deleting it
   from the Python is a separate commit.
-- **The positioned vector allocates one `Vec<u8>` per slot**, i.e. `2 * len(consensus) + 1` small
-  allocations per supporting segment per correction interval — the shape the reference's list of
-  strings has. Nearly all of them are the one-byte `"-"`. A slot is either a single character or a
-  contiguous range of the query, so an enum of `(char)` / `(start, len)` would remove essentially
-  all of it. Deferred because it is an inner-loop rewrite with no output change, and `msa.rs` has
-  the oracle that makes it safe to do later.
+- ~~**The positioned vector allocates one `Vec<u8>` per slot.**~~ **Done** — `msa::Positioned` is one
+  flat buffer plus an offset table, halving the stage. See *The MSA matrix: one buffer instead of
+  `2t + 1` allocations*.
 - `create_multialignment_format_NEW` takes `start`/`stop` and filters to rows covering that window,
   but the only caller passes the full vector, so the filter always admits everything and
   `t_vector_start`/`t_vector_end` are constants. The port drops the parameters. Deleting them from

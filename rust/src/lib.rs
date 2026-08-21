@@ -27,6 +27,7 @@ pub mod poa;
 pub mod profile;
 pub mod quality;
 pub mod regions;
+pub mod simd;
 pub mod support;
 pub mod validate;
 pub mod wis;
