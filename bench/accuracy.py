@@ -18,12 +18,16 @@ Either way the read is then scored against its assigned transcript with edlib's
 infix mode (`HW`), which finds the read's best placement inside it, and the error
 rate is `edit_distance / len(read)`.
 
-**The assignment is made once, from the first read set, and reused for all of
-them.** That matters: if each implementation picked its own best-matching
-transcript, every one would be flattered by construction, and a correction that
-dragged a read toward the wrong isoform would score *better* rather than worse.
-Pass the uncorrected reads first so the assignment is independent of any
-correction.
+**The assignment is made once and reused for every set** — from the first set, or
+whichever `--assign-from` names. That matters: if each implementation picked its
+own best-matching transcript, every one would be flattered by construction, and
+a correction that dragged a read toward the wrong isoform would score *better*
+rather than worse. **Assign from the uncorrected reads**, which are neutral
+between implementations.
+
+`--pair-against` chooses the baseline for the per-read comparison separately, so
+truth can stay neutral while the comparison is made against the reference
+implementation.
 
 Corrected reads keep their input headers, so the same mapping works for every
 implementation's output.
@@ -93,6 +97,59 @@ def read_fastqs(path: str) -> dict[str, str]:
     return out
 
 
+# Set once per worker process by `_init`. macOS spawns rather than forks, so the
+# transcriptome is pickled to each worker once instead of being inherited.
+_TRANSCRIPTS: dict[str, str] = {}
+_NAMES: list[str] = []
+
+
+def _init(transcripts: dict[str, str]) -> None:
+    global _TRANSCRIPTS, _NAMES
+    _TRANSCRIPTS = transcripts
+    _NAMES = sorted(transcripts)
+
+
+def _score_chunk(chunk):
+    """One chunk of `(header, forced_truth_or_None, [seq_per_set])`.
+
+    Assignment and scoring happen in the same worker so each read's sequences
+    cross the process boundary exactly once. Returns
+    `(header, truth_name, assign_err, [error_per_set])`.
+    """
+    import edlib
+
+    out = []
+    for header, forced, seqs in chunk:
+        assign_seq = seqs[0]
+        if forced is not None:
+            truth_name, assign_err = forced, 0.0
+        elif not assign_seq:
+            continue
+        else:
+            best_name, best_ed = None, None
+            for tname in _NAMES:
+                ed = edlib.align(
+                    assign_seq, _TRANSCRIPTS[tname], mode="HW", task="distance"
+                )["editDistance"]
+                if best_ed is None or ed < best_ed:
+                    best_name, best_ed = tname, ed
+            if best_name is None:
+                continue
+            truth_name = best_name
+            assign_err = 100.0 * best_ed / len(assign_seq)
+
+        truth = _TRANSCRIPTS[truth_name]
+        errors = []
+        for seq in seqs:
+            if not seq:
+                errors.append(None)
+                continue
+            ed = edlib.align(seq, truth, mode="HW", task="distance")["editDistance"]
+            errors.append((ed, len(seq)))
+        out.append((header, truth_name, assign_err, errors))
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--transcriptome", required=True)
@@ -104,6 +161,30 @@ def main() -> int:
         help="a labelled read set; repeat for each implementation",
     )
     ap.add_argument("--max-reads", type=int, default=0, help="sample this many (0 = all)")
+    ap.add_argument(
+        "--assign-from",
+        default=None,
+        metavar="NAME",
+        help="read set used to pick each read's transcript (default: the first). "
+        "Should be the UNCORRECTED reads: assigning from a corrected set lets that "
+        "correction choose its own target, so a correction that pulled a read "
+        "toward the wrong isoform would score better rather than worse.",
+    )
+    ap.add_argument(
+        "--pair-against",
+        default=None,
+        metavar="NAME",
+        help="baseline for the per-read paired comparison (default: the first "
+        "set). Independent of --assign-from, so truth can stay neutral while the "
+        "comparison is made against whichever implementation is the reference.",
+    )
+    ap.add_argument(
+        "--threads",
+        type=int,
+        default=0,
+        help="worker processes (0 = all cores). The best-of-N assignment is the "
+        "cost here and is embarrassingly parallel per read.",
+    )
     ap.add_argument(
         "--max-assign-error",
         type=float,
@@ -136,69 +217,85 @@ def main() -> int:
     if args.max_reads:
         ordered = ordered[: args.max_reads]
 
-    # Assign each read a transcript, once, from the first set.
-    assign_from = next(iter(sets))
-    names_sorted = sorted(transcripts)
-    assigned: dict[str, str] = {}
-    assign_err: dict[str, float] = {}
+    # Assign each read a transcript, once, from the first set, and score every
+    # set against that assignment --- both in the same worker pass.
+    assign_from = args.assign_from or next(iter(sets))
+    if assign_from not in sets:
+        print(f"error: --assign-from {assign_from!r} is not one of {list(sets)}", file=sys.stderr)
+        return 1
+    set_names = list(sets)
+    workers = args.threads or (os.cpu_count() or 1)
+
+    work = []
     from_header = 0
     for header in ordered:
         m = HEADER_TRANSCRIPT.search(header)
-        if m and m.group(1) in transcripts:
-            assigned[header] = m.group(1)
-            assign_err[header] = 0.0
+        forced = m.group(1) if m and m.group(1) in transcripts else None
+        if forced is not None:
             from_header += 1
-            continue
-        seq = sets[assign_from][header]
-        if not seq:
-            continue
-        best_name, best_ed = None, None
-        for tname in names_sorted:
-            ed = edlib.align(seq, transcripts[tname], mode="HW", task="distance")[
-                "editDistance"
-            ]
-            if best_ed is None or ed < best_ed:
-                best_name, best_ed = tname, ed
-        if best_name is not None:
-            assigned[header] = best_name
-            assign_err[header] = 100.0 * best_ed / len(seq)
+        # The assignment set must come first; `_score_chunk` reads seqs[0].
+        seqs = [sets[assign_from][header]] + [
+            sets[n][header] for n in set_names if n != assign_from
+        ]
+        work.append((header, forced, seqs))
+    order = [assign_from] + [n for n in set_names if n != assign_from]
+
+    chunk = 200
+    chunks = [work[i : i + chunk] for i in range(0, len(work), chunk)]
+    print(f"scoring on {workers} worker(s), {len(chunks)} chunks of <= {chunk}")
+
+    records = []
+    if workers > 1 and len(chunks) > 1:
+        import multiprocessing as mp
+
+        with mp.Pool(workers, initializer=_init, initargs=(transcripts,)) as pool:
+            done = 0
+            for got in pool.imap_unordered(_score_chunk, chunks):
+                records.extend(got)
+                done += 1
+                if done % 50 == 0 or done == len(chunks):
+                    print(f"\r  {done}/{len(chunks)} chunks", end="", flush=True)
+        print()
+    else:
+        _init(transcripts)
+        for c in chunks:
+            records.extend(_score_chunk(c))
 
     if from_header:
         print(f"truth from read headers for {from_header} reads")
-    searched = len(assigned) - from_header
+    searched = len(records) - from_header
     if searched:
-        errs = sorted(assign_err[h] for h in assigned if assign_err[h] > 0)
+        errs = sorted(r[2] for r in records if r[2] > 0)
         med = errs[len(errs) // 2] if errs else 0.0
         print(
             f"truth by best-of-{len(transcripts)} alignment for {searched} reads "
             f"(assigned from {assign_from!r}, median best-match error {med:.2f}%)"
         )
     if args.max_assign_error:
-        before = len(assigned)
-        assigned = {
-            h: t for h, t in assigned.items() if assign_err[h] <= args.max_assign_error
-        }
+        before = len(records)
+        records = [r for r in records if r[2] <= args.max_assign_error]
         print(
-            f"dropped {before - len(assigned)} reads whose best match exceeded "
+            f"dropped {before - len(records)} reads whose best match exceeded "
             f"{args.max_assign_error}% --- no plausible SIRV of origin"
         )
-    ordered = [h for h in ordered if h in assigned]
-    print(f"scoring {len(ordered)} reads present in every set\n")
+    print(f"scored {len(records)} reads present in every set\n")
 
-    results: dict[str, list[float]] = {name: [] for name in sets}
+    # Keyed by header, not appended positionally: `imap_unordered` returns chunks
+    # in completion order, and a set missing a read would shift its list against
+    # the others. The paired comparison below depends on this being right.
+    per_read: dict[str, dict[str, float]] = {name: {} for name in sets}
     totals: dict[str, tuple[int, int]] = {name: (0, 0) for name in sets}
-    for header in ordered:
-        truth = transcripts[assigned[header]]
-        for name, reads in sets.items():
-            seq = reads[header]
-            if not seq:
+    for header, _truth, _aerr, errors in records:
+        for name, cell in zip(order, errors):
+            if cell is None:
                 continue
-            # "HW" = infix: the read is aligned in full, the transcript's ends are
-            # free. That is the right model for a read drawn from a transcript.
-            ed = edlib.align(seq, truth, mode="HW", task="distance")["editDistance"]
-            results[name].append(100.0 * ed / len(seq))
+            ed, length = cell
+            per_read[name][header] = 100.0 * ed / length
             errs, bases = totals[name]
-            totals[name] = (errs + ed, bases + len(seq))
+            totals[name] = (errs + ed, bases + length)
+    results: dict[str, list[float]] = {
+        name: [per_read[name][h] for h in sorted(per_read[name])] for name in sets
+    }
 
     width = max(len(n) for n in sets)
     print(f"{'set':<{width}}  {'mean%':>7} {'median%':>8} {'p90%':>7} "
@@ -222,10 +319,14 @@ def main() -> int:
     # when two implementations disagree on only a fraction of reads.
     names = list(sets)
     if len(names) > 1:
-        base = names[0]
+        base = args.pair_against or names[0]
+        if base not in sets:
+            print(f"error: --pair-against {base!r} is not one of {names}", file=sys.stderr)
+            return 1
         print(f"\npaired against {base!r}, per read:")
-        for name in names[1:]:
-            deltas = [b - a for a, b in zip(results[base], results[name])]
+        for name in [n for n in names if n != base]:
+            shared = sorted(set(per_read[base]) & set(per_read[name]))
+            deltas = [per_read[name][h] - per_read[base][h] for h in shared]
             better = sum(1 for d in deltas if d < 0)
             worse = sum(1 for d in deltas if d > 0)
             print(
