@@ -874,6 +874,50 @@ rate rather than reaching zero. Two further findings worth keeping:
 `ISONCORRECT_BAND_CHECK=<half>` re-runs the comparison on any dataset, and the `parasail::banding`
 tests keep the measurement. block-aligner made this moot: it is banded *and* SIMD *and* optimal.
 
+### Accuracy against ground truth
+
+Equivalence testing answers "do two implementations agree"; it cannot answer "is the correction any
+good". Once the guard's aligner diverges deliberately, the second question is the one that matters.
+`bench/accuracy.py` measures it: the simulated SIRV reads carry their source transcript in the
+header, so each read is aligned against *its own* transcript with edlib's infix mode and error rate
+is `edit_distance / len(read)`. Corrected reads keep their headers, so the same mapping scores every
+implementation, and only reads present in every set are scored — a paired comparison.
+
+```bash
+bench/accuracy.py --transcriptome sirv_transcriptome.fasta \
+  --reads python=/tmp/fold_py --reads rust-exact=/tmp/fold_ex --reads rust-block=/tmp/fold_ba
+```
+
+68 simulated transcript clusters, 10 000 reads:
+
+| set | mean % | median % | p90 % | total % | perfect reads |
+| --- | --- | --- | --- | --- | --- |
+| uncorrected | 6.862 | 6.854 | 7.745 | 6.866 | 0 |
+| Python reference | 0.634 | 0.510 | 1.232 | 0.532 | 141 |
+| Rust, `ISONCORRECT_EXACT_GUARD=1` | 0.634 | 0.510 | 1.232 | 0.532 | 141 |
+| Rust, block-aligner (default) | 0.635 | 0.511 | 1.232 | 0.532 | 141 |
+
+Paired per read against the Python reference:
+
+| | mean delta | better | worse | equal |
+| --- | --- | --- | --- | --- |
+| Rust exact-guard | +0.0000 pp | 0 | 0 | 10 000 |
+| Rust block-aligner | **+0.0007 pp** | 30 | **41** | 9 929 |
+
+Two things this settles:
+
+- **The exact path is confirmed byte-identical through a second, independent lens** — identical error
+  rate on all 10 000 reads, measured against ground truth rather than against the reference's bytes.
+- **The guard divergence has no measurable accuracy cost.** Of the 71 reads that differ, 30 improve
+  and 41 worsen, for a mean penalty of 0.0007 percentage points against a correction effect of 6.23.
+  That is four orders of magnitude below the signal, and 71 samples cannot distinguish 41-vs-30 from
+  a coin toss. All three implementations cut error 6.87% -> 0.53% and improve **every** read.
+
+**The caveat, since it is an inference and not a measurement:** this uses *simulated* reads, because
+that is where per-read ground truth exists. The real isONclust corpus has no truth to score against,
+so the 0.78% divergence measured there is assumed to be equally harmless. Given both aligners
+provably find optimal scores, that seems safe, but it is reasoning rather than data.
+
 ### Where it stands
 
 | | Python | Rust (default) | |
@@ -892,12 +936,8 @@ next round of work has no single obvious target and should start from a fresh pr
 
 ### What is not done
 
-- **The accuracy benchmark.** The guard divergence is justified on the grounds that both aligners are
-  optimal, but that has not been checked against ground truth. `sirv_transcriptome.fasta` plus the
-  real isONclust corpus is the material: align corrected reads back to the source transcripts and
-  compare per-read error rates for Python, Rust exact-guard, and Rust default. Agreed to do this
-  *after* landing block-aligner, and it is the measurement that would confirm or overturn the
-  divergence.
+- ~~**The accuracy benchmark.**~~ **Done** — see *Accuracy against ground truth*. The guard
+  divergence costs 0.0007 percentage points of read error, which is noise.
 - **Re-profiling** after the three wins, to decide what is next.
 - **A native POA** to replace `spoars` (see *Deferred improvements*).
 - **Real long-read data.** The real corpus here is SIRV, whose reads are short (median ~600 bp). A
@@ -1019,12 +1059,6 @@ behaviour reaches the output:
 
 ### Performance and structure
 
-- **Benchmark corrected-read accuracy against ground truth.** The guard's aligner divergence rests on
-  both aligners being optimal, not on measured accuracy. `sirv_transcriptome.fasta` plus the real
-  isONclust corpus makes this checkable: align corrected reads back to the source transcripts and
-  compare per-read error rates across Python, Rust `ISONCORRECT_EXACT_GUARD=1`, and Rust default. If
-  accuracy is equal the divergence is free; if it is worse, revert the default. **This is the
-  highest-value outstanding measurement.**
 
 
 - **Write a native linear-gap kSW POA + heaviest-bundle consensus**, replacing `spoars`. Removes the
