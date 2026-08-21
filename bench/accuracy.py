@@ -7,11 +7,23 @@ reference — the guard's aligner reports a different equally-optimal alignment,
 changing ~0.8% of reads — that second question is the one that matters. This
 measures it.
 
-The simulated SIRV reads carry their source transcript in the header
-(`@read_1_from_SIRV612`), so no alignment search is needed to know the truth:
-each read is aligned against *its own* source transcript with edlib's infix mode
-(`HW`), which finds the read's best placement within the transcript. Error rate
-is then `edit_distance / len(read)`.
+Truth comes from one of two places:
+
+* **simulated reads** carry their source transcript in the header
+  (`@read_1_from_SIRV612`), so no search is needed;
+* **real reads** are assigned by aligning against every transcript and taking
+  the best match, ties broken by transcript name so the choice is deterministic.
+
+Either way the read is then scored against its assigned transcript with edlib's
+infix mode (`HW`), which finds the read's best placement inside it, and the error
+rate is `edit_distance / len(read)`.
+
+**The assignment is made once, from the first read set, and reused for all of
+them.** That matters: if each implementation picked its own best-matching
+transcript, every one would be flattered by construction, and a correction that
+dragged a read toward the wrong isoform would score *better* rather than worse.
+Pass the uncorrected reads first so the assignment is independent of any
+correction.
 
 Corrected reads keep their input headers, so the same mapping works for every
 implementation's output.
@@ -92,6 +104,15 @@ def main() -> int:
         help="a labelled read set; repeat for each implementation",
     )
     ap.add_argument("--max-reads", type=int, default=0, help="sample this many (0 = all)")
+    ap.add_argument(
+        "--max-assign-error",
+        type=float,
+        default=0.0,
+        help="drop reads whose best transcript match is worse than this percent "
+        "(0 = keep all). Real data contains chimeras and contamination with no "
+        "true SIRV of origin; the filter uses the *assignment* set, so it "
+        "removes the same reads from every implementation.",
+    )
     args = ap.parse_args()
 
     try:
@@ -109,19 +130,65 @@ def main() -> int:
         sets[name] = read_fastqs(path)
         print(f"  {name:<14} {len(sets[name]):>7} reads  ({path})")
 
-    # Paired comparison: only reads every set has, and whose truth we know.
+    # Paired comparison: only reads every set has.
     common = set.intersection(*(set(v) for v in sets.values()))
-    common = {h for h in common if HEADER_TRANSCRIPT.search(h)}
-    common = {h for h in common if HEADER_TRANSCRIPT.search(h).group(1) in transcripts}
     ordered = sorted(common)
     if args.max_reads:
         ordered = ordered[: args.max_reads]
+
+    # Assign each read a transcript, once, from the first set.
+    assign_from = next(iter(sets))
+    names_sorted = sorted(transcripts)
+    assigned: dict[str, str] = {}
+    assign_err: dict[str, float] = {}
+    from_header = 0
+    for header in ordered:
+        m = HEADER_TRANSCRIPT.search(header)
+        if m and m.group(1) in transcripts:
+            assigned[header] = m.group(1)
+            assign_err[header] = 0.0
+            from_header += 1
+            continue
+        seq = sets[assign_from][header]
+        if not seq:
+            continue
+        best_name, best_ed = None, None
+        for tname in names_sorted:
+            ed = edlib.align(seq, transcripts[tname], mode="HW", task="distance")[
+                "editDistance"
+            ]
+            if best_ed is None or ed < best_ed:
+                best_name, best_ed = tname, ed
+        if best_name is not None:
+            assigned[header] = best_name
+            assign_err[header] = 100.0 * best_ed / len(seq)
+
+    if from_header:
+        print(f"truth from read headers for {from_header} reads")
+    searched = len(assigned) - from_header
+    if searched:
+        errs = sorted(assign_err[h] for h in assigned if assign_err[h] > 0)
+        med = errs[len(errs) // 2] if errs else 0.0
+        print(
+            f"truth by best-of-{len(transcripts)} alignment for {searched} reads "
+            f"(assigned from {assign_from!r}, median best-match error {med:.2f}%)"
+        )
+    if args.max_assign_error:
+        before = len(assigned)
+        assigned = {
+            h: t for h, t in assigned.items() if assign_err[h] <= args.max_assign_error
+        }
+        print(
+            f"dropped {before - len(assigned)} reads whose best match exceeded "
+            f"{args.max_assign_error}% --- no plausible SIRV of origin"
+        )
+    ordered = [h for h in ordered if h in assigned]
     print(f"scoring {len(ordered)} reads present in every set\n")
 
     results: dict[str, list[float]] = {name: [] for name in sets}
     totals: dict[str, tuple[int, int]] = {name: (0, 0) for name in sets}
     for header in ordered:
-        truth = transcripts[HEADER_TRANSCRIPT.search(header).group(1)]
+        truth = transcripts[assigned[header]]
         for name, reads in sets.items():
             seq = reads[header]
             if not seq:

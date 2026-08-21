@@ -832,7 +832,13 @@ End to end against the Python reference:
 | --- | --- | --- |
 | one 200-read gene cluster | 16.1 s -> **1.4 s** | **11.6x** |
 | 68-cluster folder, `--t 8` | 83.7 s -> **13.3 s** | **6.3x** |
-| reads differing from Python | **78 / 10 000** | 0.78% |
+| reads differing from Python, simulated | **78 / 10 000** | 0.78% |
+| reads differing, **real isONclust data** | **2 364 / 75 442** | **3.13%** |
+
+**The divergence is four times larger on real data than on simulated data** — 3.13% against 0.78%.
+That is the same lesson the banding experiment taught: real ONT reads have variable lengths and
+messier indels, so the guard's alignment has more ties to break differently. Any statement about
+this divergence has to be sourced from the real corpus, not the simulated one.
 
 `ISONCORRECT_EXACT_GUARD=1` selects the exact parasail-compatible DP instead, which is
 byte-identical. `bench/equivalence.sh` exports it, so **the 29-case gate still passes 29/29** and
@@ -878,52 +884,74 @@ tests keep the measurement. block-aligner made this moot: it is banded *and* SIM
 
 Equivalence testing answers "do two implementations agree"; it cannot answer "is the correction any
 good". Once the guard's aligner diverges deliberately, the second question is the one that matters.
-`bench/accuracy.py` measures it: the simulated SIRV reads carry their source transcript in the
-header, so each read is aligned against *its own* transcript with edlib's infix mode and error rate
-is `edit_distance / len(read)`. Corrected reads keep their headers, so the same mapping scores every
-implementation, and only reads present in every set are scored — a paired comparison.
+`bench/accuracy.py` measures it.
+
+Truth comes from one of two places. Simulated reads carry their source transcript in the header, so
+no search is needed. **Real reads are assigned by aligning against every transcript and taking the
+best match**, ties broken by name so the choice is deterministic. Either way the read is scored
+against its assigned transcript with edlib's infix mode (`HW`) and the error rate is
+`edit_distance / len(read)`.
+
+**The assignment is made once, from the first read set, and reused for all of them.** That is
+load-bearing: if each implementation picked its own best-matching transcript, every one would be
+flattered by construction, and a correction that dragged a read toward the wrong isoform would score
+*better* rather than worse. Pass the uncorrected reads first.
 
 ```bash
 bench/accuracy.py --transcriptome sirv_transcriptome.fasta \
-  --reads python=/tmp/fold_py --reads rust-exact=/tmp/fold_ex --reads rust-block=/tmp/fold_ba
+  --reads uncorrected=/tmp/real_trunc --reads python=/tmp/real_py \
+  --reads rust-exact=/tmp/real_ex --reads rust-block=/tmp/real_ba
 ```
 
-68 simulated transcript clusters, 10 000 reads:
+**Real isONclust data — 32 clusters, 75 442 reads, the corpus that matters:**
 
-| set | mean % | median % | p90 % | total % | perfect reads |
+| set | mean % | median % | p90 % | total % | perfect |
 | --- | --- | --- | --- | --- | --- |
-| uncorrected | 6.862 | 6.854 | 7.745 | 6.866 | 0 |
-| Python reference | 0.634 | 0.510 | 1.232 | 0.532 | 141 |
-| Rust, `ISONCORRECT_EXACT_GUARD=1` | 0.634 | 0.510 | 1.232 | 0.532 | 141 |
-| Rust, block-aligner (default) | 0.635 | 0.511 | 1.232 | 0.532 | 141 |
+| uncorrected | 6.245 | 5.580 | 9.655 | 6.112 | 1 |
+| Python reference | 1.787 | 1.168 | 3.672 | 1.310 | 156 |
+| Rust, `ISONCORRECT_EXACT_GUARD=1` | 1.787 | 1.168 | 3.672 | 1.310 | 156 |
+| Rust, block-aligner (default) | **1.782** | **1.163** | **3.665** | **1.303** | 156 |
 
-Paired per read against the Python reference:
+Restricted to the 2 364 reads where block-aligner's answer differs at all:
 
-| | mean delta | better | worse | equal |
-| --- | --- | --- | --- | --- |
-| Rust exact-guard | +0.0000 pp | 0 | 0 | 10 000 |
-| Rust block-aligner | **+0.0007 pp** | 30 | **41** | 9 929 |
+| | |
+| --- | --- |
+| block-aligner **better** | **1 373** |
+| block-aligner worse | 794 |
+| equal | 197 |
+| mean delta | **-0.157 pp** (negative is better) |
+| median delta | **-0.203 pp** |
 
-Two things this settles:
+**block-aligner is measurably better on real data**: better on 63% of the reads it changes, and
+better in aggregate (1.303% against 1.310% total error). Simulated data said the opposite — 30
+better, 41 worse of 71 — which is a reminder that the simulated corpus is not a substitute for real
+reads on any question about this guard.
+
+Simulated corpus, for comparison (68 transcript clusters, 10 000 reads): uncorrected 6.866% total,
+all three implementations 0.532%, and block-aligner differing on only 71 reads.
+
+Two further conclusions:
 
 - **The exact path is confirmed byte-identical through a second, independent lens** — identical error
-  rate on all 10 000 reads, measured against ground truth rather than against the reference's bytes.
-- **The guard divergence has no measurable accuracy cost.** Of the 71 reads that differ, 30 improve
-  and 41 worsen, for a mean penalty of 0.0007 percentage points against a correction effect of 6.23.
-  That is four orders of magnitude below the signal, and 71 samples cannot distinguish 41-vs-30 from
-  a coin toss. All three implementations cut error 6.87% -> 0.53% and improve **every** read.
+  rate on all 75 442 real reads and all 10 000 simulated ones, measured against ground truth rather
+  than against the reference's bytes.
+- **Correction works**, which is worth stating since nothing else in this file checks it: 6.2% -> 1.8%
+  mean error on real reads, improving 75 254 of 75 442 and worsening 116.
 
-**The caveat, since it is an inference and not a measurement:** this uses *simulated* reads, because
-that is where per-read ground truth exists. The real isONclust corpus has no truth to score against,
-so the 0.78% divergence measured there is assumed to be equally harmless. Given both aligners
-provably find optimal scores, that seems safe, but it is reasoning rather than data.
+Caveats, since they are inferences rather than measurements. Assignment uses the *uncorrected* read,
+so at ~6% error a read may be assigned to the wrong isoform of the right gene — SIRV isoforms are
+deliberately similar. That inflates absolute error rates for every implementation equally, so the
+comparison holds even where the absolute numbers are pessimistic. And `bench/accuracy.py` is
+single-threaded: the best-of-68 search over 75 442 reads takes roughly 20 minutes, which is worth
+parallelising before this is run routinely.
 
 ### Where it stands
 
-| | Python | Rust (default) | |
-| --- | --- | --- | --- |
-| one 200-read gene cluster | 16.1 s, 339 MB | **1.4 s, ~147 MB** | 11.6x faster, 2.3x less memory |
-| 68-cluster folder, `--t 8` | 83.7 s | **13.3 s** | 6.3x faster |
+| | Python | Rust exact | Rust default | |
+| --- | --- | --- | --- | --- |
+| one 200-read gene cluster | 16.1 s, 339 MB | 3.3 s | **1.4 s, ~147 MB** | 11.6x faster |
+| 68 simulated clusters, `--t 8` | 83.7 s | 23.8 s | **13.3 s** | 6.3x faster |
+| **32 real isONclust clusters, 75 442 reads, `--t 8`** | **417.7 s** | 128.9 s | **81.0 s** | **5.2x faster** |
 
 Byte-identical everywhere except the guard's aligner, which changes ~0.8% of reads. With
 `ISONCORRECT_EXACT_GUARD=1` the output is byte-identical and a cluster takes 3.3 s.
