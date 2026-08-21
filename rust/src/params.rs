@@ -44,13 +44,19 @@ impl Params {
         }
     }
 
-    /// Whether this batch runs the exact path.
+    /// Whether this cluster runs the exact path.
     ///
     /// `--exact` forces it, and `isoncorrect_main` additionally sets it for any
-    /// batch of at most `--exact_instance_limit` reads. Since
+    /// cluster of at most `--exact_instance_limit` reads. Since
     /// `run_isoncorrect` defaults that limit to 50, every small cluster takes
     /// the exact path by default --- it is not an opt-in.
-    pub fn exact_for_batch(&self, n_reads: usize) -> bool {
+    ///
+    /// **The count is the whole cluster, not the batch.** The reference decides
+    /// this once, before batching (`if len(all_reads) <= ...`), so
+    /// `--max_seqs 10` on a 200-read cluster does *not* make its batches exact.
+    /// Passing a batch length here would silently diverge on exactly that
+    /// combination.
+    pub fn exact_for_cluster(&self, n_reads: usize) -> bool {
         self.exact || n_reads <= self.exact_instance_limit
     }
 }
@@ -99,27 +105,27 @@ mod tests {
     }
 
     #[test]
-    fn exact_limit_makes_small_batches_exact() {
+    fn exact_limit_makes_small_clusters_exact() {
         // run_isoncorrect's default: every cluster of <=50 reads is exact.
         let p = Params {
             exact_instance_limit: 50,
             ..base()
         };
-        assert!(p.exact_for_batch(50));
-        assert!(p.exact_for_batch(1));
-        assert!(!p.exact_for_batch(51));
+        assert!(p.exact_for_cluster(50));
+        assert!(p.exact_for_cluster(1));
+        assert!(!p.exact_for_cluster(51));
 
-        // isONcorrect's own default of 0 still catches empty batches, matching
-        // the reference's `<=` comparison.
+        // isONcorrect's own default of 0 still catches an empty cluster,
+        // matching the reference's `<=` comparison.
         let p = base();
-        assert!(!p.exact_for_batch(1));
-        assert!(p.exact_for_batch(0));
+        assert!(!p.exact_for_cluster(1));
+        assert!(p.exact_for_cluster(0));
 
         // --exact forces it regardless of size.
         let p = Params {
             exact: true,
             ..base()
         };
-        assert!(p.exact_for_batch(10_000));
+        assert!(p.exact_for_cluster(10_000));
     }
 }

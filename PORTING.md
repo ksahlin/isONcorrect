@@ -38,7 +38,7 @@ Two binaries must keep their exact current names, flags, and defaults:
 | bounded edit distance (edlib `'dist'`) | done natively, no C++; 4 000 real pairs verified against Python edlib |
 | quality-value prefix sums (`get_qvs`) | done; `D` table cross-checked against the reference |
 | `find_most_supported_span` | done; 52 558 intervals byte-identical to the reference |
-| anchor filtering (`previously_corrected_regions`, `pos_group`) | implemented; inert under `--exact`, so verified only in that mode |
+| anchor filtering (`previously_corrected_regions`, `pos_group`) | done; live on the 100-read fixture and verified through end-to-end output |
 | correction driver (`correct_read`) | done, see below |
 | consensus POA (`run_spoa`) | done via `spoars`; oracle green on 5 922 real intervals |
 | NW CIGAR (edlib `task="path"`) | done natively, no C++; 187 744 real alignments byte-identical |
@@ -52,11 +52,12 @@ Two binaries must keep their exact current names, flags, and defaults:
 | semi-global alignment (parasail `sg_trace_scan_16`) | done natively, no C++; tie-break measured, 200 real alignments byte-identical |
 | `fix_correction` | done; replayed against every recorded call |
 | `correct_read` (stitching + guard) | done; replayed end to end against every recorded read |
-| per-read driver (`isoncorrect_main`) | next; the last piece before end-to-end output |
+| per-read driver (`isoncorrect_main`) | done; `corrected_reads.fastq` byte-identical on 1 204 reads |
+| `run_isoncorrect` (batch driver) | next; the last unported piece |
 
-Argument names, defaults, validation order, stderr text and exit codes match the reference. The
-correction algorithm is not ported: both binaries validate their arguments and then exit non-zero
-saying so.
+Argument names, defaults, validation order, stderr text and exit codes match the reference.
+**`isONcorrect` now corrects for real** and writes byte-identical output; `run_isoncorrect` still
+validates its arguments and exits non-zero, since the batch driver is not ported yet.
 
 ### Stage-by-stage verification
 
@@ -105,9 +106,11 @@ Byte-identical on both clusters at `--k/--w` of 9/20 (2 208 intervals, 6 859 ali
 ordering, the `already_computed` cache across anchors, the `reads_visited` fall-through and the
 float thresholds.
 
-Still unverified: the `previously_corrected_regions` / `pos_group` filtering itself, which is inert
-under `--exact`. It has unit tests, but exercising it against the reference needs the correction
-driver.
+~~Still unverified: the `previously_corrected_regions` / `pos_group` filtering.~~ **Now covered.**
+It is inert under `--exact`, but `--exact_instance_limit` defaults to **0** in `isONcorrect` itself,
+so the 100-read fixture runs the *non-exact* path — the feedback loop is live there, and the
+end-to-end output is byte-identical. The circularity that made this hard to check disappeared once
+the correction stage existed to close the loop.
 
 `cigar_to_seq_cases.tsv` and `msa_cases.tsv` do the same for the two stages that turn pairwise
 alignments into columns. Both are pure functions of their recorded inputs, so the Rust side replays
@@ -344,9 +347,11 @@ Two things about `fix_correction` worth knowing before touching it:
 to `2*k` before anything runs, so the reference was building spans at 18 while the port used 14.
 Anything added to `main`'s preamble has to be mirrored in `dump_stages.rs` or the comparison lies.
 
-Current `bench/equivalence.sh verify`: **7 passed, 22 failed** — the 7 are the unsupported-flag
-cases, and the 22 failures are the supported cases with no algorithm behind them yet. That is the
-expected state; it becomes the progress bar as the algorithm lands.
+Current `bench/equivalence.sh verify`: **23 passed, 6 failed.** All 16 single-cluster cases are
+byte-identical — `default`, `paper`, `k11`, `k7`, `w15`, `w_eq_k_plus1`, `xspan_narrow`,
+`xspan_wide`, `T_low`, `T_high`, `batched`, `spoa_cap`, `spoa_cap_tiny`, `exact`, `exact_limit`,
+`dynamic_w` — plus the 7 unsupported-flag cases. **Every remaining failure is a `folder_*` case**,
+i.e. `run_isoncorrect`, which is the last unported piece.
 
 Verified equal to the reference by hand: `--version` on both binaries, exit codes for
 `--w 150` (1), `--split_mod 2 --residual 5` (1), `--version` (0), no-args (0), and the exact stderr
@@ -689,6 +694,35 @@ through isONclust remains worth adding.
 
 Performance is measured on the same corpus: wall clock and peak RSS, Rust vs Python, single-core
 and at `--t N`.
+
+## First end-to-end performance measurement, and it is below target
+
+Now that `isONcorrect` runs, the port can be timed. On one 200-read SIRV gene cluster
+(~1.4 kb reads, default parameters, single core):
+
+| | wall | user | sys | peak RSS |
+| --- | --- | --- | --- | --- |
+| Python reference | 16.1 s | 9.0 s | 6.5 s | 339 MB |
+| Rust port | 10.7 s | 10.6 s | 0.1 s | 420 MB |
+
+**1.5x faster, and 24% *more* memory.** That is well short of the goal at the top of this file, and
+the shape of the numbers says exactly why:
+
+- **The win is all in `sys` time.** Python spends 6.5 s in the kernel, almost entirely
+  `fork`/`exec` plus temp-file I/O for one `spoa` subprocess *per correction interval*. The port's
+  sys time is 0.1 s. Removing that was the easy, structural win.
+- **The port loses on `user` time** — 10.6 s against 9.0 s. The reference delegates its inner loops
+  to C: edlib is bit-parallel Myers, spoa and parasail are SIMD. The port answers with plain
+  `O(n*m)` scalar DP in `align.rs` and `parasail.rs`. Correctness first was the right order, but the
+  arithmetic has to get faster before the port is worth switching to.
+- **Memory is worse for the same reason.** `parasail.rs` allocates three `i32` tables over the full
+  read against its own correction — ~24 MB per read at 1.4 kb — and `align.rs` allocates a table per
+  segment alignment. Both are transient, but they set the peak.
+
+None of this is new information about *what* to do; every item is already in *Deferred improvements*
+(band or linear-space the guard alignment, replace the scalar NW, drop the per-slot `Vec<u8>` in the
+MSA). What is new is that they are now measured rather than suspected, and that the equivalence
+oracles make each one safe to attempt. Do them in profile order, not in the order they were noticed.
 
 ## Profiling
 

@@ -1,13 +1,15 @@
 //! `isONcorrect` --- correct a single cluster.
 //!
-//! CLI parity with `src/isoncorrect/isONcorrect.py`. The correction algorithm
-//! is not ported yet; this validates arguments exactly as the reference does
-//! and then reports that clearly.
+//! CLI parity with `src/isoncorrect/isONcorrect.py`, and the correction itself
+//! via [`isoncorrect::driver`]. Argument handling mirrors the reference's
+//! `main` exactly, including the order side effects happen in.
 
 use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser};
 use isoncorrect::cli::{unsupported_flag, CorrectArgs, EXIT_UNSUPPORTED};
+use isoncorrect::driver;
+use isoncorrect::fastq;
 use isoncorrect::params::Params;
 use isoncorrect::validate::{check_window, clamp_xmin};
 
@@ -85,15 +87,42 @@ fn main() -> ExitCode {
         set_w_dynamically: args.set_w_dynamically,
     };
 
-    eprintln!(
-        "isONcorrect (Rust port): argument handling is in place, but the correction\n\
-         algorithm is not ported yet, so no output was written.\n\
-         \n\
-         Would have corrected: {}\n\
-         Parameters: {params:?}\n\
-         \n\
-         Use the Python implementation for real runs. Progress: PORTING.md",
-        fastq.display()
-    );
-    ExitCode::FAILURE
+    let reads = match std::fs::File::open(fastq)
+        .and_then(|f| fastq::read_fastq(std::io::BufReader::new(f)))
+    {
+        Ok(reads) => reads,
+        Err(e) => {
+            eprintln!("error: could not read {}: {e}", fastq.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("Total cluster of {} reads.", reads.len());
+
+    let (corrected, _stats) = driver::correct_cluster(&reads, &params);
+
+    // The reference always writes into --outfolder; argparse defaults it, so a
+    // missing one here means the caller passed an empty value.
+    let Some(outfolder) = args.outfolder.as_ref() else {
+        eprintln!("error: --outfolder is required");
+        return ExitCode::FAILURE;
+    };
+    let path = outfolder.join("corrected_reads.fastq");
+    let file = match std::fs::File::create(&path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("error: could not write {}: {e}", path.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut writer = std::io::BufWriter::new(file);
+    if let Err(e) = driver::write_fastq(&mut writer, &corrected) {
+        eprintln!("error: could not write {}: {e}", path.display());
+        return ExitCode::FAILURE;
+    }
+    if let Err(e) = writer.into_inner().map(|f| f.sync_all()) {
+        eprintln!("error: could not flush {}: {e:?}", path.display());
+        return ExitCode::FAILURE;
+    }
+
+    ExitCode::SUCCESS
 }
