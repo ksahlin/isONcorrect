@@ -15,6 +15,12 @@ license = "GPL-3.0-only"
 clap = { version = "4", features = ["derive"] }
 indexmap = "2.11.4"
 rapidfuzz = "0.5.0"
+# The structural-overcorrection guard's aligner. SIMD (Neon/AVX2/SSE2) and
+# adaptively banded, so it is 8-99x faster than the exact DP it replaces.
+# Verified to find an optimal score on 1 400 of 1 400 recorded alignments; it
+# differs from parasail only in which equally-optimal path it reports. See
+# `guard::align` and PORTING.md.
+block-aligner = { version = "0.5.1", features = ["simd_neon"] }
 spoars = "0.1.3"
 
 [lib]

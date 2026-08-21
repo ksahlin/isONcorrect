@@ -124,5 +124,17 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    let (checked, differed) = isoncorrect::parasail::band_check_report();
+    if checked > 0 {
+        eprintln!("band-check: {checked} guard alignments, {differed} differed from exact");
+    }
+    let (checked, cigars, outputs) = isoncorrect::parasail::global_check_report();
+    if checked > 0 {
+        eprintln!(
+            "global-check: {checked} alignments, {cigars} different CIGARs, \
+             {outputs} different guard outputs"
+        );
+    }
+
     ExitCode::SUCCESS
 }

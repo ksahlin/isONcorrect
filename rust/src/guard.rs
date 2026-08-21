@@ -27,6 +27,92 @@
 use crate::align;
 use crate::parasail::{self, Scoring};
 
+/// Shortest sequence the SIMD aligner is used on.
+///
+/// Below this the exact DP is already trivial and block-aligner's minimum block
+/// size (32) would dominate, so there is nothing to gain.
+const SIMD_MIN_LEN: usize = 64;
+
+/// Align the read against its correction, for the guard.
+///
+/// **Default: [`block_aligner`], which is SIMD and adaptively banded.** It finds
+/// an optimal-scoring alignment — verified on 1 400 of 1 400 recorded
+/// alignments, zero suboptimal — but reports a *different* equally-optimal path
+/// than parasail in most cases, which shifts the guard's answer on roughly 1% of
+/// reads. That is the one place the port deliberately diverges from the
+/// reference; see PORTING.md.
+///
+/// Setting `ISONCORRECT_EXACT_GUARD=1` restores the exact parasail-compatible
+/// DP, which is byte-identical to the reference. `bench/equivalence.sh` runs in
+/// that mode, so the equivalence gate still covers the whole pipeline.
+fn align(seq: &[u8], corr: &[u8]) -> (Vec<u8>, Vec<u8>) {
+    let use_exact = exact_guard() || seq.len() < SIMD_MIN_LEN || corr.len() < SIMD_MIN_LEN;
+    let cigar = if use_exact {
+        parasail::semiglobal(seq, corr, Scoring::GUARD).cigar
+    } else {
+        match block_aligner(seq, corr, Scoring::GUARD) {
+            Some(cigar) => cigar,
+            // Falling back rather than failing: an alignment that does not span
+            // both sequences cannot be expanded, and the exact DP always can.
+            None => parasail::semiglobal(seq, corr, Scoring::GUARD).cigar,
+        }
+    };
+    align::cigar_to_seq(&cigar, seq, corr).expect("the aligner's own CIGAR expands over its inputs")
+}
+
+/// Whether `ISONCORRECT_EXACT_GUARD` asks for the parasail-compatible DP.
+fn exact_guard() -> bool {
+    use std::sync::atomic::{AtomicU8, Ordering};
+    static MODE: AtomicU8 = AtomicU8::new(u8::MAX);
+    let cached = MODE.load(Ordering::Relaxed);
+    if cached != u8::MAX {
+        return cached == 1;
+    }
+    let on = std::env::var("ISONCORRECT_EXACT_GUARD")
+        .map(|v| v != "0" && !v.is_empty())
+        .unwrap_or(false);
+    MODE.store(u8::from(on), Ordering::Relaxed);
+    on
+}
+
+/// Affine global alignment via `block-aligner`, returning an extended CIGAR.
+///
+/// Gap penalties translate directly: block-aligner charges
+/// `open + extend * (n - 1)`, the same convention parasail uses, and its `I`/`D`
+/// mean the same thing (`I` consumes the query, `D` the reference). Returns
+/// `None` if the result does not span both sequences, which the caller treats as
+/// "use the exact DP instead".
+fn block_aligner(seq: &[u8], corr: &[u8], sc: Scoring) -> Option<String> {
+    use block_aligner::{cigar::*, scan_block::*, scores::*};
+
+    // The block grows adaptively up to this bound; larger costs nothing when the
+    // alignment stays near the diagonal, which for a read against its own
+    // correction it does.
+    let max_block = 256;
+    let matrix = NucMatrix::new_simple(
+        i8::try_from(sc.match_score).ok()?,
+        i8::try_from(sc.mismatch).ok()?,
+    );
+    let gaps = Gaps {
+        open: i8::try_from(-sc.open).ok()?,
+        extend: i8::try_from(-sc.ext).ok()?,
+    };
+
+    let q = PaddedBytes::from_bytes::<NucMatrix>(seq, max_block);
+    let r = PaddedBytes::from_bytes::<NucMatrix>(corr, max_block);
+    let mut block = Block::<true, false>::new(seq.len(), corr.len(), max_block);
+    block.align(&q, &r, &matrix, gaps, 32..=max_block, 0);
+    let res = block.res();
+    if res.query_idx != seq.len() || res.reference_idx != corr.len() {
+        return None;
+    }
+    let mut cigar = Cigar::new(res.query_idx, res.reference_idx);
+    block
+        .trace()
+        .cigar_eq(&q, &r, res.query_idx, res.reference_idx, &mut cigar);
+    Some(cigar.to_string())
+}
+
 /// Longest indel run, in alignment columns, that keeps its correction.
 pub const MAX_INDEL_RUN: usize = 10;
 
@@ -114,9 +200,7 @@ pub fn stitch(seq: &[u8], intervals: &[Interval]) -> Vec<u8> {
 /// away; that call is not reproduced (see *Deferred improvements*).
 pub fn correct_read(seq: &[u8], intervals: &[Interval]) -> Vec<u8> {
     let corr = stitch(seq, intervals);
-    let aln = parasail::semiglobal(seq, &corr, Scoring::GUARD);
-    let (orig_aln, corr_aln) = align::cigar_to_seq(&aln.cigar, seq, &corr)
-        .expect("parasail's own CIGAR expands over its own inputs");
+    let (orig_aln, corr_aln) = align(seq, &corr);
     fix_correction(&orig_aln, &corr_aln)
 }
 

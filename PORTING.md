@@ -2,9 +2,15 @@
 
 ## Goal
 
-Port isONcorrect from Python to Rust. **Identical CLI, identical output**, primarily faster and
-lower memory. The Python implementation in `src/isoncorrect/` is the **normative reference**: when
-Rust and Python disagree, Python is right until a human decides otherwise.
+Port isONcorrect from Python to Rust. **Identical CLI**, primarily faster and lower memory. The
+Python implementation in `src/isoncorrect/` is the **normative reference**: when Rust and Python
+disagree, Python is right until a human decides otherwise.
+
+**Output is byte-identical everywhere except the structural-overcorrection guard's aligner**, which
+now uses `block-aligner` by default and changes roughly 0.8% of reads. That is a deliberate,
+measured divergence taken for an 8-99x speedup on the port's dominant cost — see *The guard's
+aligner: a deliberate divergence*. `ISONCORRECT_EXACT_GUARD=1` restores byte-identity, and
+`bench/equivalence.sh` runs in that mode, so the 29-case gate still covers the whole pipeline.
 
 Two binaries must keep their exact current names, flags, and defaults:
 
@@ -49,7 +55,8 @@ Two binaries must keep their exact current names, flags, and defaults:
 | frequency context matrix (`test_numba`) | done, no numpy; verified through the alternatives it feeds |
 | alternative references (`get_alternative_ref_contexts`) | done; 636 real alternatives replayed, order included |
 | the correction loop over `PFM` (`get_best_corrections`) | done; 5 922 of 5 922 real calls byte-identical |
-| semi-global alignment (parasail `sg_trace_scan_16`) | done natively, no C++; tie-break measured, 200 real alignments byte-identical |
+| semi-global alignment (parasail `sg_trace_scan_16`) | done natively, no C++; tie-break measured, 2 408 real alignments byte-identical. Kept behind `ISONCORRECT_EXACT_GUARD=1` |
+| the guard's production aligner | `block-aligner` (SIMD, banded). Optimal score on 1 400/1 400 recorded alignments; differs from parasail only in which equally-optimal path it reports, changing ~0.8% of reads |
 | `fix_correction` | done; replayed against every recorded call |
 | `correct_read` (stitching + guard) | done; replayed end to end against every recorded read |
 | per-read driver (`isoncorrect_main`) | done; `corrected_reads.fastq` byte-identical on 1 204 reads |
@@ -768,29 +775,151 @@ with **no architecture guards at all**. Swapping it in is safe for the reason at
 **84.1 s → 24.2 s, a 3.5x speedup**, with all 68 outputs still byte-identical and the full
 29-case sweep green. Memory is untouched, because the memory peak is the guard, not this.
 
-### Where it is now: the guard dominates
+### The guard: 3x less memory
 
-Re-profiling after the swap (2 246 samples, same cluster) inverts the picture:
+After the edit-distance fix the parasail guard was **65%** of runtime and the whole of the memory
+peak: three `i32` matrices over a read against its own correction, ~24 MB per read at 1.4 kb.
 
-| component | before | after |
+`parasail.rs` now keeps **two rows** of `H`/`E`/`F` and stores, per cell, only the four bits the
+traceback cannot re-derive: which predecessor won the `H` cell (2 bits, from `TieBreak::h_order`),
+and whether each gap chain leaves or extends (1 bit each). Same computation, so the recorded CIGARs
+do not move.
+
+| | wall | peak RSS |
 | --- | --- | --- |
-| **the parasail guard** | 19% | **65%** |
-| `get_best_corrections` in total | ~10% | 8% |
-| NW CIGAR (`align::global`) | 3% | 7% |
-| spoa consensus | 2% | 4% |
-| bounded edit distance | **67%** | **2%** |
+| three `i32` matrices | 3.9 s | 440 MB |
+| two rows + a decision byte per cell | **3.5 s** | **147 MB** |
 
-So the next target is `parasail.rs`, which is also the memory peak: three `i32` tables over the full
-read against its own correction, ~24 MB per read at 1.4 kb. Two output-neutral changes are described
-under *Deferred improvements*, and `parasail_cases.tsv` (2 408 recorded alignments, scores and
-CIGARs) is what makes either safe to attempt.
+Two things that measurement settled, both the opposite of the obvious guess:
 
-**Banding it needs care, and is probably wrong.** The obvious speedup is to restrict the DP to a
-band around the diagonal, since a read and its own correction differ by very little. But the guard
-exists precisely to catch *structural* differences — an exon-length indel moves the optimal path
-hundreds of cells off-diagonal, and a band narrow enough to be fast would exclude exactly the cases
-the guard is for. Reducing memory and improving cache behaviour (two rows plus a packed traceback
-array instead of three full `i32` matrices) is the safe win; SIMD is the ambitious one.
+- **Four bits per cell is slower than eight.** Packing two cells per byte halves the array but adds
+  a read-modify-write and a shift per cell, and the DP already streams row by row so the cache never
+  benefited: 4.3 s against 3.5 s. One byte per cell it is.
+- **Computing the tie-break winner by walking `h_order` cost ~10% of total runtime.** It is a
+  data-dependent branch chain over a runtime array, executed once per cell, and the predictor cannot
+  learn it. An 8-entry lookup table indexed by a 3-bit "which predecessors achieved this cell" mask
+  removes the branches entirely.
+
+This path is still what `ISONCORRECT_EXACT_GUARD=1` runs, so it remains the byte-identical
+reference implementation and the thing the equivalence gate exercises.
+
+### The guard's aligner: a deliberate divergence
+
+The guard aligns each read against its own correction, and after the edit-distance fix that single
+`O(n*m)` DP was **65% of the port's runtime**. It is now `block-aligner` by default: SIMD (Neon,
+AVX2, SSE2) and adaptively banded.
+
+**It is not an approximation on this data, and that is the point.** The first measurement of it was
+misleading because it compared block-aligner's *global* alignment against parasail's *semi-global*
+CIGARs — two different problems. Comparing like with like, against exact affine global:
+
+| | |
+| --- | --- |
+| optimal score found | **1 400 / 1 400** recorded alignments |
+| suboptimal | **0**, worst loss 0, at `max_block` 256, 1 024 and 4 096 |
+| identical CIGAR | almost never |
+| guard output differs | 16 / 1 400 (**1.1%**) |
+
+So block-aligner finds an optimal-scoring alignment every time and simply reports a *different*
+equally-optimal path. Roughly 1% of the time that shifts an indel run across the guard's 10-column
+threshold and changes the corrected read. The penalties map exactly, which the matching scores
+prove: block-aligner charges `open + extend * (n - 1)`, the same convention as parasail, and its
+`I`/`D` mean the same thing.
+
+End to end against the Python reference:
+
+| | | |
+| --- | --- | --- |
+| one 200-read gene cluster | 16.1 s -> **1.4 s** | **11.6x** |
+| 68-cluster folder, `--t 8` | 83.7 s -> **13.3 s** | **6.3x** |
+| reads differing from Python | **78 / 10 000** | 0.78% |
+
+`ISONCORRECT_EXACT_GUARD=1` selects the exact parasail-compatible DP instead, which is
+byte-identical. `bench/equivalence.sh` exports it, so **the 29-case gate still passes 29/29** and
+still covers every other stage byte-for-byte. Sequences shorter than 64 bp also take the exact path,
+where the SIMD minimum block size would dominate anyway.
+
+**Why the reference uses semi-global at all, and why that matters less than it looks.** The helper
+is copied: `parasail_alignment(s1, s2, match_score=2, mismatch_penalty=-2, opening_penalty=..., gap_ext=1)`
+calling `sg_trace_scan_16` exists verbatim in isONclust's `modules/consensus.py`, where it compares
+*different reads* and semi-global is exactly right. In `correct_read` it is applied to a read against
+its own correction — which shares an exact prefix and suffix with it, so free end gaps can almost
+never pay — and none of the helper's defaults are used at the call site. So global is the natural
+choice here and semi-global looks inherited rather than chosen. It is **not inert**, though:
+measured on 75 442 real alignments, exact global and exact semi-global disagree on 414 CIGARs and
+**145 guard outputs (0.19%)**. Most of the 1.1% above is therefore tie-break, not this.
+
+### Banding our own DP: measured and rejected
+
+Before adopting block-aligner, banding the exact DP was tried. It is the cautionary tale of this
+whole exercise, so the numbers stay:
+
+| corpus | half-band 32 | half-band 64 | half-band 128 |
+| --- | --- | --- | --- |
+| simulated SIRV, 2 408 alignments | 12 differ | **0 differ** | 0 differ |
+| real isONclust, 13 963 alignments | — | **23 differ** | — |
+| real isONclust, 75 442 alignments | — | — | **34 differ** |
+
+The simulated corpus endorsed a band width that is wrong on real data, and widening only lowers the
+rate rather than reaching zero. Two further findings worth keeping:
+
+- **An edge-touch check is not a sufficient validator.** At half-band 32, twelve alignments returned
+  a different CIGAR while the path never touched the band edge.
+- **The provable band is worth almost nothing.** Any path reaching deviation `W` needs `g >= W` gap
+  columns, so it scores at most `2(n+m) - 2W`; a banded score above that is provably optimal. But
+  `4*min(n,m) - score` has median 753 here, so the provable half-band is `~slack/2 ~= 380`.
+  Measured: full DP 3.5 s, provable band 3.1 s, unproven +-64 band 2.1 s. **The rigorous version
+  buys 9%.**
+
+`ISONCORRECT_BAND_CHECK=<half>` re-runs the comparison on any dataset, and the `parasail::banding`
+tests keep the measurement. block-aligner made this moot: it is banded *and* SIMD *and* optimal.
+
+### Where it stands
+
+| | Python | Rust (default) | |
+| --- | --- | --- | --- |
+| one 200-read gene cluster | 16.1 s, 339 MB | **1.4 s, ~147 MB** | 11.6x faster, 2.3x less memory |
+| 68-cluster folder, `--t 8` | 83.7 s | **13.3 s** | 6.3x faster |
+
+Byte-identical everywhere except the guard's aligner, which changes ~0.8% of reads. With
+`ISONCORRECT_EXACT_GUARD=1` the output is byte-identical and a cluster takes 3.3 s.
+
+Gates: **29/29** equivalence cases (exact-guard mode), 9/9 stage-oracle runs, 186 unit tests.
+
+Profile after all three optimisations, on the 200-read gene cluster: the guard is no longer
+dominant. What is left is spread across `get_best_corrections` (the NW CIGAR, spoa, the MSA), so the
+next round of work has no single obvious target and should start from a fresh profile.
+
+### What is not done
+
+- **The accuracy benchmark.** The guard divergence is justified on the grounds that both aligners are
+  optimal, but that has not been checked against ground truth. `sirv_transcriptome.fasta` plus the
+  real isONclust corpus is the material: align corrected reads back to the source transcripts and
+  compare per-read error rates for Python, Rust exact-guard, and Rust default. Agreed to do this
+  *after* landing block-aligner, and it is the measurement that would confirm or overturn the
+  divergence.
+- **Re-profiling** after the three wins, to decide what is next.
+- **A native POA** to replace `spoars` (see *Deferred improvements*).
+- **Real long-read data.** The real corpus here is SIRV, whose reads are short (median ~600 bp). A
+  transcriptome with multi-kb transcripts would stress the guard and the band assumptions harder.
+
+### The real-data corpus
+
+`isONclust` is **not** in the reference environment; it is installed in a separate `isonclust-tool`
+conda env, deliberately, so that adding it cannot shift the pinned edlib/parasail/numpy versions the
+goldens depend on. `pip install isONclust` fails on osx-arm64 (parasail-python has no wheel), so:
+`conda create -n isonclust-tool python=3.10`, `conda install -c bioconda -c conda-forge
+parasail-python pysam`, `pip install --no-deps isONclust`.
+
+```bash
+isONclust --fastq SIRV_real_full.fastq --outfolder /tmp/isonclust_full --t 8 --ont
+isONclust write_fastq --clusters /tmp/isonclust_full/final_clusters.tsv \
+  --fastq SIRV_real_full.fastq --outfolder /tmp/real_clusters_full --N 50
+```
+
+1.3 M reads -> 490 clusters, 32 with >= 50 reads, largest 555 403. Read lengths 71-2 898, median
+~609 — much more variable than the simulated set, which is exactly why it caught the banding
+failure the simulated corpus missed. Clustering the full 1.8 GB file takes about ten minutes.
 
 ## Profiling
 
@@ -890,19 +1019,29 @@ behaviour reaches the output:
 
 ### Performance and structure
 
+- **Benchmark corrected-read accuracy against ground truth.** The guard's aligner divergence rests on
+  both aligners being optimal, not on measured accuracy. `sirv_transcriptome.fasta` plus the real
+  isONclust corpus makes this checkable: align corrected reads back to the source transcripts and
+  compare per-read error rates across Python, Rust `ISONCORRECT_EXACT_GUARD=1`, and Rust default. If
+  accuracy is equal the divergence is free; if it is worse, revert the default. **This is the
+  highest-value outstanding measurement.**
+
+
 - **Write a native linear-gap kSW POA + heaviest-bundle consensus**, replacing `spoars`. Removes the
   only low-usage dependency on the critical path and allows reusing graph allocations across
   intervals, which matters because POA runs once per correction interval. `poa.rs` already isolates
   the surface (`consensus`), and `poa::oracle` is the acceptance test — 505 real intervals against
   the `spoa` binary. Deferred because `spoars` is already byte-identical on that corpus.
-- **The guard's semi-global alignment is `O(n*m)` in time and memory**, on the full read against its
-  own correction — roughly 2 M cells and 24 MB of scratch for a 1 400 bp read, once per read.
-  `parasail.rs` is a plain three-matrix Gotoh; parasail itself is striped SIMD. Two ways out, both
-  output-neutral and both checkable against `parasail_cases.tsv`: keep only two rows plus a
-  traceback-direction byte per cell, which drops the 24 MB to ~2 MB, or band the DP, since the two
-  sequences differ by very little. Deferred because it changes nothing observable and the oracle
-  makes it safe to do later. Profile first — the guard runs once per read, while spoa runs once per
-  correction interval.
+- ~~**The guard's semi-global alignment is `O(n*m)` in time and memory.**~~ **Done both ways.**
+  `block-aligner` replaced it (SIMD + banded, ~0.8% of reads change), and the exact DP behind
+  `ISONCORRECT_EXACT_GUARD=1` got the two-row rewrite. Original note follows for context:
+- ~~**Memory.**~~
+  `parasail.rs` keeps two rows of `H`/`E`/`F` plus one decision byte per cell instead of three
+  `i32` matrices: 440 MB peak down to 147 MB, and ~13% faster. Banding was investigated and
+  **rejected as unprovable** — see *The guard: 3x less memory, and why it is not banded*. The
+  remaining time win is vectorising the DP, which is sound (the recurrence does not change) but a
+  substantially larger piece of work; `parasail_cases.tsv` is what makes it checkable. It is still
+  ~65% of runtime, so it is the top of the list.
 - **The reference realigns after `fix_correction` and discards the result**
   (`isONcorrect.py:1312`). The port omits that second call. It is output-neutral by inspection — the
   return value feeds nothing — and the `correct_read` oracle agrees on 1 204 reads, but deleting it

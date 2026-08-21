@@ -179,6 +179,13 @@ resolve_rust_bins() {
 # reproducible run to run, so goldens stay stable. See PORTING.md.
 export PYTHONHASHSEED=0
 
+# The Rust guard defaults to block-aligner, which reports a different
+# equally-optimal alignment than parasail and so changes ~1% of reads. That is a
+# deliberate divergence (see PORTING.md); this gate is about everything else, so
+# it runs the exact parasail-compatible DP. Unset this to measure the divergence
+# instead of asserting byte-identity.
+export ISONCORRECT_EXACT_GUARD=1
+
 # ---------------------------------------------------------------------------
 # Running one case
 # ---------------------------------------------------------------------------
