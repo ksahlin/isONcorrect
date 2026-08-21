@@ -20,8 +20,26 @@
 //!
 //! So this module is safe to implement natively; the consensus stage is not.
 //! See PORTING.md.
+//!
+//! # Why `rapidfuzz` and not `triple_accel`
+//!
+//! This was the port's single hottest function --- **67% of runtime** on a
+//! profiled 200-read cluster --- and the reason was not the algorithm but the
+//! architecture: `triple_accel` guards its SIMD paths with `target_arch = "x86"`
+//! and `"x86_64"` and has no `aarch64` equivalent, so on Apple Silicon or any
+//! ARM host every call fell back to naive `O(n*m)` scalar DP.
+//!
+//! `rapidfuzz` implements the same bit-parallel Myers algorithm edlib uses, in
+//! plain `u64` arithmetic with **no architecture guards at all**, so it is fast
+//! everywhere rather than fast on x86. `O(n * m / 64)` instead of `O(n * m)`.
+//!
+//! Swapping the implementation is safe precisely because of the argument above:
+//! the answer is a uniquely defined number, so there is no tie-break to
+//! preserve. The differential tests below check it anyway --- against a naive DP
+//! over exhaustive short inputs and random longer ones, and against Python
+//! edlib over recorded real pairs.
 
-use triple_accel::levenshtein::levenshtein_simd_k;
+use rapidfuzz::distance::levenshtein;
 
 /// Sentinel for "distance exceeds the bound", matching edlib's `-1`.
 pub const OVER_BOUND: i64 = -1;
@@ -32,9 +50,10 @@ pub const OVER_BOUND: i64 = -1;
 /// `len(ref_seq)`, so the bound only bites when the two segments differ wildly
 /// in length.
 pub fn bounded(x: &[u8], y: &[u8], k: usize) -> i64 {
-    // triple_accel returns None when the distance exceeds k, which is exactly
+    // `score_cutoff` yields None when the distance exceeds k, which is exactly
     // edlib's -1 contract.
-    match levenshtein_simd_k(x, y, k as u32) {
+    let args = levenshtein::Args::default().score_cutoff(k);
+    match levenshtein::distance_with_args(x.iter().copied(), y.iter().copied(), &args) {
         Some(d) => d as i64,
         None => OVER_BOUND,
     }
@@ -81,6 +100,99 @@ mod tests {
         assert_eq!(bounded(b"ACGT", b"", 4), 4);
         // ...and is bounded like anything else.
         assert_eq!(bounded(b"", b"ACGT", 3), OVER_BOUND);
+    }
+
+    /// Textbook full-matrix Levenshtein. Slow and obviously correct, which is
+    /// the point: it is the reference the fast implementation is checked against.
+    fn naive(x: &[u8], y: &[u8]) -> usize {
+        let mut prev: Vec<usize> = (0..=y.len()).collect();
+        let mut cur = vec![0usize; y.len() + 1];
+        for i in 1..=x.len() {
+            cur[0] = i;
+            for j in 1..=y.len() {
+                let sub = prev[j - 1] + usize::from(x[i - 1] != y[j - 1]);
+                cur[j] = sub.min(prev[j] + 1).min(cur[j - 1] + 1);
+            }
+            std::mem::swap(&mut prev, &mut cur);
+        }
+        prev[y.len()]
+    }
+
+    /// Every pair of strings over `AC` up to length 6, against the naive DP.
+    ///
+    /// Exhaustive rather than sampled, because bit-parallel edit distance fails
+    /// in narrow structural cases --- word boundaries, all-match rows, empty
+    /// inputs --- not in "typical" ones.
+    #[test]
+    fn exhaustive_short_inputs_match_a_naive_dp() {
+        let mut words: Vec<Vec<u8>> = Vec::new();
+        for len in 0..=6usize {
+            for bits in 0..(1u32 << len) {
+                words.push(
+                    (0..len)
+                        .map(|i| if bits >> i & 1 == 1 { b'A' } else { b'C' })
+                        .collect(),
+                );
+            }
+        }
+        let mut checked = 0usize;
+        for a in &words {
+            for b in &words {
+                let want = naive(a, b);
+                assert_eq!(
+                    bounded(a, b, a.len().max(b.len())),
+                    want as i64,
+                    "on {:?} vs {:?}",
+                    String::from_utf8_lossy(a),
+                    String::from_utf8_lossy(b)
+                );
+                checked += 1;
+            }
+        }
+        assert!(checked > 15_000, "expected a real sweep, got {checked}");
+    }
+
+    /// Longer random sequences, including lengths that straddle the 64-bit word
+    /// boundary the bit-parallel algorithm blocks on.
+    #[test]
+    fn random_inputs_across_the_word_boundary_match_a_naive_dp() {
+        // Deterministic xorshift: a fixed corpus beats a random one that cannot
+        // be re-run.
+        let mut state = 0x243f_6a88_85a3_08d3u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let alphabet = b"ACGT";
+        for _ in 0..3000 {
+            // Lengths around 64 and 128 are where blocking bugs live.
+            let pick = |n: u64| (n % 200) as usize;
+            let (la, lb) = (pick(next()), pick(next()));
+            let a: Vec<u8> = (0..la).map(|_| alphabet[(next() % 4) as usize]).collect();
+            let b: Vec<u8> = (0..lb).map(|_| alphabet[(next() % 4) as usize]).collect();
+            let want = naive(&a, &b) as i64;
+            assert_eq!(bounded(&a, &b, la.max(lb)), want, "len {la} vs {lb}");
+            // And the bound behaves: one below the answer must report "over".
+            if want > 0 {
+                assert_eq!(bounded(&a, &b, (want - 1) as usize), OVER_BOUND);
+                assert_eq!(bounded(&a, &b, want as usize), want);
+            }
+        }
+    }
+
+    #[test]
+    fn lengths_at_and_beyond_one_word_are_exact() {
+        for len in [63usize, 64, 65, 127, 128, 129] {
+            let a = vec![b'A'; len];
+            let mut b = a.clone();
+            // One substitution in the middle, one at each end.
+            b[0] = b'C';
+            b[len / 2] = b'C';
+            b[len - 1] = b'C';
+            assert_eq!(bounded(&a, &b, len), 3, "at length {len}");
+        }
     }
 
     #[test]

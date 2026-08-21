@@ -715,46 +715,33 @@ through isONclust remains worth adding.
 Performance is measured on the same corpus: wall clock and peak RSS, Rust vs Python, single-core
 and at `--t N`.
 
-## First end-to-end performance measurement, and it is below target
+## Performance, measured at each step
 
-Now that `isONcorrect` runs, the port can be timed. On one 200-read SIRV gene cluster
-(~1.4 kb reads, default parameters, single core):
+### Where it started
+
+On one 200-read SIRV gene cluster (~1.4 kb reads, default parameters, single core):
 
 | | wall | user | sys | peak RSS |
 | --- | --- | --- | --- | --- |
 | Python reference | 16.1 s | 9.0 s | 6.5 s | 339 MB |
-| Rust port | 10.7 s | 10.6 s | 0.1 s | 420 MB |
+| Rust, first working version | 10.7 s | 10.6 s | 0.1 s | 420 MB |
 
-**1.5x faster, and 24% *more* memory.** That is well short of the goal at the top of this file, and
-the shape of the numbers says exactly why:
+1.5x faster and 24% *more* memory — well short of the goal at the top of this file. The shape said
+why: Python's 6.5 s of `sys` time is one `spoa` `fork`/`exec` per correction interval, which the
+port removes outright, but the port *lost* on `user` time because the reference delegates its inner
+loops to C (bit-parallel edlib, SIMD spoa and parasail) where the port had scalar `O(n*m)` DP.
 
-- **The win is all in `sys` time.** Python spends 6.5 s in the kernel, almost entirely
-  `fork`/`exec` plus temp-file I/O for one `spoa` subprocess *per correction interval*. The port's
-  sys time is 0.1 s. Removing that was the easy, structural win.
-- **The port loses on `user` time** — 10.6 s against 9.0 s. The reference delegates its inner loops
-  to C: edlib is bit-parallel Myers, spoa and parasail are SIMD. The port answers with plain
-  `O(n*m)` scalar DP in `align.rs` and `parasail.rs`. Correctness first was the right order, but the
-  arithmetic has to get faster before the port is worth switching to.
-- **Memory is worse for the same reason.** `parasail.rs` allocates three `i32` tables over the full
-  read against its own correction — ~24 MB per read at 1.4 kb — and `align.rs` allocates a table per
-  segment alignment. Both are transient, but they set the peak.
-
-Now that `run_isoncorrect` works, the same question can be asked of a realistic workload: 68 SIRV
-transcript clusters (20–342 reads each, ~1.4 kb), `--t 8`, both implementations parallel:
-
-| | wall |
-| --- | --- |
-| Python `run_isoncorrect --t 8` | 83.7 s |
-| Rust `run_isoncorrect --t 8` | 84.1 s |
-
-**Dead even** — and all 68 `corrected_reads.fastq` byte-identical. That result is worth stating
-plainly, because it corrects the assumption that motivated porting the batch driver first: the
+And on a realistic workload — 68 SIRV transcript clusters (20–342 reads, ~1.4 kb), `--t 8`, both
+implementations parallel — it was **dead even**: Python 83.7 s, Rust 84.1 s. That was worth stating
+plainly, because it corrected the assumption behind porting the batch driver for speed: the
 reference is *already* parallel via `multiprocessing`, so removing the subprocess and interpreter
-startup buys back only what per-cluster inefficiency gives away. Per-cluster speed is the lever, and
-it multiplies through the whole pipeline.
+startup only buys back what per-cluster inefficiency gives away. **Per-cluster speed is the lever**,
+and it multiplies through the pipeline.
 
-A profile of the port on one cluster says where that speed is (5 064 samples, 200-read gene
-cluster):
+### Bounded edit distance: 67% of runtime, and an architecture trap
+
+Profiling the port (`sample`, 5 064 samples, the 200-read gene cluster) put two thirds of runtime in
+one function:
 
 | component | share |
 | --- | --- |
@@ -763,17 +750,47 @@ cluster):
 | `get_best_corrections` in total (spoa 2%, NW CIGAR 3%, MSA <1%) | ~10% |
 | everything else (minimizers, anchors, WIS, I/O) | <1% |
 
-And the reason the top entry is so large is worth knowing before optimising anything else:
-**`triple_accel` ships SIMD for `x86`/`x86_64` only** — 67 `target_arch` guards for those two, none
-for `aarch64` — so on Apple Silicon or any ARM host every call falls back to naive scalar DP. Edit
-distance is *uniquely defined*, so replacing it carries no tie-break risk at all, and
-`bench/gen_editdist_cases.py` already provides the oracle. That makes it both the largest and the
-safest of the remaining wins.
+The cause was not the algorithm but the architecture. **`triple_accel` guards its SIMD paths with
+`target_arch = "x86"` / `"x86_64"` and has no `aarch64` equivalent** — 67 occurrences of those two,
+zero for ARM — so on Apple Silicon, Graviton, or any ARM host every call fell back to naive scalar
+DP. A benchmark on an x86 laptop would never have shown this.
 
-None of this is new information about *what* to do; every item is already in *Deferred improvements*
-(band or linear-space the guard alignment, replace the scalar NW, drop the per-slot `Vec<u8>` in the
-MSA). What is new is that they are now measured rather than suspected, and that the equivalence
-oracles make each one safe to attempt. Do them in profile order, not in the order they were noticed.
+`rapidfuzz` implements the same bit-parallel Myers algorithm edlib uses, in plain `u64` arithmetic
+with **no architecture guards at all**. Swapping it in is safe for the reason at the top of
+`editdist.rs`: the answer is a uniquely defined number, so there is no tie-break to preserve.
+
+| | wall | peak RSS |
+| --- | --- | --- |
+| before (`triple_accel`) | 10.7 s | 420 MB |
+| after (`rapidfuzz`) | **3.9 s** | 420 MB |
+
+**2.7x on one cluster, and 4.1x against the Python reference.** On the 68-cluster folder at `--t 8`:
+**84.1 s → 24.2 s, a 3.5x speedup**, with all 68 outputs still byte-identical and the full
+29-case sweep green. Memory is untouched, because the memory peak is the guard, not this.
+
+### Where it is now: the guard dominates
+
+Re-profiling after the swap (2 246 samples, same cluster) inverts the picture:
+
+| component | before | after |
+| --- | --- | --- |
+| **the parasail guard** | 19% | **65%** |
+| `get_best_corrections` in total | ~10% | 8% |
+| NW CIGAR (`align::global`) | 3% | 7% |
+| spoa consensus | 2% | 4% |
+| bounded edit distance | **67%** | **2%** |
+
+So the next target is `parasail.rs`, which is also the memory peak: three `i32` tables over the full
+read against its own correction, ~24 MB per read at 1.4 kb. Two output-neutral changes are described
+under *Deferred improvements*, and `parasail_cases.tsv` (2 408 recorded alignments, scores and
+CIGARs) is what makes either safe to attempt.
+
+**Banding it needs care, and is probably wrong.** The obvious speedup is to restrict the DP to a
+band around the diagonal, since a read and its own correction differ by very little. But the guard
+exists precisely to catch *structural* differences — an exon-length indel moves the optimal path
+hundreds of cells off-diagonal, and a band narrow enough to be fast would exclude exactly the cases
+the guard is for. Reducing memory and improving cache behaviour (two rows plus a packed traceback
+array instead of three full `i32` matrices) is the safe win; SIMD is the ambitious one.
 
 ## Profiling
 
