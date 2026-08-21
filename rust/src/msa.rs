@@ -97,9 +97,58 @@ pub fn pfm(rows: &[Vec<u8>]) -> Vec<Column> {
     pfm
 }
 
-/// One slot of a positioned vector: the insertion before a consensus position,
-/// or the base aligned to it.
-type Slot = Vec<u8>;
+/// A positioned vector: `2 * t + 1` slots laid out in one flat buffer.
+///
+/// The obvious representation is `Vec<Vec<u8>>`, one allocation per slot, which
+/// is the shape the reference's list of strings has. That is
+/// `2 * len(consensus) + 1` tiny allocations per supporting segment per
+/// correction interval, and nearly all of them hold the single byte `"-"`. On a
+/// profile of ten real clusters `create_multialignment_matrix` was **14.3%** of
+/// runtime, most of it allocator traffic.
+///
+/// Every slot is either one character or a **contiguous run of the aligned
+/// query** — an insertion is exactly the query characters opposite a run of
+/// consensus gaps — so all of them fit in one buffer with an offset table. Two
+/// allocations per segment instead of `2t + 1`.
+///
+/// This is a representation change only. The slot *contents* are identical, so
+/// the 192 252-row matrix oracle must not move.
+#[derive(Debug, Clone, Default)]
+pub struct Positioned {
+    buf: Vec<u8>,
+    slots: Vec<(u32, u32)>,
+}
+
+impl Positioned {
+    /// Number of slots, always `2 * t + 1`.
+    pub fn len(&self) -> usize {
+        self.slots.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+
+    /// Contents of slot `i`.
+    #[inline]
+    pub fn slot(&self, i: usize) -> &[u8] {
+        let (off, len) = self.slots[i];
+        &self.buf[off as usize..off as usize + len as usize]
+    }
+
+    /// The slots in order.
+    pub fn iter(&self) -> impl Iterator<Item = &[u8]> + '_ {
+        self.slots
+            .iter()
+            .map(move |&(off, len)| &self.buf[off as usize..off as usize + len as usize])
+    }
+
+    fn push(&mut self, bytes: &[u8]) {
+        let off = self.buf.len() as u32;
+        self.buf.extend_from_slice(bytes);
+        self.slots.push((off, bytes.len() as u32));
+    }
+}
 
 /// Re-express a pairwise alignment against the consensus slot vector, matching
 /// `position_query_to_alignment(query_aligned, target_aligned, 0)`.
@@ -110,31 +159,35 @@ type Slot = Vec<u8>;
 ///
 /// The reference also returns the start and end vector positions, but they are
 /// `0` and `2 * t` by construction and it immediately asserts as much.
-pub fn positioned(query_aligned: &[u8], target_aligned: &[u8]) -> Vec<Slot> {
+pub fn positioned(query_aligned: &[u8], target_aligned: &[u8]) -> Positioned {
     assert_eq!(
         query_aligned.len(),
         target_aligned.len(),
         "the two rows of a pairwise alignment must have equal length"
     );
-    let mut out: Vec<Slot> = Vec::with_capacity(target_aligned.len() * 2 + 1);
-    let mut temp_ins: Vec<u8> = Vec::new();
+    let n = target_aligned.len();
+    let mut out = Positioned {
+        buf: Vec::with_capacity(n + n / 2 + 2),
+        slots: Vec::with_capacity(n * 2 + 1),
+    };
 
+    // An insertion is a contiguous run of query characters opposite consensus
+    // gaps, so it is tracked as a range into `query_aligned` and copied once.
+    let mut run_start: Option<usize> = None;
     for (p, &t) in target_aligned.iter().enumerate() {
         if t == b'-' {
-            temp_ins.push(query_aligned[p]);
+            run_start.get_or_insert(p);
         } else {
-            if temp_ins.is_empty() {
-                out.push(vec![b'-']);
-            } else {
-                out.push(std::mem::take(&mut temp_ins));
+            match run_start.take() {
+                Some(start) => out.push(&query_aligned[start..p]),
+                None => out.push(b"-"),
             }
-            out.push(vec![query_aligned[p]]);
+            out.push(&query_aligned[p..p + 1]);
         }
     }
-    if temp_ins.is_empty() {
-        out.push(vec![b'-']);
-    } else {
-        out.push(temp_ins);
+    match run_start {
+        Some(start) => out.push(&query_aligned[start..]),
+        None => out.push(b"-"),
     }
     out
 }
@@ -251,7 +304,7 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 pub fn multialignment_matrix(rows: &[(&[u8], &[u8])]) -> Vec<Vec<u8>> {
     assert!(!rows.is_empty(), "multialignment of an empty partition");
 
-    let segments: Vec<Vec<Slot>> = rows.iter().map(|&(q, t)| positioned(q, t)).collect();
+    let segments: Vec<Positioned> = rows.iter().map(|&(q, t)| positioned(q, t)).collect();
 
     let nr_pos = segments[0].len();
     assert!(
@@ -264,7 +317,7 @@ pub fn multialignment_matrix(rows: &[(&[u8], &[u8])]) -> Vec<Vec<u8>> {
     let mut unique: Vec<BTreeSet<&[u8]>> = vec![BTreeSet::new(); nr_pos];
     for segment in &segments {
         for (p, slot) in segment.iter().enumerate() {
-            unique[p].insert(slot.as_slice());
+            unique[p].insert(slot);
         }
     }
 
@@ -321,7 +374,7 @@ pub fn multialignment_matrix(rows: &[(&[u8], &[u8])]) -> Vec<Vec<u8>> {
                     );
                     row.push(slot[0]);
                 } else {
-                    row.extend_from_slice(&solutions[max_ins.as_slice()][slot.as_slice()]);
+                    row.extend_from_slice(&solutions[max_ins.as_slice()][slot]);
                 }
             }
             row
@@ -340,7 +393,7 @@ mod tests {
     fn slots(query: &str, target: &str) -> Vec<String> {
         positioned(query.as_bytes(), target.as_bytes())
             .iter()
-            .map(|v| s(v))
+            .map(s)
             .collect()
     }
 
