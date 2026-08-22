@@ -35,6 +35,15 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --release
+      # x86_64 defaults to block-aligner's SSE2 backend so the binary runs on any
+      # x86_64 CPU. The AVX2 backend is selected by a target_feature cfg, so it is
+      # only compiled when someone builds with AVX2 enabled -- which means nothing
+      # would notice it breaking. Check it here.
+      - name: check the AVX2 backend compiles
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          RUSTFLAGS: "-C target-feature=+avx2"
+        run: cargo check --all-targets
       # The port must keep building on its declared MSRV.
       - name: check the declared MSRV still builds
         if: matrix.os == 'ubuntu-latest'

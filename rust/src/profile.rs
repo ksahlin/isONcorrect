@@ -113,7 +113,7 @@ pub fn report(total_wall: Duration) {
     }
 
     let mut rows: Vec<(&&str, &(u64, Duration, Duration))> = totals.iter().collect();
-    rows.sort_by(|a, b| b.1 .1.cmp(&a.1 .1));
+    rows.sort_by_key(|a| std::cmp::Reverse(a.1 .1));
 
     let wall = total_wall.as_secs_f64();
     println!();

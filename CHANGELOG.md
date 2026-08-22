@@ -47,6 +47,14 @@ Real ONT data, 8 threads, against the Python implementation:
 | 266 drosophila clusters, 54 721 reads | 181 s | **18.5 s** | 9.8x |
 | one 200-read cluster, peak memory | 339 MB | **~147 MB** | 2.3x less |
 
+### A note on the prebuilt x86_64 binaries
+
+They use SSE2, which every x86_64 CPU has, so they run anywhere. The aligner's SIMD backend is chosen
+at compile time with no runtime dispatch, so an AVX2 build would crash outright on pre-2013 CPUs
+rather than falling back. If your hardware is newer and you want the 256-bit path, build from source
+with `RUSTFLAGS="-C target-cpu=native" cargo build --release` — the faster backend is selected
+automatically.
+
 ### Removed flags
 
 Six flags are gone from both implementations: `--randstrobes`, `--layers`, `--set_layers_manually`,

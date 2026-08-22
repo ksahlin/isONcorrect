@@ -458,6 +458,26 @@ catch it.
 
 ### Porting gotchas found so far
 
+- **`block-aligner`'s SIMD backend is a target-specific *dependency feature*, and getting that wrong
+  made the port aarch64-only.** `features = ["simd_neon"]` listed unconditionally fails on x86_64 with
+  `unresolved import std::arch::aarch64`, and because block-aligner is on the default path for both
+  aligners, **the tool did not build on the commonest platform at all**. Nothing local caught it —
+  every check in this file had only ever run on Apple Silicon. GitHub Actions caught it on its first
+  run, which is the argument for having CI at all.
+
+  Two things learned fixing it. block-aligner picks its backend at **compile time with no runtime
+  dispatch**, so an AVX2 build executes AVX2 unconditionally and dies with SIGILL on a pre-Haswell
+  CPU; x86_64 therefore defaults to **SSE2**, which is in the x86_64 baseline. And Cargo *does*
+  evaluate `target_feature` in `[target.'cfg(...)'.dependencies]` — verified with `cargo tree` — so
+  `-C target-cpu=native` selects the 256-bit backend automatically without a crate feature of our own.
+  A crate feature could not work here anyway: Cargo features are additive, and enabling both
+  `simd_sse2` and `simd_avx2` makes block-aligner define `L` twice.
+
+  **The SSE2 path is verified, not assumed**: cross-built to `x86_64-apple-darwin` and run under
+  Rosetta, where all 195 tests pass, the corrected output is byte-identical to the Neon build, and
+  exact mode still matches the golden. CI also compiles the AVX2 backend explicitly, since a
+  `target_feature` cfg means nothing would otherwise notice it breaking.
+
 - **clap rewrites `field_name` to `--field-name`.** The reference uses underscores throughout, so
   every multi-word flag silently became a different flag (`--max_seqs` → `--max-seqs`) until each
   was pinned with an explicit `long = "..."`. `cli.rs` has tests asserting the exact flag set and

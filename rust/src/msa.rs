@@ -47,7 +47,7 @@ use crate::align;
 /// Note this is the seven-symbol dict from `get_best_corrections`, which
 /// includes `N`. `correct_seqs` has a six-symbol variant without it; that one
 /// belongs to `correct_to_consensus`, which isONcorrect never calls.
-pub const ALPHABET: [u8; 7] = [b'A', b'C', b'G', b'T', b'U', b'-', b'N'];
+pub const ALPHABET: [u8; 7] = *b"ACGTU-N";
 
 /// Column of the PFM: one count per [`ALPHABET`] symbol.
 ///
