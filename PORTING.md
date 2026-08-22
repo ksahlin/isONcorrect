@@ -1171,22 +1171,25 @@ Where the time goes now, ten real clusters and 30 000 reads, after the MSA and `
 
 | stage | calls | self | share |
 | --- | --- | --- | --- |
-| `align` (segment vs consensus) | 11 775 | 20.99 s | 17.3% |
-| `run_spoa` | 11 775 | 20.29 s | 16.8% |
-| `find_most_supported_span` | 342 940 | 20.20 s | 16.7% |
-| `get_alternative_ref_contexts` | 11 775 | 19.07 s | 15.8% |
-| `create_multialignment_matrix` | 11 775 | 17.25 s | 14.3% |
-| `get_minimizer_combinations_database` | 20 | 3.87 s | 3.2% |
-| the guard | 30 000 | 2.41 s | 2.0% |
-| I/O, parsing, glue | | 10.47 s | 8.7% |
-| **total** | | **120.99 s** | |
+| `align` (segment vs consensus) | 11 775 | 22.11 s | 21.1% |
+| `run_spoa` | 11 775 | 21.21 s | 20.2% |
+| `find_most_supported_span` | 342 940 | 20.55 s | 19.6% |
+| `create_multialignment_matrix` | 11 775 | 9.66 s | 9.2% |
+| `get_alternative_ref_contexts` | 11 775 | 6.99 s | 6.7% |
+| `get_minimizer_combinations_database` | 20 | 4.15 s | 4.0% |
+| the guard | 30 000 | ~2.4 s | ~2% |
+| I/O, parsing, glue | | 10.96 s | 10.5% |
+| **total** | | **104.85 s** | |
 
-Cumulatively **207.9 s -> 121.0 s** across four rounds: the MSA representation, the affine aligner,
-`find_most_supported_span`, and the segment aligner's per-call cost.
+Cumulatively **207.9 s -> 104.9 s** across five rounds: the MSA representation, the affine aligner,
+`find_most_supported_span`, the segment aligner's per-call cost, and the contexts/MSA trees.
 
-**The profile is now flat** — 17%, 17%, 17%, 16%, 14% — which is a different situation from every
-round above, each of which had one obvious target. There is no single next win; each remaining stage
-is worth at most ~8% of total even if halved.
+**Three stages now share the top and the rest are small** — `align`, `run_spoa` and
+`find_most_supported_span` at 21/20/20%, then a gap to 9%. All three are close to their floor under
+the current constraints: `align` is SIMD with a derived band, `run_spoa` is spoa's own algorithm and
+its per-call setup measures at zero (see `poa.rs`), and `find_most_supported_span` is 343 000 calls of
+already-lean per-call work. Further gains here need a *different algorithm*, not tuning — which for
+`run_spoa` means giving up byte-identity with spoa.
 
 Two notes on reading these numbers. Absolute totals move with machine load (the same build measured
 132 s and 121 s in two runs while other jobs came and went); *shares* are stable to a point or so and
@@ -1200,9 +1203,17 @@ sub-stage measurements have to be taken and then removed, never left in.
   *improve* accuracy: the guard by 0.005 pp, the affine MSA aligner by 0.013 pp.
 - ~~**Re-profiling.**~~ **Done** — see *Where it stands*. `find_most_supported_span` is now the top
   cost at 28.4%, and it is 343 000 calls rather than one hot loop, so the next win is per-call work.
-- **A native POA** to replace `spoars` (see *Deferred improvements*).
-- **Real long-read data.** The real corpus here is SIRV, whose reads are short (median ~600 bp). A
-  transcriptome with multi-kb transcripts would stress the guard and the band assumptions harder.
+- **A native POA** to replace `spoars` — still deferred, and *Deferred improvements* now records why
+  the case for it is weaker: allocation reuse measures at zero, leaving only the dependency argument.
+- ~~**Real long-read data.**~~ **Done** — real ONT drosophila cDNA through isONclust, scored against
+  the genome by spliced alignment. See *The drosophila corpus, and the bug it found*; it found one.
+  Reads are still not multi-kb (median 553 bp, p99 2 705), so a transcriptome with genuinely long
+  transcripts would still stress the guard and the block-width bound harder than anything tested.
+- **Decide on `ISONCORRECT_FIX_WIS`.** It is measured, provably optimal and a large accuracy win, and
+  it is still off by default. Turning it on — or better, fixing `fill_p2` in the reference — is a
+  deliberate decision that re-records every golden and moves every accuracy number in this file.
+- **`tools/repo-slim/`** is staged and unrun. It rewrites history and force-pushes, so it needs a
+  human at the keyboard.
 
 ### The drosophila corpus, and the bug it found
 
@@ -1490,11 +1501,18 @@ trajectory still passes. Comparing `spans.tsv` from the live driver is what caug
 
 
 
-- **Write a native linear-gap kSW POA + heaviest-bundle consensus**, replacing `spoars`. Removes the
-  only low-usage dependency on the critical path and allows reusing graph allocations across
-  intervals, which matters because POA runs once per correction interval. `poa.rs` already isolates
-  the surface (`consensus`), and `poa::oracle` is the acceptance test — 505 real intervals against
-  the `spoa` binary. Deferred because `spoars` is already byte-identical on that corpus.
+- **Write a native linear-gap kSW POA + heaviest-bundle consensus**, replacing `spoars`. **Still
+  deferred, and the case for it is now weaker than when this note was written.** It had two
+  justifications and one of them has been measured to zero: reusing allocations across intervals is
+  worth nothing (`run_spoa` 21.28 s to 21.21 s when the engine is hoisted into a thread-local — see
+  `poa.rs`), because the cost is the POA dynamic programming, not the per-call setup. A native
+  implementation constrained to reproduce spoa's output exactly would do the same asymptotic work.
+
+  What remains is the dependency argument: `spoars` is v0.1.3 with low usage, sitting on the critical
+  path. Against that, `spoars` is ~14 000 lines of which ~5 700 is the SIMD alignment core, so this is
+  a large project, and `poa::oracle` has now held byte-identical on **5 705 recorded intervals in a
+  single session**, across the fixture, SIRV and drosophila. The oracle is the standing mitigation and
+  must stay green on every upgrade.
 - ~~**The guard's semi-global alignment is `O(n*m)` in time and memory.**~~ **Done both ways.**
   `block-aligner` replaced it (SIMD + banded, ~0.8% of reads change), and the exact DP behind
   `ISONCORRECT_EXACT_GUARD=1` got the two-row rewrite. Original note follows for context:
@@ -1515,12 +1533,22 @@ trajectory still passes. Comparing `spans.tsv` from the live driver is what caug
   the only caller passed `0` and `2*len(repr_seq)`, and `position_query_to_alignment` always returns
   `t_vector_start = 0`, `t_vector_end = 2*t` (it asserts as much), so the filter admitted every row
   and the slice was the whole vector. Parameters and filter deleted; all 43 goldens byte-identical.
-- The `hash_fcn` parameter is threaded through but hardcoded to `"lex"`; `get_kmer_minimizers`
-  (random) and `get_kmer_maximizers` are dead in the default path.
-- Dropping the flags listed under *Scope* leaves a large amount of now-unreachable Python
-  (`randstrobe*`, `seq_to_strobes_iter*`, `run_racon`, `get_minimizers_and_positions_compressed`,
-  and most of `create_augmented_reference`). Deleting it from the Python tree is tempting but is a
-  separate commit, and only after the port has passed the full sweep.
+- The `hash_fcn` parameter is threaded through but hardcoded to `"lex"`. `get_kmer_minimizers`
+  (random) and `get_kmer_maximizers` were dead in the default path and are now deleted; the
+  parameter itself remains, threaded and constant.
+- ~~**Dropping the flags listed under *Scope* leaves a large amount of unreachable Python.**~~
+  **Done.** The six out-of-scope flags are gone from the Python CLI too, along with the code only
+  they reached: 15 functions in `isONcorrect.py` (`randstrobe*`, `seq_to_strobes_iter*`,
+  `get_randstrobes_*`, `get_kmer_minimizers`/`maximizers`,
+  `get_minimizers_and_positions_compressed`, `sep_function*`, `get_primes`, `argmin`) and 10 in
+  `create_augmented_reference.py` (`run_racon`, five unused spoa variants, `longest_path_botond`,
+  `kmer_counter`). **3 286 lines to 2 634, a 20% cut, with all 43 goldens byte-identical.**
+
+  This makes the reference's supported set equal the port's, which is the point — previously the two
+  disagreed about which flags exist. It does mean the *reference* now rejects `--randstrobes` and
+  friends as unrecognised arguments, where the Rust port names them specifically, so the port's error
+  message is the more helpful of the two. The 7 unsupported-flag equivalence cases test the Rust
+  binary only and are unaffected.
 
 ## Repo hygiene
 

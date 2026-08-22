@@ -18,6 +18,19 @@
 //! identical consensus to the `spoa` binary. See `PORTING.md`, and the
 //! `oracle` test below, which re-checks it on demand.
 //!
+//! # Measured and rejected: reusing the engine across intervals
+//!
+//! `SimdEngine` owns grow-only DP scratch that it reuses across `align` calls, so
+//! building one per interval — 11 775 per ten real clusters — looks like pure
+//! waste. Hoisting it into a thread-local is **worth nothing**: `run_spoa` went
+//! 21.28 s to 21.21 s, inside the noise. The per-call allocation is not the cost;
+//! the POA dynamic programming is.
+//!
+//! That also bears on whether to write a native POA (see *Deferred improvements*).
+//! Allocation reuse was one of the two arguments for it, and this measures that
+//! argument at zero. A native implementation constrained to reproduce spoa's
+//! output exactly would do the same asymptotic work.
+//!
 //! **Sequence insertion order changes the consensus.** POA is order-sensitive,
 //! so the order `get_best_corrections` writes segments — which is `to_add`'s
 //! insertion order from `find_most_supported_span` — must be preserved,
