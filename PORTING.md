@@ -1155,17 +1155,32 @@ error rate); the claim is the sign, not the magnitude.
 
 ### Where it stands
 
-| | Python | Rust exact | Rust default | |
-| --- | --- | --- | --- | --- |
-| one 200-read gene cluster | 16.1 s, 339 MB | 3.3 s | **1.4 s, ~147 MB** | 11.6x faster |
-| 68 simulated clusters, `--t 8` | 83.7 s | 23.8 s | **13.3 s** | 6.3x faster |
-| **32 real isONclust clusters, 75 442 reads, `--t 8`** | **417.7 s** | 128.9 s | **48.1 s** | **8.7x faster** |
+All rows below are **after** the `fill_p2` fix, on both sides, so Python and Rust are doing the same
+(larger) amount of correction.
 
-Byte-identical with both exact-mode variables set. The two divergences are the guard's aligner
-(~0.8% of reads) and the MSA's aligner (~11% of alignments); see *Goal* for the table.
+| | Python | Rust default | |
+| --- | --- | --- | --- |
+| one 200-read gene cluster | 16.1 s, 339 MB | **1.4 s, ~147 MB** | 11.6x faster |
+| 32 real SIRV clusters, 75 442 reads, `--t 8` | 432.2 s | **43.5 s** | **9.9x faster** |
+| **266 real drosophila clusters, 54 721 reads, `--t 8`** | **181.2 s** | **18.5 s** | **9.8x faster** |
 
-Gates: **29/29** equivalence cases (exact mode), 9/9 stage-oracle runs, 191 unit tests, and
-`spans.tsv` byte-identical over eight dump comparisons.
+**Byte-identity in exact mode**, measured against the fixed reference:
+
+| corpus | reads | clusters differing | reads differing |
+| --- | --- | --- | --- |
+| the 100-read fixture, 29 equivalence cases | — | 0 | 0 |
+| 32 real SIRV clusters | 75 442 | **0 of 32** | **0** |
+| 266 real drosophila clusters | 54 721 | 2 of 266 | **2** |
+
+The two drosophila reads are the parasail semi-global end-cell tie-break, where the scores match and
+only the reported path differs; both happen to be *better* by the accuracy measure. See *The parasail
+tie-break the corpus finally reached*.
+
+The two deliberate divergences that the default path carries on top are the guard's aligner (~0.8% of
+reads) and the MSA's aligner (~11% of alignments); see *Goal*.
+
+Gates: **29/29** equivalence cases (exact mode), stage oracles green on every recorded corpus
+including drosophila, 195 unit tests, and `spans.tsv` byte-identical over eight dump comparisons.
 
 Where the time goes now, ten real clusters and 30 000 reads, after the MSA and `align` work:
 
@@ -1367,17 +1382,26 @@ mismatches each, and every other stage clean (78 288 edlib CIGARs, 76 540 MSA ro
 
 **Confirmed independently on the SIRV corpus**, which matters because it is a different organism, a
 different truth source (edlib against a transcriptome rather than spliced alignment against a genome)
-and a different error profile — 32 real isONclust clusters, 75 156 reads:
+and a different error profile — 32 real isONclust clusters, 75 156 reads. Measured before the fix
+landed, comparing the port with and without it: mean 1.696% to 1.632%, total 1.232% to 1.157%,
+perfect reads 158 to 169, **-0.0638 pp, better on 20 198 and worse on 9 753** — a 67% win rate.
+Smaller in absolute terms than on drosophila (-0.316 pp), which is consistent with everything else in
+this file: the spike-in and simulated corpora understate how much these decisions matter on real data.
+
+Re-measured after the fix landed in the reference, comparing the reference against itself on the same
+75 156 reads:
 
 | set | mean % | median % | p90 % | total % | perfect |
 | --- | --- | --- | --- | --- | --- |
-| Python reference | 1.714 | 1.165 | 3.601 | 1.259 | 156 |
-| Rust default | 1.696 | 1.143 | 3.608 | 1.232 | 158 |
-| **+ `fill_p` fixed** | **1.632** | **1.086** | **3.456** | **1.157** | **169** |
+| Python, before the fix | 1.714 | 1.165 | 3.601 | 1.259 | 156 |
+| **Python, after the fix** | **1.649** | **1.104** | **3.448** | **1.183** | **163** |
+| Rust default | 1.632 | 1.086 | 3.456 | 1.157 | 169 |
 
--0.0638 pp against the Rust default, better on 20 198 and worse on 9 753 — a 67% win rate. Smaller in
-absolute terms than on drosophila (-0.319 pp), which is consistent with everything else in this file:
-the simulated and spike-in corpora understate how much these decisions matter on real data.
+The unfixed reference is +0.0652 pp: worse on 20 384 reads and better on 10 119, a 67% loss rate —
+the same direction and the same ratio as drosophila, on a different organism and a different truth
+source. **And the fixed port is byte-identical to the fixed reference here** — all 32 clusters,
+75 442 reads, in exact mode. The two drosophila reads that still differ are the parasail tie-break,
+which this corpus does not reach.
 
 It costs about 7% in wall clock (48.1 s to 51.8 s on the 32 SIRV clusters at `--t 8`), which is
 exactly what one expects from correcting more regions — the defect's only virtue was doing less work.
