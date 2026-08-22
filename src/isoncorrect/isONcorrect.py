@@ -1317,7 +1317,6 @@ def correct_read(seq, reads, intervals_to_correct, k_size, work_dir, v_depth_rat
     s1_alignment, s2_alignment, cigar_string, cigar_tuples, score = parasail_alignment(seq, corr, match_score=4, mismatch_penalty=-8, opening_penalty=12, gap_ext=1)
     # print('Alignment took: ', time() - start )
     adjusted_corr = fix_correction(s1_alignment, s2_alignment)
-    s1_alignment, s2_alignment, cigar_string, cigar_tuples, score = parasail_alignment(seq, adjusted_corr, match_score=4, mismatch_penalty=-8, opening_penalty=12, gap_ext=1)
 
     return adjusted_corr, other_reads_corrected_regions
 
@@ -1404,24 +1403,8 @@ def isoncorrect_main(args):
         x_low = args.xmin
         hash_fcn = "lex"
         # for hash_fcn in ["lex"]: # ["lex"]: #  add "rev_lex" # add four others
-        if args.randstrobes:
-            if args.set_layers_manually:
-                primes = get_primes(1000, args.layers)
-            else:
-                layers = 1 if len(reads) >= 1000 else 2
-                print("Using {0} layers.".format(layers))
-                primes = get_primes(1000, layers)
-            # print(primes)
-            # primes = [97,73]
-            # minimizer_combinations_database, read_to_randstrobes = get_randstrobes_with_positions_database(reads, k_size, x_low, x_high, primes)
-            minimizer_combinations_database = get_randstrobes_with_positions_database_2way(reads, k_size, x_low, x_high, primes)
-        else:
-            if args.compression:
-                minimizer_database  = get_minimizers_and_positions_compressed(reads, w, k_size, hash_fcn)
-            else:
-                minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
-
-            minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
+        minimizer_database  = get_minimizers_and_positions(reads, w, k_size, hash_fcn)
+        minimizer_combinations_database = get_minimizer_combinations_database(reads, minimizer_database, k_size, x_low, x_high)
 
         quality_values_database = get_qvs(reads)
         # print(minimizer_database)
@@ -1441,16 +1424,7 @@ def isoncorrect_main(args):
         for r_id in sorted(reads): #, reverse=True):
             # print()
             # print(reads[r_id][0])
-            if args.randstrobes:
-                seq = reads[r_id][1]
-                # print("seq length:", len(seq))
-                # read_min_comb = [ ((m1,p1), m1_curr_spans) for m1, p1, m1_curr_spans in randstrobe_iterator(seq, k_size, x_low, x_high, primes)] 
-                read_min_comb = randstrobes_read_2way(seq, k_size, x_low, x_high, primes)
-                # read_min_comb = read_to_randstrobes[r_id]
-            else:
-                # seq = reads[r_id][1]
-                # print("seq length:", len(seq))
-                read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
+            read_min_comb = [ ((m1,p1), m1_curr_spans) for (m1,p1), m1_curr_spans in  minimizers_comb_iterator(minimizer_database[r_id], k_size, x_low, x_high)]
 
             # print(read_min_comb)
             # sys.exit()

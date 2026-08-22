@@ -167,7 +167,7 @@ def get_best_solution(max_insertion, q_ins):
 
 
 
-def create_multialignment_format_NEW(query_to_target_positioned_dict, start, stop):
+def create_multialignment_format_NEW(query_to_target_positioned_dict):
     """
             1. From segments datastructure, get a list (coordinate in MAM) of lists insertions that contains all the insertions in that position
             2. Make data structure unique_indels =  set(insertions) to get all unique insertions in a given position
@@ -184,19 +184,17 @@ def create_multialignment_format_NEW(query_to_target_positioned_dict, start, sto
                         1. [ ] [alignmet[q_acc].append(char) for char in solution]
     """
     assert len(query_to_target_positioned_dict) > 0
-    target_vector_length = len( list(query_to_target_positioned_dict.values())[0][0])
-    assert stop < target_vector_length # vector coordinates are 0-indexed
 
-    # get allreads alignments covering interesting segment
-    # row_accessions = []
+    # This used to take `start`/`stop` and filter to the rows covering that
+    # window, but the only caller passed the full vector -- `0` and
+    # `2*len(repr_seq)` -- and `position_query_to_alignment` always returns
+    # `t_vector_start = 0` and `t_vector_end = 2*t`, which it asserts. So the
+    # filter admitted every row and the slice was the whole vector. Both are gone.
     segments = {}
     segment_lists = []
-    for q_acc, (q_to_t_pos, t_vector_start, t_vector_end) in query_to_target_positioned_dict.items():
-        if t_vector_start <= start and t_vector_end >= stop: # read cover region
-            segment = q_to_t_pos[start - t_vector_start : stop - t_vector_start +1 ]
-            # row_accessions.append(q_acc)
-            segments[q_acc] = segment
-            segment_lists.append(segment)
+    for q_acc, (q_to_t_pos, _, _) in query_to_target_positioned_dict.items():
+        segments[q_acc] = q_to_t_pos
+        segment_lists.append(q_to_t_pos)
 
     # 1
     unique_insertions = [set(i) for i in zip(*segment_lists)]
@@ -313,7 +311,7 @@ def create_multialignment_matrix(partition):
         assert target_vector_end_position + 1 == 2*len(repr_seq) + 1 # vector positions are 0-indexed
         query_to_target_positioned_dict[q_acc] = (s_positioned, target_vector_start_position, target_vector_end_position)
 
-    alignment_matrix = create_multialignment_format_NEW(query_to_target_positioned_dict, 0, 2*len(repr_seq))
+    alignment_matrix = create_multialignment_format_NEW(query_to_target_positioned_dict)
     # print(alignment_matrix)
     # sys.exit()
     return alignment_matrix
