@@ -44,6 +44,7 @@
 //! set. See PORTING.md.
 
 use indexmap::IndexMap;
+use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::editdist;
 
@@ -167,6 +168,8 @@ pub fn frequency_context_matrix(
     let mut windows: Vec<Window> = Vec::new();
     let mut per_column = Vec::with_capacity(contexts.len());
     let mut prev: Option<(usize, usize)> = None;
+    // Reused across windows; `clear` keeps the capacity.
+    let mut counts: FxHashMap<&[u8], u32> = FxHashMap::default();
 
     for &(start, stop) in contexts {
         if prev == Some((start, stop)) {
@@ -176,19 +179,22 @@ pub fn frequency_context_matrix(
         prev = Some((start, stop));
 
         // `np.unique` sorts the raw bytes, which for these strings is plain
-        // lexicographic order --- so a BTreeMap gives the tie-break for free.
-        let mut counts: std::collections::BTreeMap<&[u8], u32> = std::collections::BTreeMap::new();
+        // lexicographic order, and the reference then sorts by depth. A BTreeMap
+        // gave the lexicographic order for free, but at a tree lookup with a
+        // string compare per row per window. Counting in a hash map and sorting
+        // by `(depth descending, bytes ascending)` once is the same total order,
+        // and the sort runs over the *surviving* contexts rather than all of them.
+        counts.clear();
         for row in rows {
             *counts.entry(&row[start..stop]).or_insert(0) += 1;
         }
 
         let mut contexts: Vec<(Vec<u8>, u32)> = counts
-            .into_iter()
-            .filter(|&(_, n)| f64::from(n) > cutoff)
-            .map(|(ctx, n)| (ctx.to_vec(), n))
+            .iter()
+            .filter(|&(_, &n)| f64::from(n) > cutoff)
+            .map(|(&ctx, &n)| (ctx.to_vec(), n))
             .collect();
-        // Stable, so equal depths keep the lexicographic order above.
-        contexts.sort_by_key(|&(_, n)| std::cmp::Reverse(n));
+        contexts.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
         windows.push(Window { start, contexts });
         per_column.push(windows.len() - 1);
@@ -233,12 +239,20 @@ pub fn alternative_ref_contexts(
 ) -> Vec<Vec<Alternative>> {
     let mut out = vec![Vec::new(); ref_aln.len()];
 
+    let mut eligible: Vec<Eligible> = Vec::new();
     for j in 0..ref_aln.len() {
-        let eligible: Vec<Eligible> = fcm.column(j).collect();
-        // `len({v for ...}) == 1` --- one variant means nothing to choose.
-        if eligible.is_empty() || eligible.iter().all(|e| e.variant == eligible[0].variant) {
+        // `len({v for ...}) == 1` --- one variant means nothing to choose. Most
+        // columns exit here, so the test runs over the iterator and the vector is
+        // only filled for columns that survive.
+        let mut variants = fcm.column(j).map(|e| e.variant);
+        let Some(first) = variants.next() else {
+            continue;
+        };
+        if variants.all(|v| v == first) {
             continue;
         }
+        eligible.clear();
+        eligible.extend(fcm.column(j));
 
         let (start, stop) = contexts[j];
         let consensus_context: Vec<u8> = degap(&ref_aln[start..stop]);
@@ -246,7 +260,11 @@ pub fn alternative_ref_contexts(
 
         // `None` marks the two seeded consensus entries, which are removed
         // below; the reference seeds them with an empty `set()`.
-        let mut filed: IndexMap<Vec<u8>, Option<Alternative>> = IndexMap::new();
+        // `FxBuildHasher`: this map is looked up by key and iterated in
+        // *insertion* order, which `IndexMap` preserves for any hasher, so the
+        // hasher cannot reach the result.
+        let mut filed: IndexMap<Vec<u8>, Option<Alternative>, FxBuildHasher> =
+            IndexMap::with_hasher(FxBuildHasher);
         filed.insert(consensus_hpol.clone(), None);
         filed.insert(consensus_context.clone(), None);
 

@@ -37,7 +37,7 @@
 //! * rows keep the partition's insertion order. The PFM does not care, but
 //!   later stages iterate the matrix and the corrected output does.
 
-use std::collections::{BTreeSet, HashMap};
+use rustc_hash::FxHashMap;
 
 use crate::align;
 
@@ -312,52 +312,49 @@ pub fn multialignment_matrix(rows: &[(&[u8], &[u8])]) -> Vec<Vec<u8>> {
         "rows disagree about the consensus length"
     );
 
-    // Per slot, the distinct strings across all rows. `BTreeSet` because the
-    // widest insertion is picked with `sorted(...)[0]`.
-    let mut unique: Vec<BTreeSet<&[u8]>> = vec![BTreeSet::new(); nr_pos];
-    for segment in &segments {
-        for (p, slot) in segment.iter().enumerate() {
-            unique[p].insert(slot);
-        }
-    }
-
     // How wide each slot becomes: `-` for a one-character slot, else the
     // lexicographically smallest of the longest insertions, padded either side.
-    let max_insertions: Vec<Vec<u8>> = unique
-        .iter()
-        .enumerate()
-        .map(|(p, set)| {
-            let max_len = set.iter().map(|s| s.len()).max().unwrap_or(1);
-            if max_len <= 1 {
-                return vec![b'-'];
+    //
+    // The reference takes `sorted(set(...))[0]` of the longest, and this used to
+    // mirror that with a `BTreeSet` per slot — `2t + 1` trees per matrix, each
+    // paying a string compare per insert per segment. But the *only* things the
+    // set was ever asked for were the maximum length and the lexicographically
+    // smallest string at that length, and a single pass tracks both directly.
+    let mut max_insertions: Vec<Vec<u8>> = Vec::with_capacity(nr_pos);
+    for p in 0..nr_pos {
+        let mut best: Option<&[u8]> = None;
+        for segment in &segments {
+            let slot = segment.slot(p);
+            // Longer wins outright; equal length breaks lexicographically, which
+            // is exactly `sorted(...)[0]` over the longest.
+            let better = match best {
+                None => true,
+                // Longer wins outright; at equal length the *smaller* string
+                // wins, because the reference takes `sorted(...)[0]`.
+                Some(b) => slot.len() > b.len() || (slot.len() == b.len() && slot < b),
+            };
+            if better {
+                best = Some(slot);
             }
-            assert_eq!(p % 2, 0, "an insertion in a consensus-base slot");
-            let widest = set
-                .iter()
-                .find(|s| s.len() == max_len)
-                .expect("a longest element exists");
-            let mut padded = Vec::with_capacity(max_len + 2);
-            padded.push(b'-');
-            padded.extend_from_slice(widest);
-            padded.push(b'-');
-            padded
-        })
-        .collect();
-
-    // Solutions, cached by padded slot then by insertion — the reference's
-    // `position_solutions`, shared across slots exactly as there.
-    let mut solutions: HashMap<&[u8], HashMap<&[u8], Vec<u8>>> = HashMap::new();
-    for (p, max_ins) in max_insertions.iter().enumerate() {
-        if max_ins.len() <= 1 {
+        }
+        let widest = best.expect("a non-empty partition has slots");
+        if widest.len() <= 1 {
+            max_insertions.push(vec![b'-']);
             continue;
         }
-        let per_slot = solutions.entry(max_ins.as_slice()).or_default();
-        for &ins in &unique[p] {
-            per_slot
-                .entry(ins)
-                .or_insert_with(|| best_solution(max_ins, ins));
-        }
+        assert_eq!(p % 2, 0, "an insertion in a consensus-base slot");
+        let mut padded = Vec::with_capacity(widest.len() + 2);
+        padded.push(b'-');
+        padded.extend_from_slice(widest);
+        padded.push(b'-');
+        max_insertions.push(padded);
     }
+
+    // Solutions, keyed by `(padded slot, insertion)` — the reference's
+    // `position_solutions`, shared across slots exactly as there, and filled on
+    // demand rather than pre-enumerated. It is a cache, so *when* an entry is
+    // computed cannot reach the output.
+    let mut solutions: FxHashMap<(&[u8], &[u8]), Vec<u8>> = FxHashMap::default();
 
     segments
         .iter()
@@ -374,7 +371,11 @@ pub fn multialignment_matrix(rows: &[(&[u8], &[u8])]) -> Vec<Vec<u8>> {
                     );
                     row.push(slot[0]);
                 } else {
-                    row.extend_from_slice(&solutions[max_ins.as_slice()][slot]);
+                    let key = (max_ins.as_slice(), slot);
+                    let sol = solutions
+                        .entry(key)
+                        .or_insert_with(|| best_solution(max_ins, slot));
+                    row.extend_from_slice(sol);
                 }
             }
             row
