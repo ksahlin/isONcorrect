@@ -1205,10 +1205,18 @@ sub-stage measurements have to be taken and then removed, never left in.
 Everything on the original list is closed. What is left is three risks and one loose end, none of
 which is a task waiting to be started.
 
-- **No multi-kb read data has ever been tested.** Both real corpora are median ~600 bp (SIRV ~609,
-  drosophila 553, p99 2 705). `simd::min_block`'s derived lower bound and the guard's behaviour are
-  argued to be length-independent, but that is an argument, not a measurement. A transcriptome with
-  genuinely long transcripts is the one test that could still overturn a decision here.
+- **No multi-kb read data has ever been tested — and that predates the port.** Both real corpora here
+  are median ~600 bp (SIRV ~609, drosophila 553, p99 2 705), but so was everything the *reference* was
+  ever run on, including for the paper. So this is a property isONcorrect has always had, not a gap
+  the port introduced, and the port is not in a worse position than the tool it replaces.
+
+  What *is* new is the length-sensitive machinery: `simd::min_block`'s derived lower bound, and
+  block-aligner's adaptive banding in both aligners. Those are argued to be length-independent — the
+  bound is a proof about deviation, not a tuned threshold — but an argument is not a measurement, and
+  a corpus has twice overturned an argument of exactly this shape in this file (the ±64 band, and the
+  direction of the guard's accuracy effect). A transcriptome with genuinely long transcripts is the
+  one test that could still change a decision, and it would be testing the reference for the first
+  time too.
 - **The parasail end-cell tie-break is not reproduced**, and cannot be as a fixed preference order —
   the 96-configuration sweep tops out at 419/420. It costs **2 reads in 54 721** on drosophila and 0
   on SIRV, both of them *better* by the accuracy measure. Closed by decision rather than solved.
