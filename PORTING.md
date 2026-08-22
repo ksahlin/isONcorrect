@@ -351,9 +351,17 @@ re-run if a corpus ever reaches one.
 `PARASAIL_SWEEP` doubles as a case cap (`PARASAIL_SWEEP=40`), because 96 configurations over
 1 400 bp reads is hours of quadratic DP and ties are what matter, not volume.
 
-**The port is now free of C++ entirely.** edlib, spoa and parasail were the three native libraries
-the reference depends on; the first and third are reimplemented natively and the second goes through
-`spoars`, which is pure Rust. No CMake, no vendored source, no toolchain beyond cargo.
+**The port is now free of C and C++ entirely.** edlib, spoa and parasail were the three native
+libraries the reference depends on; the first and third are reimplemented natively and the second goes
+through `spoars`, which is pure Rust. No CMake, no vendored source, no toolchain beyond cargo.
+
+**That took one non-obvious step, and the claim was quietly false until it was taken.** `spoars`
+enables a `cli` feature by default, which pulls `needletail` and with it `bzip2`, `liblzma` and
+`zstd` — all C, all compiled through `cc-rs`. Nothing in the port uses that CLI. It went unnoticed
+because a C *dependency* costs nothing visible on a machine that has a working `cc`; what exposed it
+was a musl cross-build failing with `failed to find tool "x86_64-linux-musl-gcc"`. `spoars` is now
+declared `default-features = false`, and `cargo tree` shows zero C crates. Check it that way rather
+than by trusting this paragraph.
 
 Two things about `fix_correction` worth knowing before touching it:
 

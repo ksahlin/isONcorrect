@@ -47,13 +47,23 @@ Real ONT data, 8 threads, against the Python implementation:
 | 266 drosophila clusters, 54 721 reads | 181 s | **18.5 s** | 9.8x |
 | one 200-read cluster, peak memory | 339 MB | **~147 MB** | 2.3x less |
 
-### A note on the prebuilt x86_64 binaries
+### Which prebuilt binary to take
 
-They use SSE2, which every x86_64 CPU has, so they run anywhere. The aligner's SIMD backend is chosen
-at compile time with no runtime dispatch, so an AVX2 build would crash outright on pre-2013 CPUs
-rather than falling back. If your hardware is newer and you want the 256-bit path, build from source
-with `RUSTFLAGS="-C target-cpu=native" cargo build --release` — the faster backend is selected
-automatically.
+Linux ships in two libc flavours, because neither one suits everybody:
+
+| asset | use it when | note |
+| --- | --- | --- |
+| `...-linux-gnu` | your glibc is **2.34 or newer** — Ubuntu 22.04+, RHEL 9+, Debian 12+ | faster |
+| `...-linux-musl` | anything older, or you do not want to check — CentOS 7, RHEL 8, Ubuntu 20.04 | statically linked, runs anywhere |
+
+The `gnu` build will refuse to start on older systems with `GLIBC_2.34 not found`; the `musl` build
+has no such dependency. Prefer `gnu` where your glibc allows it: musl's allocator is slower, and
+isONcorrect does a lot of allocation.
+
+x86_64 binaries use **SSE2**, which every x86_64 CPU has. The aligner picks its SIMD backend at
+compile time with no runtime dispatch, so an AVX2 build would crash outright on pre-2013 CPUs rather
+than falling back. On newer hardware, building from source with
+`RUSTFLAGS="-C target-cpu=native" cargo build --release` selects the 256-bit backend automatically.
 
 ### Removed flags
 

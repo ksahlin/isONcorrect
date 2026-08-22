@@ -22,15 +22,37 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # `native: true` means the runner can execute what it just built, so the
+        # smoke test runs. Cross-compiled targets are built and packaged but not
+        # executed here.
+        #
+        # Both libc flavours ship for Linux, on purpose:
+        #   gnu  - faster, but needs glibc >= 2.34, so it will NOT run on
+        #          CentOS 7, RHEL 8, Ubuntu 20.04 or Debian 11.
+        #   musl - statically linked, runs on any Linux however old. musl's
+        #          allocator is slower than glibc's and isONcorrect is
+        #          allocation-sensitive, so prefer gnu when your glibc allows it.
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            native: true
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            native: true
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            native: true
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            native: true
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-13
+            native: true
+          # Cross-compiled from the arm runner rather than built on macos-13,
+          # which GitHub has retired -- a job targeting it sits queued forever.
+          - os: macos-latest
             target: x86_64-apple-darwin
+            native: false
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +65,7 @@ jobs:
         working-directory: rust
         run: cargo build --release --target ${{ matrix.target }}
       - name: smoke-test the binaries actually run
+        if: matrix.native
         working-directory: rust
         run: |
           bin="target/${{ matrix.target }}/release"

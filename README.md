@@ -32,7 +32,9 @@ This builds two binaries, `isONcorrect` and `run_isoncorrect`, in
 No Rust? `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 
 Prefer not to build? Binaries for Linux and macOS (x86_64, arm64) are attached to
-[release v0.2.0](https://github.com/ksahlin/isONcorrect/releases/tag/v0.2.0).
+[release v0.2.0](https://github.com/ksahlin/isONcorrect/releases/tag/v0.2.0). Linux comes in two
+flavours: take `musl` if your glibc is older than 2.34 (CentOS 7, RHEL 8, Ubuntu 20.04) or you would
+rather not check, and `gnu` otherwise — see [CHANGELOG.md](CHANGELOG.md).
 
 For the full pipeline you also want pychopper and isONclust:
 
