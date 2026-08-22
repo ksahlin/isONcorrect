@@ -1,202 +1,112 @@
 isONcorrect
 ===========
 
-isONcorrect is a tool for error-correcting Oxford Nanopore cDNA reads. It is designed to handle highly variable coverage and exon variation within reads and achieves about a 0.5-1% median error rate after correction. It leverages regions shared between reads from different isoforms achieve low error rates even for low abundant transcripts. See [paper](https://www.nature.com/articles/s41467-020-20340-8) for details. 
+[![ci](https://github.com/ksahlin/isONcorrect/actions/workflows/ci.yml/badge.svg)](https://github.com/ksahlin/isONcorrect/actions/workflows/ci.yml)
 
-**Update:** Since v0.0.8, isONcorrect uses different default parameters compared to what was used in the [paper](https://www.nature.com/articles/s41467-020-20340-8). The new parameters make isONcorrect 2-3 times faster and use 3-8 times less memory with only a small cost of increased median post-correction error rate. With the new parameter setting the correction accuracy is 98.5-99.3% instead of 98.9–99.6% on the data used in the paper. Current default uses `--k 9 --w 20 --max_seqs 2000`. To invoke settings used in paper, set parameters `--k 9 --w 10 --max_seqs 1000`.
+isONcorrect error-corrects Oxford Nanopore cDNA reads. It handles highly variable coverage and exon variation within reads, and leverages regions shared between reads from different isoforms to reach low error rates even for low-abundance transcripts. See the [paper](https://www.nature.com/articles/s41467-020-20340-8).
 
-Processing and error correction of full-length ONT cDNA reads is achieved by the pipeline of running [pychopper](https://github.com/nanoporetech/pychopper) --> [isONclust](https://github.com/ksahlin/isONclust) --> [isONcorrect](https://github.com/ksahlin/isONcorrect). All these steps can be run in one go with [this script](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). See below for installation and usage. 
-
-
-isONcorrect is distributed as a python package supported on Linux / OSX with python v>=3.4. [![Build Status](https://travis-ci.org/ksahlin/isONcorrect.svg?branch=master)](https://travis-ci.com/ksahlin/isONcorrect).
-
-Table of Contents
-=================
-
-  * [INSTALLATION](#INSTALLATION)
-    * [Using conda](#Using-conda)
-    * [Using pip](#Using-pip)
-    * [Downloading source from GitHub](#Downloading-source-from-github)
-    * [Dependencies](#Dependencies)
-    * [Testing installation](#testing-installation)
-  * [USAGE](#USAGE)
-    * [Running](#Running)
-    * [Output](#Output)
-    * [Parallelization across nodes](#Parallelization-across-nodes)
-  * [PAPER DATA](#PAPER-DATA)
-  * [CREDITS](#CREDITS)
-  * [LICENCE](#LICENCE)
+> ## v0.2.0 — isONcorrect is now written in Rust
+>
+> Same command line, so existing pipelines do not need editing. About **10x faster**, uses **less
+> memory**, and **more accurate** — a bug in region selection meant every previous version corrected
+> fewer regions than it should have. **Corrected output therefore differs from earlier releases.**
+>
+> The Python implementation is still here but is **deprecated**, kept as the reference the Rust
+> version is verified against. Details, numbers, and the removed flags: **[CHANGELOG.md](CHANGELOG.md)**.
 
 
+Install
+-------
 
-INSTALLATION
-=================
+Needs a Rust toolchain (1.85+) and nothing else — no C/C++ toolchain, no CMake.
 
-Typical install time on a desktop computer is about 5 minutes with conda for this software.
-
-## Using conda
-Conda is the preferred way to install isONcorrect.
-
-1. Create and activate a new environment called isoncorrect
-
-```
-conda create -n isoncorrect python=3.9 pip 
-conda activate isoncorrect
+```bash
+git clone https://github.com/ksahlin/isONcorrect.git
+cd isONcorrect
+cargo build --release --manifest-path rust/Cargo.toml
+mkdir -p ~/.local/bin && cp rust/target/release/{isONcorrect,run_isoncorrect} ~/.local/bin/
 ```
 
-2. Install isONcorrect and its dependency `spoa`.
+No Rust? `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`. Prefer not to build?
+Binaries for Linux and macOS (x86_64, arm64) are attached to each
+[release](https://github.com/ksahlin/isONcorrect/releases).
 
-```
-pip install isONcorrect
-conda install -c bioconda spoa
-```
-3. You should now have 'isONcorrect' installed; try it:
-```
-isONcorrect --help
-```
+For the full pipeline you also want pychopper and isONclust:
 
-Upon start/login to your server/computer you need to activate the conda environment "isonclust" to run isONcorrect as:
-```
-conda activate isoncorrect
-```
-
-4. You probably want to install `pychopper` and `isONclust` in the isoncorrect environmment as well to run the complete correction pipeline if you haven't already. This can be done with:
-
-```
+```bash
+conda create -n isoncorrect python=3.9 pip && conda activate isoncorrect
 pip install isONclust
-conda install -c bioconda "hmmer>=3.0"
-conda install -c bioconda "pychopper>=2.0"
+conda install -c bioconda "hmmer>=3.0" "pychopper>=2.0"
 ```
 
-You are now set to run the [correction_pipeline](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). See [USAGE](https://github.com/ksahlin/isONcorrect#usage).
+The deprecated Python version, if you need it to reproduce the paper:
+`pip install isONcorrect && conda install -c bioconda spoa`.
 
+### Test the install
 
-### Dependencies
+From the repository root:
 
-isONcorrect has the following dependencies (the three first are automatically installed with `pip`)
-* [edlib](https://github.com/Martinsos/edlib/tree/master/bindings/python)
-* [NumPy](https://numpy.org/) 
-* [parasail](https://github.com/jeffdaily/parasail-python)
-*  [spoa](https://github.com/rvaser/spoa) 
-
-
-## Testing installation
-
-You can verify successul installation by running isONcorrect on [these](https://github.com/ksahlin/isONcorrect/tree/master/test_data/isoncorrect/) two small datasets of 100 reads. Download the two datasets and put in a folder `test_data` run, e.g,
-
-```
-isONcorrect --fastq test_data/0.fastq \
-            --outfolder [output path]
-```
-Expected runtime for this test data is about 15 seconds. The output will be found in `[output path]/corrected_reads.fastq` where the 100 reads have the same headers as in the original file, but with corrected sequence. Testing the paralleized version (by separate clusters) of isONcorrect can be done by running
-
-```
-./run_isoncorrect --t 3 --fastq_folder test_data/ \
-                  --outfolder [output path]
-```
- 
-This will perform correction on `0.fastq` and `1.fastq` in parallel. Expected runtime for this test data is about 15 seconds. The output will be found in `[output path]/0/corrected_reads.fastq` and `[output path]/1/corrected_reads.fastq` where the 100 reads in each separate cluster have the same headers as in the respective original files, but with corrected sequence. 
-
-
-USAGE
-=================
- 
-## Running
-
-### Using correction_pipeline.sh
-
-You can simply run `./correction_pipeline.sh <raw_reads.fq>  <outfolder>  <num_cores> ` which will perform the steps 1-5 below for you. The `correction_pipeline.sh` script is available in this repository [here](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). Simply download the reposotory or the individual [correction_pipeline.sh file](https://github.com/ksahlin/isONcorrect/blob/master/scripts/correction_pipeline.sh). 
-
-For a fastq file with raw ONT cDNA reads, the following pipeline is recommended:
-1.  Produce full-length reads (with [pychopper](https://github.com/nanoporetech/pychopper) (a.k.a. `cdna_classifier`))
-2.  Cluster the full length reads into genes/gene-families ([isONclust](https://github.com/ksahlin/isONclust))
-3.  Make fastq files of each cluster (`isONclust write_fastq` command)
-4.  Correct individual clusters ([isONcorrect](https://github.com/ksahlin/isONcorrect))
-5.  Join reads back to a single fastq file (This is of course optional)
-
-
-### Manually
-
-The contents of the `correction_pipeline.sh` is (roughly) provided below. If you want more individual control over the steps than what the `correction_pipeline.sh` can do for you (such as different parameters in each step), you can modify/remove arguments as needed in `correction_pipeline.sh` or in the below script.  
-
-```
-#!/bin/bash
-
-# Pipeline to get high-quality full-length reads from ONT cDNA sequencing
-
-# Set path to output and number of cores
-root_out="outfolder"
-cores=20
-
-mkdir -p $root_out
-
-cdna_classifier.py  raw_reads.fq $root_out/full_length.fq -t $cores 
-
-isONclust  --t $cores  --ont --fastq $root_out/full_length.fq \
-             --outfolder $root_out/clustering
-
-isONclust write_fastq --N 1 --clusters $root_out/clustering/final_clusters.tsv \
-                      --fastq $root_out/full_length.fq --outfolder  $root_out/clustering/fastq_files 
-
-run_isoncorrect --t $cores  --fastq_folder $root_out/clustering/fastq_files  --outfolder $root_out/correction/ 
-
-# OPTIONAL BELOW TO MERGE ALL CORRECTED READS INTO ONE FILE
-touch $root_out/all_corrected_reads.fq
-OUTFILES=$root_out"/correction/"*"/corrected_reads.fastq"
-for f in $OUTFILES
-do 
-  cat $f >> $outfolder/all_corrected_reads.fq
-done
+```bash
+isONcorrect --fastq test_data/isoncorrect/0.fastq --outfolder /tmp/isoncorrect_test
 ```
 
-isONcorrect does not need ONT reads to be full-length (i.e., produced by `pychopper`), but unless you have specific other goals, it is advised to run pychopper for any kind of downstream analysis to guarantee full-length reads. 
-
-## Output
-
-The output of `run_isoncorrect` is one file per cluster with identical headers to the original reads.
-
-### Few large clusters
-
-For some datasets, e.g. targeted data, `isONclust` can produce highly uneven clusters, i.e., a few very large clusters and some/many small ones. In such cases, runtime can be reduced if the argument `--split_wrt_batches` is specified to `run_isoncorrect`.
+Under a second. Writes `/tmp/isoncorrect_test/corrected_reads.fastq` — 100 reads, same headers as the
+input, corrected sequences.
 
 
-## Parallelization across nodes
+Run
+---
 
-isONcorrect currently supports parallelization across cores on a node (parameter `--t`), but not across several nodes. There is a way to overcome this limitation if you have access to multiple nodes as follows. The `run_isoncorrect` step can be parallilized across n nodes by (in bash or other environment, e.g., snakemake) parallelizing the following commands
+One command for the whole pipeline:
 
-```
-run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual 0
-run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual 1
-run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual 2
-...
-run_isoncorrect --fastq_folder outfolder/clustering/fastq_files  --outfolder /outfolder/correction/ --split_mod n --residual n-1
-```
-Which tells isONcorrect to only work with distinct cluster IDs.
-
-PAPER DATA
-=================
-
-The result data behind the [paper](https://www.nature.com/articles/s41467-020-20340-8) used to be committed to this repository under `data/`, which made it about 2.4 GB to clone. It is now archived on Zenodo:
-
-**https://zenodo.org/records/21920617**
-
-Nothing in isONcorrect reads this data at run time. You only need it to regenerate the paper figures with the snakemake workflows under `paper/`. To restore it into `data/`:
-
-```
-tools/fetch_data.sh
+```bash
+./scripts/correction_pipeline.sh raw_reads.fq outfolder 20   # reads, outdir, cores
 ```
 
-This downloads the archive and verifies it against the checksums published with the record.
+Or the steps yourself — pychopper for full-length reads, isONclust to group them into genes, then
+isONcorrect per cluster:
 
-CREDITS
-----------------
+```bash
+cdna_classifier.py raw_reads.fq out/full_length.fq -t 20
 
-Please cite [1] when using isONcorrect.
+isONclust --t 20 --ont --fastq out/full_length.fq --outfolder out/clustering
+isONclust write_fastq --N 1 --clusters out/clustering/final_clusters.tsv \
+          --fastq out/full_length.fq --outfolder out/clustering/fastq_files
 
-1. Sahlin, K., Medvedev, P. Error correction enables use of Oxford Nanopore technology for reference-free transcriptome analysis. Nat Commun 12, 2 (2021). https://doi.org/10.1038/s41467-020-20340-8  [Link](https://www.nature.com/articles/s41467-020-20340-8).
+run_isoncorrect --t 20 --fastq_folder out/clustering/fastq_files --outfolder out/correction
 
-LICENCE
-----------------
+cat out/correction/*/corrected_reads.fastq > out/all_corrected_reads.fq
+```
 
-GPL v3.0, see [LICENSE.txt](https://github.com/ksahlin/isONcorect/blob/master/LICENCE.txt).
+Reads need not be full-length, but running pychopper first is advised for downstream analysis.
 
+**Output** is one `corrected_reads.fastq` per cluster with the input headers. Note the quality string
+is not real — it is `+` repeated to the length of the sequence, as in the Python version.
+
+**Useful flags** (`--help` for the rest): `--split_wrt_batches` cuts runtime when isONclust produces a
+few very large clusters; `--split_mod n --residual i` spreads `run_isoncorrect` across *n* nodes;
+`--k 9 --w 10 --max_seqs 1000` reproduces the paper's settings rather than the faster defaults.
+
+
+Paper data
+----------
+
+The result data behind the paper used to be committed here, making the repo ~2.4 GB to clone. It is
+now on Zenodo — **<https://zenodo.org/records/21920617>** — and `tools/fetch_data.sh` restores and
+checksums it into `data/`. You only need it to regenerate the paper figures under `paper/`.
+
+Because the data was stripped from history, commit SHAs from before the rewrite no longer resolve.
+
+
+Credits
+-------
+
+Please cite:
+
+Sahlin, K., Medvedev, P. Error correction enables use of Oxford Nanopore technology for reference-free transcriptome analysis. *Nat Commun* **12**, 2 (2021). https://doi.org/10.1038/s41467-020-20340-8
+
+
+Licence
+-------
+
+GPL v3.0, see [LICENSE.txt](LICENSE.txt).

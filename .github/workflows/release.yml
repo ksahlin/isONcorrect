@@ -1,0 +1,71 @@
+# Build release binaries and attach them to the GitHub Release for a tag.
+#
+# Triggered by pushing a tag like v0.2.0. Creates the release if it does not
+# already exist, then uploads one tarball per target. Nothing here publishes to
+# crates.io or PyPI.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build (must already exist)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: build
+        working-directory: rust
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: smoke-test the binaries actually run
+        working-directory: rust
+        run: |
+          bin="target/${{ matrix.target }}/release"
+          "$bin/isONcorrect" --version
+          "$bin/run_isoncorrect" --version
+          "$bin/isONcorrect" --fastq ../test_data/isoncorrect/0.fastq --outfolder /tmp/smoke
+          test -s /tmp/smoke/corrected_reads.fastq
+          # 100 reads in, 100 reads out.
+          test "$(wc -l < /tmp/smoke/corrected_reads.fastq)" -eq 400
+      - name: package
+        working-directory: rust
+        run: |
+          name="isONcorrect-${{ github.event.inputs.tag || github.ref_name }}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          cp "target/${{ matrix.target }}/release/isONcorrect" \
+             "target/${{ matrix.target }}/release/run_isoncorrect" "dist/$name/"
+          cp ../README.md ../LICENSE.txt "dist/$name/" 2>/dev/null || true
+          tar -czf "dist/$name.tar.gz" -C dist "$name"
+          shasum -a 256 "dist/$name.tar.gz" > "dist/$name.tar.gz.sha256"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: |
+            rust/dist/*.tar.gz
+            rust/dist/*.tar.gz.sha256
+          fail_on_unmatched_files: true

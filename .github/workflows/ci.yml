@@ -1,0 +1,44 @@
+# Rust checks on every push and PR.
+#
+# Deliberately does NOT run bench/equivalence.sh. That sweep needs the pinned
+# Python reference environment (edlib, parasail, numpy and the `spoa` binary at
+# specific versions), and building it in CI would mean either pinning it twice or
+# letting CI drift from the environment the goldens were recorded in. The sweep is
+# a local gate; see bench/README.md. What runs here is everything that needs only
+# a Rust toolchain, which is the 195 unit tests including every stage oracle that
+# has its cases checked in.
+name: ci
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --release
+      # The port must keep building on its declared MSRV.
+      - name: check the declared MSRV still builds
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          msrv=$(grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2)
+          rustup toolchain install "$msrv" --profile minimal
+          cargo +"$msrv" check --all-targets

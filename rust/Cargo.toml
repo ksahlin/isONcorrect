@@ -1,9 +1,9 @@
 [package]
 name = "isoncorrect"
 # Cargo requires semver, but the tool's advertised version is the four-component
-# "0.1.3.5" that the Python implementation prints. The CLI version string lives
+# the CLI version string, which must match the Python implementation. It lives
 # in `cli::VERSION` and is what `--version` emits; keep the two in step.
-version = "0.1.3"
+version = "0.2.0"
 edition = "2021"
 # Raised from 1.74 by spoars, which requires 1.85.
 rust-version = "1.85"

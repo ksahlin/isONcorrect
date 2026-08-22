@@ -15,8 +15,8 @@ use std::path::PathBuf;
 use clap::{ArgAction, Parser};
 
 /// The version string the CLI advertises. Matches argparse's
-/// `%(prog)s 0.1.3.5`, so `--version` prints e.g. `isONcorrect 0.1.3.5`.
-pub const VERSION: &str = "0.1.3.5";
+/// `%(prog)s 0.2.0`, so `--version` prints e.g. `isONcorrect 0.2.0`.
+pub const VERSION: &str = "0.2.0";
 
 /// Exit code used when a deliberately unported flag is supplied.
 pub const EXIT_UNSUPPORTED: i32 = 2;
@@ -336,7 +336,7 @@ mod tests {
 
     #[test]
     fn version_string_matches_python() {
-        assert_eq!(VERSION, "0.1.3.5");
+        assert_eq!(VERSION, "0.2.0");
         // argparse prints "<prog> <version>"; clap does the same.
         assert_eq!(CorrectArgs::command().get_name(), "isONcorrect");
         assert_eq!(RunArgs::command().get_name(), "run_isoncorrect");

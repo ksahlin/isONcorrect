@@ -2,24 +2,30 @@
 
 ## Goal
 
-Port isONcorrect from Python to Rust. **Identical CLI**, primarily faster and lower memory. The
-Python implementation in `src/isoncorrect/` is the **normative reference**: when Rust and Python
-disagree, Python is right until a human decides otherwise.
+Port isONcorrect from Python to Rust. **Identical CLI**, faster, lower memory. **The port is
+complete**: ~10x faster on real data, lower memory, and more accurate.
 
-**Output is byte-identical except at two alignment call sites, both of which now use affine SIMD
-alignment rather than reproducing the reference's aligner.** Both are deliberate, measured
-divergences taken for large speedups on the port's two dominant costs; each has an env var that
-restores the exact reference-compatible path, `bench/equivalence.sh` sets both, and the 29-case
-gate still covers the whole pipeline.
+The Python implementation in `src/isoncorrect/` remains the **normative reference for verification** —
+when Rust and Python disagree, Python is right until a human decides otherwise — but it is no longer
+the implementation to run, and the README says so.
 
-| Call site | Reference uses | Port defaults to | Restore with |
+**The specification is accuracy, not byte-identity**, and that distinction did real work: it is what
+allowed the two aligner divergences below, what made the POA bake-off worth running, and what made
+fixing `fill_p2` the right call rather than something to reproduce.
+
+Three places where output differs from the reference *as released*:
+
+| Where | Reference | Now | Restore the old path with |
 | --- | --- | --- | --- |
-| the structural-overcorrection guard | parasail, affine semi-global | `block-aligner`, same scoring, own tie-break — changes ~0.8% of reads | `ISONCORRECT_EXACT_GUARD=1` |
-| segment against consensus, which builds the MSA | edlib, **unit-cost** global | `block-aligner`, **affine** (`match 4, mismatch -8, open 12, extend 1`) — changes ~11% of alignments | `ISONCORRECT_EXACT_ALIGN=1` |
+| `solve_WIS`'s predecessor table | off by one, corrects too few regions | **fixed in both implementations** | nothing — it was a bug |
+| the structural-overcorrection guard | parasail, affine semi-global | `block-aligner`, same scoring, own tie-break — ~0.8% of reads | `ISONCORRECT_EXACT_GUARD=1` |
+| segment against consensus, which builds the MSA | edlib, **unit-cost** global | `block-aligner`, **affine** (`match 4, mismatch -8, open 12, extend 1`) — ~11% of alignments | `ISONCORRECT_EXACT_ALIGN=1` |
 
-See *The guard's aligner: a deliberate divergence* and *The MSA's aligner: affine instead of edit
-distance*. The second is the deeper of the two: that CIGAR builds the MSA, which builds the PFM,
-which decides every corrected base.
+The first is a defect removed; the other two are deliberate divergences, each measured to be both
+faster *and* more accurate. With both env vars set the port is byte-identical to the fixed reference
+on 75 442 real SIRV reads and all 43 goldens, and differs on 2 of 54 721 drosophila reads. See
+*`solve_WIS` was suboptimal*, *The guard's aligner*, and *The MSA's aligner*. The MSA one is the
+deepest: that CIGAR builds the MSA, which builds the PFM, which decides every corrected base.
 
 Two binaries must keep their exact current names, flags, and defaults:
 
@@ -71,8 +77,10 @@ Two binaries must keep their exact current names, flags, and defaults:
 | per-read driver (`isoncorrect_main`) | done; `corrected_reads.fastq` byte-identical on 1 204 reads |
 | `run_isoncorrect` (batch driver) | done; in-process threads, all 29 equivalence cases green |
 
-Argument names, defaults, validation order, stderr text and exit codes match the reference.
-**Both binaries now do real work**, and `bench/equivalence.sh verify` is fully green.
+Argument names, defaults, validation order, stderr text and exit codes match the reference, and
+`bench/equivalence.sh verify` is fully green. The per-stage counts above are from the corpus each
+stage was first verified against; every one has since been re-run on the drosophila corpus at roughly
+an order of magnitude more cases — see *The drosophila corpus*.
 
 ### Stage-by-stage verification
 
@@ -1063,98 +1071,47 @@ with `anchors.tsv`, `anchor_keys.tsv` and `minimizers.tsv` identical too, and 29
 ### Accuracy against ground truth
 
 Equivalence testing answers "do two implementations agree"; it cannot answer "is the correction any
-good". Once the guard's aligner diverges deliberately, the second question is the one that matters.
-`bench/accuracy.py` measures it.
+good", and once a divergence is deliberate the second question is the only one that matters. Two
+harnesses measure it, and they disagree usefully often enough that both are kept.
 
-Truth comes from one of two places. Simulated reads carry their source transcript in the header, so
-no search is needed. **Real reads are assigned by aligning against every transcript and taking the
-best match**, ties broken by name so the choice is deterministic. Either way the read is scored
-against its assigned transcript with edlib's infix mode (`HW`) and the error rate is
-`edit_distance / len(read)`.
+| | truth from | scoring | use when |
+| --- | --- | --- | --- |
+| `bench/accuracy.py` | a transcriptome | edlib infix (`HW`), `edit_distance / len(read)` | a trustworthy transcript set exists (SIRV) |
+| `bench/accuracy_genome.py` | a genome | `minimap2 -ax splice`, `NM / aligned_bases` | it does not (drosophila) |
 
-**The assignment is made once, from the first read set, and reused for all of them.** That is
-load-bearing: if each implementation picked its own best-matching transcript, every one would be
-flattered by construction, and a correction that dragged a read toward the wrong isoform would score
-*better* rather than worse. Pass the uncorrected reads first.
+Three methodological points, each of which was a bug in an earlier version of this measurement:
 
-```bash
-bench/accuracy.py --transcriptome sirv_transcriptome.fasta \
-  --reads uncorrected=/tmp/real_trunc --reads python=/tmp/real_py \
-  --reads rust-exact=/tmp/real_ex --reads rust-block=/tmp/real_ba
-```
+- **Truth must be assigned from the *uncorrected* reads, once, and reused for every set.**
+  `bench/accuracy.py` takes `--assign-from` for this. If each implementation picks its own
+  best-matching transcript, all of them are flattered by construction and a correction that dragged a
+  read toward the wrong isoform scores *better*. This does not apply to the genome harness, where a
+  locus is unambiguous and there is no menu of near-identical targets to be flattered by.
+- **The aligned fraction has to be reported next to the error rate.** Error rate alone is gamed by
+  aligning less of the read — mangle the ends and they soft-clip away. The genome harness prints both.
+- **Only reads scored in every set count**, and the per-set drop-outs are printed, or a set that
+  quietly lost its hardest reads looks good.
 
-**Real isONclust data — 32 clusters, 75 442 reads, the corpus that matters:**
+Absolute rates are overestimates in both harnesses and for different reasons — SIRV isoforms are
+deliberately similar so a 6%-error read can be assigned to the wrong one, and `NM` against a genome
+absorbs real biological difference. Both inflations apply equally to every implementation, so
+comparisons hold where the absolute figures do not.
 
-| set | mean % | median % | p90 % | total % | perfect |
-| --- | --- | --- | --- | --- | --- |
-| uncorrected | 6.245 | 5.580 | 9.655 | 6.112 | 1 |
-| Python reference | 1.787 | 1.168 | 3.672 | 1.310 | 156 |
-| Rust, `ISONCORRECT_EXACT_GUARD=1` | 1.787 | 1.168 | 3.672 | 1.310 | 156 |
-| Rust, block-aligner (default) | **1.782** | **1.163** | **3.665** | **1.303** | 156 |
+**Current numbers live in two places**, both post-`fill_p2`-fix: *`solve_WIS` was suboptimal* for the
+reference-against-itself comparison, and *The drosophila corpus* for the per-implementation table.
+Correction takes real drosophila reads from **8.445% to 1.773%** mean error and makes 733 more of them
+alignable.
 
-Restricted to the 2 364 reads where block-aligner's answer differs at all:
+What the earlier, pre-fix measurements established, and which the fix does not change because every
+implementation in those comparisons shared the defect:
 
-| | |
-| --- | --- |
-| block-aligner **better** | **1 373** |
-| block-aligner worse | 794 |
-| equal | 197 |
-| mean delta | **-0.157 pp** (negative is better) |
-| median delta | **-0.203 pp** |
-
-**block-aligner is measurably better on real data**: better on 63% of the reads it changes, and
-better in aggregate (1.303% against 1.310% total error). Simulated data said the opposite — 30
-better, 41 worse of 71 — which is a reminder that the simulated corpus is not a substitute for real
-reads on any question about this guard.
-
-Simulated corpus, for comparison (68 transcript clusters, 10 000 reads): uncorrected 6.866% total,
-all three implementations 0.532%, and block-aligner differing on only 71 reads.
-
-Two further conclusions:
-
-- **The exact path is confirmed byte-identical through a second, independent lens** — identical error
-  rate on all 75 442 real reads and all 10 000 simulated ones, measured against ground truth rather
-  than against the reference's bytes.
-- **Correction works**, which is worth stating since nothing else in this file checks it: 6.2% -> 1.8%
-  mean error on real reads, improving 75 254 of 75 442 and worsening 116.
-
-Caveats, since they are inferences rather than measurements. Assignment uses the *uncorrected* read,
-so at ~6% error a read may be assigned to the wrong isoform of the right gene — SIRV isoforms are
-deliberately similar. That inflates absolute error rates for every implementation equally, so the
-comparison holds even where the absolute numbers are pessimistic. And `bench/accuracy.py` is
-single-threaded: the best-of-68 search over 75 442 reads takes roughly 20 minutes, which is worth
-parallelising before this is run routinely.
-
-#### Is affine actually more accurate? Measured: yes
-
-Byte-identity cannot answer this, which is the point — the whole reason to make this change is that
-the reference's objective is not the better one. `bench/accuracy.py` on the 32 real isONclust
-clusters, 75 156 reads with a plausible SIRV of origin, truth assigned from the **uncorrected** reads:
-
-| set | mean % | median % | p90 % | total % |
-| --- | --- | --- | --- | --- |
-| raw | 6.171 | 5.573 | 9.557 | 6.063 |
-| Python reference | 1.714 | 1.165 | 3.601 | 1.259 |
-| Rust, exact mode | 1.714 | 1.165 | 3.601 | 1.259 |
-| Rust, block-aligner guard only | 1.710 | 1.160 | 3.590 | 1.253 |
-| Rust, **+ affine MSA aligner** | **1.702** | **1.154** | **3.571** | **1.243** |
-
-Paired per read against the Python reference:
-
-| | mean delta | better | worse | equal |
-| --- | --- | --- | --- | --- |
-| exact mode | +0.0000 pp | 0 | 0 | 75 156 |
-| guard only | -0.0048 pp | 1 355 | 783 | 73 018 |
-| **+ affine MSA aligner** | **-0.0129 pp** | **9 740** | **5 631** | 59 785 |
-
-**Affine is better, and by 2.7x more than the guard divergence was.** It touches twenty times as
-many reads (15 371 against 2 138) and still wins 63% of them — the same ratio the guard showed, on a
-much larger sample, which is what makes it a signal rather than a coincidence. Every summary statistic
-moves the same direction.
-
-So this change is faster *and* more accurate, and the reference's use of edit distance here is
-confirmed as the speed compromise it was. The effect is small in absolute terms (0.013 pp on a 1.7%
-error rate); the claim is the sign, not the magnitude.
+- **both deliberate divergences improve accuracy** — the guard's aligner by 0.005 pp, the affine MSA
+  aligner by 0.013 pp, each winning ~63% of the reads it changes. The affine one touches twenty times
+  as many reads as the guard and holds the same ratio, which is what makes it signal rather than noise;
+- **the reference's use of edit distance was a speed compromise, not a modelling preference**, and
+  replacing it with affine gaps is both faster and more accurate;
+- **SIRV understates how much these decisions matter.** Every divergence measured on both corpora is
+  larger on drosophila, and the win *rate* is lower there too (53.6% against 63%) — real data has more
+  ties to break and more to lose by breaking them differently.
 
 ### Where it stands
 
@@ -1217,21 +1174,22 @@ sub-stage measurements have to be taken and then removed, never left in.
 
 ### What is not done
 
-- ~~**The accuracy benchmark.**~~ **Done** — see *Accuracy against ground truth*. Both divergences
-  *improve* accuracy: the guard by 0.005 pp, the affine MSA aligner by 0.013 pp.
-- ~~**Re-profiling.**~~ **Done** — see *Where it stands*. `find_most_supported_span` is now the top
-  cost at 28.4%, and it is 343 000 calls rather than one hot loop, so the next win is per-call work.
-- **A native POA** to replace `spoars` — still deferred, and *Deferred improvements* now records why
-  the case for it is weaker: allocation reuse measures at zero, leaving only the dependency argument.
-- ~~**Real long-read data.**~~ **Done** — real ONT drosophila cDNA through isONclust, scored against
-  the genome by spliced alignment. See *The drosophila corpus, and the bug it found*; it found one.
-  Reads are still not multi-kb (median 553 bp, p99 2 705), so a transcriptome with genuinely long
-  transcripts would still stress the guard and the block-width bound harder than anything tested.
-- **Decide on `ISONCORRECT_FIX_WIS`.** It is measured, provably optimal and a large accuracy win, and
-  it is still off by default. Turning it on — or better, fixing `fill_p2` in the reference — is a
-  deliberate decision that re-records every golden and moves every accuracy number in this file.
-- **`tools/repo-slim/`** is staged and unrun. It rewrites history and force-pushes, so it needs a
-  human at the keyboard.
+Everything on the original list is closed. What is left is three risks and one loose end, none of
+which is a task waiting to be started.
+
+- **No multi-kb read data has ever been tested.** Both real corpora are median ~600 bp (SIRV ~609,
+  drosophila 553, p99 2 705). `simd::min_block`'s derived lower bound and the guard's behaviour are
+  argued to be length-independent, but that is an argument, not a measurement. A transcriptome with
+  genuinely long transcripts is the one test that could still overturn a decision here.
+- **The parasail end-cell tie-break is not reproduced**, and cannot be as a fixed preference order —
+  the 96-configuration sweep tops out at 419/420. It costs **2 reads in 54 721** on drosophila and 0
+  on SIRV, both of them *better* by the accuracy measure. Closed by decision rather than solved.
+- **`spoars` is a v0.1.3 dependency with low usage on the critical path.** *The POA bake-off* shows
+  there is nothing better available, so this is accepted rather than fixed. `poa::oracle` is the
+  mitigation and must stay green on every upgrade.
+- **24 paths in `removal-paths.txt` are absent from the Zenodo archive** — see *Repo hygiene*. Nothing
+  in the repository reads any of them, so there is no functional gap, but whether they were live at
+  archive time cannot now be determined.
 
 ### The drosophila corpus, and the bug it found
 
@@ -1635,11 +1593,59 @@ trajectory still passes. Comparing `spans.tsv` from the live driver is what caug
 The repo is ~2.4 GB to clone. **2.920 GB of the 2.935 GB of blob content in history is `data/` and
 large files under `test_data/`**; all source and scripts together are ~15 MB.
 
-`tools/repo-slim/` implements the fix in three staged steps (archive → analyze → rewrite), none of
-which push or upload on their own. Measured result: `.git` drops to ~900 KB, a full working clone
-to ~2.9 MB. See `tools/repo-slim/README.md`, which also documents the two traps that make this
-harder than it looks (blob deduplication hiding paths, and `git rev-parse` printing to stdout on
-failure).
+**This is done.** `tools/repo-slim/` implemented it in three staged steps (archive → analyze →
+rewrite), none of which push or upload on their own; see `tools/repo-slim/README.md`, which also
+documents the two traps that make it harder than it looks (blob deduplication hiding paths, and
+`git rev-parse` printing to stdout on failure).
+
+Verified end to end from the *remote*, not from the local repo, which is the only check that
+actually answers "is it still 2.4 GB to clone":
+
+| | |
+| --- | --- |
+| fresh `git clone` from GitHub | **3.2 MB, `.git` 1.2 MB, 0.9 s** |
+| paths under `data/` anywhere in history, either branch | **0** |
+| largest blob left in all history | 503 KB (`isoncorrect_cpp/src/isoncorrect_test`, a committed binary, not in `HEAD`) |
+| fixtures and sources byte-identical to local | all checked, all identical |
+| `cargo test` in the clone | 195 passed |
+| `bench/equivalence.sh` in the clone | **29/29** |
+| goldens recorded *in the clone* vs local | **43 of 43 byte-identical** |
+
+Both `master` and `develop` are rewritten, and both tags (`v0.1.0`, `v0.1.3.5`) are ancestors of
+`HEAD`, so no ref drags the old objects back in.
+
+The data itself is on **Zenodo: <https://zenodo.org/records/21920617>** — a 1.01 GB archive plus
+`chr6_ensemble.fa.tar.gz` and a checksummed `MANIFEST.txt`. `tools/fetch_data.sh` restores it and
+verifies the checksums. One detail worth knowing, because it looks like a loose end and is not:
+`paper/evaluation_sim/Snakefile` takes `test_data/chr6_ensemble.fa` as an input and that file was
+stripped, but `archive_data.sh` packed it *with its path* and `fetch_data.sh` extracts into the repo
+root, so restoring puts it back exactly where the Snakefile expects.
+
+Two things the README recommended that were **not** done, recorded so nobody assumes otherwise:
+
+- **no pre-rewrite tag was pushed.** The suggested mitigation was to tag the old state so the
+  original history stays reachable by name. It was not taken, and the old commits are no longer in
+  any local reflog either — so the pre-rewrite history is gone except for whatever GitHub still holds
+  unreferenced. Since this is public paper data now archived on Zenodo, that is a tidiness question
+  rather than a loss, but it is not reversible;
+- **24 of the 72 `data/` paths in `removal-paths.txt` are not in the Zenodo archive.** Confirmed by
+  streaming the 1 GB tarball and listing it: it holds 48 paths, exactly what `MANIFEST.txt` claims, so
+  the manifest is accurate and the archive is simply smaller than the removal list. The 24 are all
+  under `data/results/`; the 9 with a recorded size total 0.78 GB, including three 97.6 MB drosophila
+  result files.
+
+  **Impact: none that can be found.** Of the 24, exactly one is mentioned anywhere in `paper/`,
+  `scripts/`, `src/` or `bench/`, and that mention is inside a **commented-out** example command in
+  `paper/evaluation_sim/Snakefile`. Nothing live reads any of them.
+
+  The likely explanation is the benign one — `archive_data.sh` packs the *working tree* while
+  `removal-paths.txt` comes from `git log --all`, so anything deleted from `data/` before the rewrite
+  is in the list and was never in the tree to archive. The file names support it: two superseded
+  generations of split drosophila results (`drosophila.csvaa..ag.bz2`, then
+  `drosophila_full.csv.a..c.bz2`) are both absent while the `comp_dros_file.tar.bz2.parta*` set that
+  appears to replace them is present. **This remains an inference.** It cannot be settled, because the
+  pre-rewrite history is gone locally and GitHub will not serve the old commit — fetching
+  `9396f26c` by SHA hangs rather than returning it.
 
 - **Never commit data files.** No `.csv`, `.fa`, `.fasta`, `.fastq`, `.tar.bz2`, `.bam`, or
   `.part*` beyond the small fixtures under `test_data/`. The root `.gitignore` now enforces this.
