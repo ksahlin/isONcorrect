@@ -24,6 +24,7 @@
 //! both mean "no support", so the data is the same. See PORTING.md.
 
 use indexmap::IndexMap;
+use rustc_hash::FxBuildHasher;
 
 /// `(r_id, p1, p2)` --- a read supporting one anchor pair, and where.
 pub type Occurrence = (usize, usize, usize);
@@ -46,7 +47,7 @@ pub type Combination<'a> = (MinimizerRef<'a>, Vec<MinimizerRef<'a>>);
 /// payload order actually feeds results.
 #[derive(Debug, Default)]
 pub struct AnchorDb {
-    map: IndexMap<Vec<u8>, IndexMap<Vec<u8>, Vec<Occurrence>>>,
+    map: IndexMap<Vec<u8>, PartnerMap, FxBuildHasher>,
     /// Total pairs generated before filtering; the reference prints this.
     pub generated: usize,
     /// Entries dropped for having a single occurrence.
@@ -55,22 +56,35 @@ pub struct AnchorDb {
     pub high_abundance: usize,
 }
 
+/// The partners of one `m1`.
+///
+/// `FxBuildHasher` rather than SipHash on both levels: these maps are read by
+/// lookup on the hot path, and `IndexMap` preserves *insertion* order regardless
+/// of hasher, so [`AnchorDb::iter`] — the only place order is observed, when
+/// dumping — is unaffected. Same for `retain`, which keeps relative order.
+pub type PartnerMap = IndexMap<Vec<u8>, Vec<Occurrence>, FxBuildHasher>;
+
 impl AnchorDb {
     /// Occurrences for a pair; empty when unknown.
     ///
     /// The reference indexes a `defaultdict`, so a miss yields an empty array
     /// rather than an error. Same contract here, without the insertion.
     pub fn get(&self, m1: &[u8], m2: &[u8]) -> &[Occurrence] {
-        self.map
-            .get(m1)
+        self.partners(m1)
             .and_then(|inner| inner.get(m2))
             .map(Vec::as_slice)
             .unwrap_or(&[])
     }
 
+    /// All partners of `m1`, so a caller sweeping many `m2` for one `m1` pays
+    /// the outer lookup once. `find_most_supported_span` does exactly that.
+    pub fn partners(&self, m1: &[u8]) -> Option<&PartnerMap> {
+        self.map.get(m1)
+    }
+
     /// Number of surviving `(m1, m2)` entries.
     pub fn len(&self) -> usize {
-        self.map.values().map(IndexMap::len).sum()
+        self.map.values().map(PartnerMap::len).sum()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -141,11 +155,20 @@ pub fn build(
                     continue;
                 }
                 db.generated += 1;
-                db.map
-                    .entry(m1.to_vec())
-                    .or_default()
-                    .entry(m2.to_vec())
-                    .or_default()
+                // `entry(m1.to_vec())` would allocate both keys on every pair,
+                // including the overwhelming majority that already exist. Look up
+                // first and only allocate on a genuine miss. A new key still lands
+                // at the end, so insertion order is unchanged.
+                if !db.map.contains_key(m1) {
+                    db.map.insert(m1.to_vec(), PartnerMap::default());
+                }
+                let inner = db.map.get_mut(m1).expect("just inserted");
+                if !inner.contains_key(m2) {
+                    inner.insert(m2.to_vec(), Vec::new());
+                }
+                inner
+                    .get_mut(m2)
+                    .expect("just inserted")
                     .push((*r_id, p1, p2));
             }
         }

@@ -21,9 +21,31 @@
 //!   so results depend on the order anchors are visited;
 //! * the estimate `ed_est` is float arithmetic via `math.fabs`, compared against
 //!   a float threshold, so it must be computed in the same order.
+//!
+//! # Why this is the port's hot spot, and what was done about it
+//!
+//! 28.4% of runtime after the MSA and `align` work, over 342 940 calls — so
+//! per-call cost rather than one hot inner loop. Measured on three real clusters:
+//! the bounded edit distance is only **27%** of the stage. The other 73% is the
+//! scaffolding around **15.4 million** iterations of the inner loop (1 715 per
+//! read), which was doing, per iteration, a SipHash of an ~80-byte key.
+//!
+//! Three changes, none of which touch what is computed:
+//!
+//! * **`FxHashMap` instead of SipHash** on `added_strings`, `already_computed`
+//!   and `reads_visited`. All three are lookup-only — never iterated — so the
+//!   hasher cannot reach output. `to_add` stays an `IndexMap` precisely because
+//!   *its* order does;
+//! * **the scratch containers are reused across partners and calls** rather than
+//!   allocated fresh each time. `clear()` keeps the capacity;
+//! * **`ref_seq` is a slice**, not a `to_vec()` per partner.
+//!
+//! The `Vec<u8>` keys of `added_strings` are still allocated on insert, but
+//! inserts are bounded by the reads actually added, while the lookups were the
+//! 15-million-iteration cost.
 
 use indexmap::IndexMap;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 
 use crate::anchors::AnchorDb;
 use crate::editdist;
@@ -55,9 +77,34 @@ pub struct SpanFinder<'a> {
     /// Quality prefix sums by `r_id`, from [`quality::prefix_sums`].
     pub qvs: &'a [Vec<f64>],
     pub k: usize,
-    already_computed: HashMap<usize, Computed>,
+    already_computed: FxHashMap<usize, Computed>,
     /// Alignments performed; the reference reports this as `tmp_cnt`.
     pub edlib_calls: usize,
+    /// Per-partner scratch, reused across partners and calls. Cleared at the top
+    /// of each partner, so carrying it here is purely an allocation saving.
+    scratch: Scratch,
+}
+
+/// The per-partner containers. `to_add` is insertion-ordered because that order
+/// becomes the payload order — `IndexMap` keeps that regardless of hasher, so
+/// only its *lookups* get the faster one. The rest are lookup-only.
+#[derive(Default)]
+struct Scratch {
+    to_add: IndexMap<usize, (usize, usize, usize, f64), FxBuildHasher>,
+    added_strings: FxHashMap<Vec<u8>, f64>,
+    reads_visited: FxHashSet<usize>,
+    /// Recycled `added_strings` keys. Each landed edit distance inserts the
+    /// ~80-byte segment as a key, 15 million times per three clusters; the map is
+    /// cleared per partner, so the buffers can simply be handed back.
+    key_pool: Vec<Vec<u8>>,
+}
+
+/// An `added_strings` key, from the pool when one is free.
+fn key_for(pool: &mut Vec<Vec<u8>>, bytes: &[u8]) -> Vec<u8> {
+    let mut v = pool.pop().unwrap_or_default();
+    v.clear();
+    v.extend_from_slice(bytes);
+    v
 }
 
 impl<'a> SpanFinder<'a> {
@@ -66,8 +113,9 @@ impl<'a> SpanFinder<'a> {
             seqs,
             qvs,
             k,
-            already_computed: HashMap::new(),
+            already_computed: FxHashMap::default(),
             edlib_calls: 0,
+            scratch: Scratch::default(),
         }
     }
 
@@ -92,8 +140,12 @@ impl<'a> SpanFinder<'a> {
         let k = self.k;
         let seqs = self.seqs;
         let qvs = self.qvs;
+        // One outer lookup for `m1`, not one per partner.
+        let Some(m1_partners) = db.partners(m1) else {
+            return;
+        };
         for &(m2, p2) in partners {
-            let relevant = db.get(m1, m2);
+            let relevant = m1_partners.get(m2).map(Vec::as_slice).unwrap_or(&[]);
             // The reference tests len(array)//3 >= 3 on the flat payload.
             if relevant.len() < 3 {
                 continue;
@@ -104,16 +156,21 @@ impl<'a> SpanFinder<'a> {
             if ref_end > seq.len() || p1 > ref_end {
                 continue;
             }
-            let ref_seq = seq[p1..ref_end].to_vec();
+            let ref_seq: &[u8] = &seq[p1..ref_end];
             let p_error_ref = quality::mean_error(&qvs[r_id - 1], p1, ref_end);
 
-            // Insertion-ordered: this becomes the payload order.
-            let mut to_add: IndexMap<usize, (usize, usize, usize, f64)> = IndexMap::new();
-            let mut added_strings: HashMap<Vec<u8>, f64> = HashMap::new();
-            let mut reads_visited: HashSet<usize> = HashSet::new();
+            let Scratch {
+                to_add,
+                added_strings,
+                reads_visited,
+                key_pool,
+            } = &mut self.scratch;
+            to_add.clear();
+            key_pool.extend(added_strings.drain().map(|(k, _)| k));
+            reads_visited.clear();
 
             to_add.insert(r_id, (r_id, p1, p2, 0.0));
-            added_strings.insert(ref_seq.clone(), 0.0);
+            added_strings.insert(key_for(key_pool, ref_seq), 0.0);
 
             for &(other, pos1, pos2) in relevant {
                 if other == r_id {
@@ -126,7 +183,7 @@ impl<'a> SpanFinder<'a> {
                 }
                 let read_seq = &other_seq_full[pos1..read_end];
 
-                if read_seq == ref_seq.as_slice() {
+                if read_seq == ref_seq {
                     to_add.insert(other, (other, pos1, pos2, 0.0));
                     reads_visited.insert(other);
                     self.already_computed
@@ -171,7 +228,7 @@ impl<'a> SpanFinder<'a> {
                                     }
                                 }
                                 to_add.insert(other, (other, pos1, pos2, ed_est));
-                                added_strings.insert(read_seq.to_vec(), ed_est);
+                                added_strings.insert(key_for(key_pool, read_seq), ed_est);
                                 reads_visited.insert(other);
                                 // NOTE: already_computed is deliberately NOT
                                 // refreshed here; the reference does not.
@@ -182,7 +239,7 @@ impl<'a> SpanFinder<'a> {
                 }
 
                 // Fall-through: align. The reference bounds by len(ref_seq).
-                let editdist = editdist::bounded(&ref_seq, read_seq, ref_seq.len());
+                let editdist = editdist::bounded(ref_seq, read_seq, ref_seq.len());
                 self.edlib_calls += 1;
                 if editdist >= 0 {
                     let ed = editdist as f64;
@@ -192,7 +249,7 @@ impl<'a> SpanFinder<'a> {
                         }
                     }
                     to_add.insert(other, (other, pos1, pos2, ed));
-                    added_strings.insert(read_seq.to_vec(), ed);
+                    added_strings.insert(key_for(key_pool, read_seq), ed);
                     reads_visited.insert(other);
                     self.already_computed
                         .insert(other, (p1, p2, pos1, pos2, ed));

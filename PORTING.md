@@ -973,6 +973,52 @@ A representation change only, so the oracle must not move, and it does not: **18
 5 484 matrices byte-identical** over the nine-run corpus, with the `get_best_corrections` oracle
 above it green on all 5 484 calls.
 
+### `find_most_supported_span`: 2.25x, and none of it was the alignment
+
+After the MSA and `align` work this was the top cost — **28.4% over ten real clusters, 342 940
+calls**, so per-call work rather than one hot inner loop. The obvious suspect was the bounded edit
+distance. It was not: a temporary scope around it attributed only **27%** of the stage there, over
+**15.4 million calls** on three clusters — 1 715 per read.
+
+The other 73% was scaffolding around those 15 million iterations. Three changes, none of which touch
+what is computed:
+
+| | |
+| --- | --- |
+| **`FxHashMap`/`FxHashSet` instead of SipHash** on `added_strings`, `already_computed`, `reads_visited`, and on `to_add`'s lookups | 20.3 s -> 11.2 s |
+| **the scratch containers reused across partners and calls** instead of three fresh allocations per anchor partner | included above |
+| **recycling `added_strings`'s keys** rather than a fresh `Vec<u8>` per landed edit distance | 11.2 s -> 9.3 s |
+
+All three are safe for the same reason: **those maps are looked up, never iterated.** `to_add` stays
+an `IndexMap` precisely because *its* order becomes the payload order, and `IndexMap` keeps insertion
+order regardless of hasher, so even its hasher is free to change. `ref_seq` also became a slice
+rather than a `to_vec()` per partner.
+
+| | ten real clusters | share |
+| --- | --- | --- |
+| before | 48.86 s | 28.4% |
+| after | **21.70 s** | **14.8%** |
+
+Total 171.9 s -> 147.0 s, and the stage is no longer the top cost — `align` is again, at 27%.
+
+**Measured and rejected: caching the edit-distance pattern.** One `ref_seq` is compared against every
+read carrying the anchor pair, so hoisting the bit-parallel pattern table out with
+`levenshtein::BatchComparator` looks free. It is a **loss** — 4.11 s to 7.51 s over the same 15.4
+million calls — because `distance_with_args` has a specialised path for patterns fitting one 64-bit
+block while `BatchComparator` always builds the heap multi-block one. The note is in `editdist.rs`;
+do not retry it without re-measuring.
+
+**Measured and nearly neutral: the anchor database.** `AnchorDb` also moved to `FxBuildHasher` on both
+levels and gained `partners(m1)`, so `find` pays the outer lookup once per call rather than once per
+partner. That is **21.70 s to 21.78 s — no change**; the outer lookup was never hot. What the same
+commit *did* buy is in the database build: `entry(m1.to_vec())` allocated both keys on every
+generated pair, including the overwhelming majority that already existed, and looking up first took
+`get_minimizer_combinations_database` from 5.43 s to **4.35 s**.
+
+Verified by the stage oracle rather than by end-to-end output alone: `spans.tsv` byte-identical to
+the reference on both clusters at `--k/--w` of 9/20, 9/10 (**52 558 intervals**), 11/25 and 7/15,
+with `anchors.tsv`, `anchor_keys.tsv` and `minimizers.tsv` identical too, and 29/29 equivalence.
+
 ### Accuracy against ground truth
 
 Equivalence testing answers "do two implementations agree"; it cannot answer "is the correction any
@@ -1075,31 +1121,32 @@ error rate); the claim is the sign, not the magnitude.
 | --- | --- | --- | --- | --- |
 | one 200-read gene cluster | 16.1 s, 339 MB | 3.3 s | **1.4 s, ~147 MB** | 11.6x faster |
 | 68 simulated clusters, `--t 8` | 83.7 s | 23.8 s | **13.3 s** | 6.3x faster |
-| **32 real isONclust clusters, 75 442 reads, `--t 8`** | **417.7 s** | 128.9 s | **67.4 s** | **6.2x faster** |
+| **32 real isONclust clusters, 75 442 reads, `--t 8`** | **417.7 s** | 128.9 s | **58.0 s** | **7.2x faster** |
 
 Byte-identical with both exact-mode variables set. The two divergences are the guard's aligner
 (~0.8% of reads) and the MSA's aligner (~11% of alignments); see *Goal* for the table.
 
-Gates: **29/29** equivalence cases (exact mode), 9/9 stage-oracle runs, 191 unit tests.
+Gates: **29/29** equivalence cases (exact mode), 9/9 stage-oracle runs, 191 unit tests, and
+`spans.tsv` byte-identical over eight dump comparisons.
 
 Where the time goes now, ten real clusters and 30 000 reads, after the MSA and `align` work:
 
 | stage | calls | self | share |
 | --- | --- | --- | --- |
-| `find_most_supported_span` | 342 940 | 48.86 s | **28.4%** |
-| `align` (segment vs consensus) | 11 775 | 38.77 s | 22.6% |
-| `run_spoa` | 11 775 | 21.09 s | 12.3% |
-| `get_alternative_ref_contexts` | 11 775 | 19.25 s | 11.2% |
-| `create_multialignment_matrix` | 11 775 | 17.28 s | 10.1% |
-| `get_minimizer_combinations_database` | 20 | 5.81 s | 3.4% |
-| the guard | 30 000 | 1.73 s | 0.9% |
-| I/O, parsing, glue | | 10.98 s | 6.4% |
-| **total** | | **171.91 s** | |
+| `align` (segment vs consensus) | 11 775 | 39.82 s | **27.2%** |
+| `find_most_supported_span` | 342 940 | 21.78 s | 14.9% |
+| `run_spoa` | 11 775 | 21.61 s | 14.8% |
+| `get_alternative_ref_contexts` | 11 775 | 19.53 s | 13.3% |
+| `create_multialignment_matrix` | 11 775 | 17.73 s | 12.1% |
+| `get_minimizer_combinations_database` | 20 | 4.35 s | 3.0% |
+| the guard | 30 000 | 1.75 s | 1.2% |
+| I/O, parsing, glue | | 11.30 s | 7.7% |
+| **total** | | **146.31 s** | |
 
-Cumulatively 207.9 s -> 171.9 s from the MSA representation and the affine aligner. **The top cost
-is now `find_most_supported_span`** — 343 000 calls, so per-call work rather than one hot inner
-loop — and the remaining `align` time is mostly the sub-64 bp segments that fall through to the
-scalar DP.
+Cumulatively **207.9 s -> 146.3 s** across three rounds: the MSA representation, the affine aligner,
+and `find_most_supported_span`. No stage is dominant any more — the top five are 27%, 15%, 15%, 13%
+and 12%, so the next win is either broad or in `align`, whose remaining time is mostly the sub-64 bp
+segments that fall through to the scalar DP.
 
 ### What is not done
 

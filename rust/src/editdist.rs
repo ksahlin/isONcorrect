@@ -33,6 +33,19 @@
 //! plain `u64` arithmetic with **no architecture guards at all**, so it is fast
 //! everywhere rather than fast on x86. `O(n * m / 64)` instead of `O(n * m)`.
 //!
+//! # Measured and rejected: a cached pattern
+//!
+//! `find_most_supported_span` compares one `ref_seq` against every read carrying
+//! an anchor pair, so hoisting the bit-parallel pattern table out of the loop
+//! with `levenshtein::BatchComparator` looks free. It is a **loss**: 4.11 s to
+//! 7.51 s over 15.4 million calls on three real clusters.
+//!
+//! The reason is that `distance_with_args` has a specialised path for patterns
+//! that fit one 64-bit block, using a stack `PatternMatchVector`, while
+//! `BatchComparator` always builds the heap `BlockPatternMatchVector`. Segments
+//! here are ~80 bp, so the plain call is on the fast path and the "optimisation"
+//! moves it off. Do not re-try this without re-measuring.
+//!
 //! Swapping the implementation is safe precisely because of the argument above:
 //! the answer is a uniquely defined number, so there is no tie-break to
 //! preserve. The differential tests below check it anyway --- against a naive DP
