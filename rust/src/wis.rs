@@ -9,6 +9,11 @@
 //!   in the support, and the epsilon keeps zero-length intervals from being
 //!   free. This is **floating point**, and the comparisons below are strict, so
 //!   the arithmetic has to be performed in the same order;
+//! * `fill_p2` **used to be off by one and is now fixed on both sides.** It stored
+//!   0-based interval indices in a table indexed by the 1-based `OPT` array, and
+//!   conflated "interval 0" with "no predecessor". The port reproduced both for as
+//!   long as the reference had them; see PORTING.md for the accuracy the fix
+//!   recovers and [`fill_p_reference`] for what it used to do;
 //! * `fill_p2` builds `stop -> j` as a dict comprehension, so when several
 //!   intervals share a `stop` the **last** one wins, and only intervals with
 //!   `start < stop` are considered at all;
@@ -33,9 +38,13 @@ pub struct Interval {
 
 const EPSILON: f64 = 0.0001;
 
-/// `p[j]`: for each interval, the index one past the last interval that ends at
-/// or before its start. Mirrors `fill_p2`.
-fn fill_p(intervals: &[Interval]) -> Vec<usize> {
+/// The pre-fix `fill_p2`, kept **only** so the test below can show that it was
+/// suboptimal and this one is not.
+///
+/// It stored 0-based indices into the 1-based `OPT` array and used `0` for both
+/// "interval 0" and "no predecessor". Not reachable from `solve`.
+#[cfg(test)]
+fn fill_p_reference(intervals: &[Interval]) -> Vec<usize> {
     // p is 1-based with a leading placeholder, matching `p = [None]`.
     let mut p = vec![0usize; intervals.len() + 1];
     if intervals.is_empty() {
@@ -67,28 +76,12 @@ fn fill_p(intervals: &[Interval]) -> Vec<usize> {
     p
 }
 
-/// Whether `ISONCORRECT_FIX_WIS` asks for the corrected predecessor table.
+/// `p[j]`: the largest **1-based** index whose interval finishes at or before
+/// interval `j` starts, or `0` when there is none. Mirrors `fill_p2`.
 ///
-/// **Off by default, and it must stay that way** until a measurement says
-/// otherwise: fixing this changes corrected output. See [`fill_p_fixed`].
-fn fix_wis() -> bool {
-    use std::sync::atomic::{AtomicU8, Ordering};
-    static MODE: AtomicU8 = AtomicU8::new(u8::MAX);
-    let cached = MODE.load(Ordering::Relaxed);
-    if cached != u8::MAX {
-        return cached == 1;
-    }
-    let on = std::env::var("ISONCORRECT_FIX_WIS")
-        .map(|v| v != "0" && !v.is_empty())
-        .unwrap_or(false);
-    MODE.store(u8::from(on), Ordering::Relaxed);
-    on
-}
-
-/// `p[j]` as weighted interval scheduling actually defines it.
-///
-/// [`fill_p`] reproduces the reference, which has two defects in one line
-/// (`fill_p2`, `isONcorrect.py:952`):
+/// The reference used to have two defects in this one line, and the port used to
+/// reproduce them; both are now fixed on both sides (`fill_p2`,
+/// `isONcorrect.py`). For the record, they were:
 ///
 /// 1. it stores a **0-based** interval index and then indexes the **1-based**
 ///    `OPT` array with it, so every predecessor is shifted down by one and
@@ -97,10 +90,10 @@ fn fix_wis() -> bool {
 ///    predecessor", so an interval with nothing before it is credited with
 ///    interval 0's optimum.
 ///
-/// Both make the selection *conservative* — it corrects over fewer regions than
-/// intended — rather than invalid. This version stores a 1-based index and uses
-/// `0` exclusively for "none".
-fn fill_p_fixed(intervals: &[Interval]) -> Vec<usize> {
+/// Both made the selection *conservative* — correcting fewer regions than
+/// intended — rather than invalid, which is why it went unnoticed. See PORTING.md
+/// for the accuracy this recovers.
+fn fill_p(intervals: &[Interval]) -> Vec<usize> {
     let mut p = vec![0usize; intervals.len() + 1];
     if intervals.is_empty() {
         return p;
@@ -146,11 +139,7 @@ pub fn solve(intervals: &[Interval]) -> Vec<usize> {
         return opt_indices;
     }
 
-    let p = if fix_wis() {
-        fill_p_fixed(intervals)
-    } else {
-        fill_p(intervals)
-    };
+    let p = fill_p(intervals);
 
     // v and OPT are 1-based with a leading placeholder.
     let mut v = vec![0.0f64; intervals.len() + 1];
@@ -219,20 +208,26 @@ mod tests {
     /// `[2, 1, 0]`. Fixing it would change corrected output on real data, so it
     /// is a reference bug to preserve, not to repair. See PORTING.md.
     #[test]
-    fn disjoint_intervals_reproduce_the_reference_off_by_one() {
+    fn pairwise_disjoint_intervals_are_all_selected() {
+        // These used to come back as [2, 0], because the reference's predecessor
+        // table was off by one and made compatible intervals look incompatible.
+        // Both `fill_p2` and `fill_p` are fixed, so a correct WIS takes all three.
         assert_eq!(
             solve(&[iv(0, 10, 3), iv(20, 30, 3), iv(40, 50, 3)]),
-            vec![2, 0]
+            vec![2, 1, 0]
         );
         assert_eq!(
             solve(&[iv(0, 10, 4), iv(20, 30, 4), iv(40, 50, 4)]),
-            vec![2, 0]
+            vec![2, 1, 0]
         );
     }
 
     #[test]
-    fn five_overlapping_intervals_match_the_reference() {
-        // Also verified directly against solve_WIS.
+    fn five_overlapping_intervals_pick_the_maximum_weight_set() {
+        // Weights are (w - 1) * span, so: 120, 210, 75, 320, 200. Interval 1
+        // (10,40) and interval 3 (50,90) are compatible and sum to 530, which
+        // beats {0,3} at 440, {1,4} at 410 and {0,2,4} at 395. The pre-fix table
+        // returned [3, 0] --- 440 --- because it could not see that 1 precedes 3.
         let got = solve(&[
             iv(0, 30, 5),
             iv(10, 40, 8),
@@ -240,7 +235,7 @@ mod tests {
             iv(50, 90, 9),
             iv(80, 120, 6),
         ]);
-        assert_eq!(got, vec![3, 0]);
+        assert_eq!(got, vec![3, 1]);
     }
 
     #[test]
@@ -394,8 +389,8 @@ mod fixed_vs_reference {
                 support: 5,
             },
         ];
-        let p_ref = fill_p(&ivs);
-        let p_fix = fill_p_fixed(&ivs);
+        let p_ref = fill_p_reference(&ivs);
+        let p_fix = fill_p(&ivs);
         // The reference shifts every predecessor down by one.
         assert_ne!(p_ref, p_fix);
         // Interval 3 (1-based) is compatible with interval 2, and interval 2
@@ -490,9 +485,9 @@ mod fixed_vs_reference {
     /// compared without touching the process-wide env cache.
     fn solve_with(intervals: &[Interval], fixed: bool) -> Vec<usize> {
         let p = if fixed {
-            fill_p_fixed(intervals)
-        } else {
             fill_p(intervals)
+        } else {
+            fill_p_reference(intervals)
         };
         let mut v = vec![0.0f64; intervals.len() + 1];
         for (j, iv) in intervals.iter().enumerate() {
@@ -524,6 +519,6 @@ mod fixed_vs_reference {
             stop: 15,
             support: 1,
         }];
-        assert_eq!(fill_p_fixed(&ivs)[1], 0);
+        assert_eq!(fill_p(&ivs)[1], 0);
     }
 }

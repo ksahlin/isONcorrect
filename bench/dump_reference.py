@@ -311,8 +311,8 @@ def main() -> int:
         ctx_cases["k_size"] = k_size
         return orig_contexts(alignment_matrix, k_size)
 
-    def wrapped_alt(alignment_matrix, contexts_per_pos, context_threshold, disable_numpy):
-        result = orig_alt(alignment_matrix, contexts_per_pos, context_threshold, disable_numpy)
+    def wrapped_alt(alignment_matrix, contexts_per_pos, context_threshold):
+        result = orig_alt(alignment_matrix, contexts_per_pos, context_threshold)
         case = ctx_cases["n"]
         ctx_cases["n"] += 1
         rows = ctx_cases["rows"]

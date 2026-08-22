@@ -554,8 +554,21 @@ def get_best_corrections(curr_best_seqs, reads, k_size, work_dir,  v_depth_ratio
 
 
 def fill_p2(p, all_intervals_sorted_by_finish):
+    """Predecessor table for solve_WIS: p[j] is the largest 1-based index whose
+    interval finishes at or before interval j starts, or 0 if there is none.
 
-    stop_to_max_j = {stop : j for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish) if start < stop }
+    The indices stored here are **1-based**, because `p` starts with a placeholder
+    and solve_WIS evaluates `OPT[p[j]]` against the 1-based `OPT` array. Storing
+    0-based indices instead shifted every predecessor down by one, so compatible
+    earlier intervals were treated as incompatible, and left 0 meaning both
+    "interval 0" and "nothing precedes this" -- which credited an interval that
+    has no predecessor with interval 0's optimum. Both made the selection
+    conservative rather than invalid: isONcorrect corrected fewer regions than it
+    should. Verified against exhaustive maximum-weight-independent-set search:
+    this version is optimal on 3000 random instances, the previous one suboptimal
+    on 2040 of them and never better. See PORTING.md.
+    """
+    stop_to_max_j = {stop : j + 1 for j, (start, stop, w, _) in enumerate(all_intervals_sorted_by_finish) if start < stop }
     # print(stop_to_max_j)
     all_choord_to_max_j = []
     j_max = 0

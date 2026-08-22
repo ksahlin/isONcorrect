@@ -1314,12 +1314,12 @@ Note also that of the 20 differing CIGARs on cluster 0, **none changed a correct
 `fix_correction` collapsed all of them to the same sequence, which is the point of recording guard
 output differences separately from CIGAR differences.
 
-### `solve_WIS` is suboptimal, and fixing it is the largest accuracy win found so far
+### `solve_WIS` was suboptimal, and fixing it is the largest accuracy win in the project
 
-*Known bugs* #2 has recorded since early in the port that `fill_p2` is off by one and that the port
-reproduces it, with a note that "it is worth measuring what it does to accuracy first, since it may
-be a free improvement". Measured. It is not free — it is **13x larger than both aligner divergences
-combined**.
+*Known bugs* #2 recorded from early in the port that `fill_p2` is off by one and that the port
+reproduced it, with a note to measure what fixing it does to accuracy first, "since it may be a free
+improvement". Measured, then fixed — **in the reference**, because that is where the defect is. It is
+**13x larger than both aligner divergences combined**, and the only cost is about 7% in wall clock.
 
 The defect is two defects in one line (`isONcorrect.py:952`):
 
@@ -1328,8 +1328,11 @@ The defect is two defects in one line (`isONcorrect.py:952`):
 2. `j_max` starts at `0`, which means both "interval 0" and "no compatible predecessor", so an
    interval with nothing before it is credited with interval 0's optimum.
 
-`wis::fill_p_fixed` stores a 1-based index and reserves `0` for "none". Selected behind
-`ISONCORRECT_FIX_WIS=1` — **off by default**, because this changes corrected output.
+**Both are now fixed, in the reference and in the port.** `fill_p2` stores a 1-based index and
+reserves `0` for "none"; `wis::fill_p` does the same, `wis::fill_p_reference` keeps the old behaviour
+for the test below, and there is no env var — the reference is correct now, so there is nothing to
+switch back to. Goldens re-recorded, and fixed Python and fixed Rust are byte-identical on the
+fixture.
 
 **It is provably the fix, not merely a different answer.** `wis::fixed_vs_reference` compares both
 tables against exhaustive maximum-weight-independent-set search over 3 000 random instances of up to
@@ -1341,19 +1344,26 @@ tables against exhaustive maximum-weight-independent-set search over 3 000 rando
 | reference suboptimal | **2 040 of 3 000** |
 | reference *better* than the optimum | 0 — impossible, and confirmed |
 
-Accuracy on the 266 real drosophila clusters, 52 848 reads with a primary spliced alignment:
+Accuracy on the 266 real drosophila clusters, 52 849 reads with a primary spliced alignment, with the
+fix applied to **the reference** as well as the port:
 
 | set | err mean % | err med % | err p90 % | err total % | aligned mean % |
 | --- | --- | --- | --- | --- | --- |
 | raw | 8.445 | 7.407 | 14.472 | 8.507 | 94.03 |
-| Python reference | 2.117 | 1.438 | 4.360 | 2.102 | 94.19 |
-| Rust default (both aligner divergences) | 2.092 | 1.416 | 4.314 | 2.076 | 94.31 |
-| **+ `fill_p` fixed** | **1.773** | **1.164** | **3.659** | **1.728** | **94.35** |
+| Python, before the fix | 2.117 | 1.438 | 4.360 | 2.102 | 94.19 |
+| **Python, after the fix** | **1.800** | **1.188** | **3.714** | **1.755** | 94.21 |
+| Rust, exact mode | 1.800 | 1.188 | 3.714 | 1.755 | 94.21 |
+| Rust, default (both aligner divergences) | **1.773** | **1.164** | **3.659** | **1.728** | **94.35** |
 
-Paired against the Rust default: **-0.3189 pp, better on 26 086 reads and worse on 7 889** — a 77%
-win rate and a **15% relative reduction in error**. Every summary statistic improves, including the
-aligned fraction, so it is not trading coverage for accuracy. For scale, the guard's aligner is worth
--0.005 pp and the affine MSA aligner -0.013 pp.
+Paired per read against the fixed reference, the *unfixed* reference is **+0.3162 pp — worse on
+26 166 reads and better on 8 065**, a 76% loss rate and a **15% relative increase in error**. Every
+summary statistic moves the same way, including the aligned fraction, so this is not trading coverage
+for accuracy. For scale, the guard's aligner is worth -0.005 pp and the affine MSA aligner -0.013 pp.
+
+Rust exact mode against fixed Python: **2 reads of 52 849**, both the parasail tie-break, both
+*better*. Confirmed by the oracles on the two clusters involved — 0 score mismatches, 2 CIGAR
+mismatches each, and every other stage clean (78 288 edlib CIGARs, 76 540 MSA rows, 838 corrections,
+838 POA consensuses, 1 130 alternatives).
 
 **Confirmed independently on the SIRV corpus**, which matters because it is a different organism, a
 different truth source (edlib against a transcriptome rather than spliced alignment against a genome)
@@ -1372,9 +1382,18 @@ the simulated and spike-in corpora understate how much these decisions matter on
 It costs about 7% in wall clock (48.1 s to 51.8 s on the 32 SIRV clusters at `--t 8`), which is
 exactly what one expects from correcting more regions — the defect's only virtue was doing less work.
 
-**This is a defect in the published tool, not a porting artefact**, and fixing it in the reference is
-the cleaner end state. Doing so changes every golden and every downstream number in this file, so it
-needs to be a deliberate, separate decision rather than something that rides along.
+This was a defect in the published tool rather than a porting artefact, which is why it is fixed in
+`isONcorrect.py` and not merely in the port. Two consequences worth stating:
+
+- **every golden was re-recorded**, and the two unit tests that pinned the old selection
+  (`[2, 0]` for three disjoint intervals, `[3, 0]` for the five-interval case) now assert the optimal
+  answers `[2, 1, 0]` and `[3, 1]`. The five-interval case is worth reading: weights are 120, 210, 75,
+  320, 200, and `{1, 3}` at 530 beats `{0, 3}` at 440, which the old table could not see because it
+  did not know 1 precedes 3;
+- **the accuracy figures elsewhere in this file predate the fix.** The tables under *Accuracy against
+  ground truth* and *Is affine actually more accurate?* compare implementations that all shared this
+  defect, so their *relative* conclusions stand — the aligner divergences are still worth what they
+  were worth — but every absolute error rate there is now pessimistic by roughly the 0.3 pp above.
 
 ### The real-data corpus
 
@@ -1423,7 +1442,8 @@ behaviour reaches the output:
 | # | Defect | Affects | Port's stance |
 | --- | --- | --- | --- |
 | 1 | `get_alternative_ref_contexts` returned a `set`, so corrected regions depended on `PYTHONHASHSEED` | corrected output | **fixed in the reference** (271be1b); output unchanged on all 43 goldens |
-| 2 | `solve_WIS`'s `fill_p2` is off by one, so compatible intervals look incompatible | corrects fewer regions than intended | reproduced; conservative, but worth measuring before fixing |
+| 1b | `create_multialignment_format_NEW`'s `start`/`stop` were always constants, and `correct_read` realigned after `fix_correction` and discarded the result | nothing — both dead | **deleted from the reference**; all 43 goldens byte-identical |
+| 2 | `solve_WIS`'s `fill_p2` was off by one, so compatible intervals looked incompatible | corrected fewer regions than intended | **fixed in the reference**; the largest accuracy win in the port — see below |
 | 3 | `split_cluster_in_batches` latches its size test after the first small cluster | which files `--split_wrt_batches` creates | reproduced |
 | 4 | Joining batched clusters concatenates in lexicographic order (batch 10 before batch 2) | read order in the joined fastq | reproduced |
 | 5 | `--split_wrt_batches` raises `ValueError` on any non-numeric filename in the input folder | crashes on real isONclust folders | **diverged**: skipped instead |
@@ -1478,17 +1498,15 @@ trajectory still passes. Comparing `spans.tsv` from the live driver is what caug
   eligible context. The flag is documented as "1.5x slower" but it does not run at all. Marked
   `xfail` in `bench/equivalence.sh`. **There is no reference behaviour for the port to match here** —
   decide whether the Rust port rejects the flag, accepts it as a no-op, or waits for a fix.
-- **`solve_WIS` is suboptimal: `fill_p2` is off by one.** It stores 0-based interval indices in
-  `p`, but `p[j]` is then used to index the **1-based** `OPT` array (`OPT[p[j]]`). Every predecessor
-  is therefore shifted, and compatible earlier intervals get treated as incompatible. Three
-  pairwise-disjoint intervals, which a correct WIS would all select, come back as two — verified
-  directly against `solve_WIS`, which returns `[2, 0]` rather than `[2, 1, 0]`.
+- ~~**`solve_WIS` is suboptimal: `fill_p2` is off by one.**~~ **Fixed, in the reference and the port.**
+  It stored 0-based interval indices in `p` while `p[j]` indexed the **1-based** `OPT` array, and
+  `j_max` started at `0`, which meant both "interval 0" and "no compatible predecessor". Three
+  pairwise-disjoint intervals came back as two (`[2, 0]` rather than `[2, 1, 0]`).
 
-  The effect is to correct over **fewer** intervals than intended, so it is conservative rather than
-  wrong-in-a-dangerous-way, but it does mean isONcorrect leaves correctable regions untouched.
-  **The port reproduces it**, because fixing it changes corrected output on real data. If it is ever
-  fixed, that is a behaviour change needing its own commit, a note here, and re-recorded goldens —
-  and it is worth measuring what it does to accuracy first, since it may be a free improvement.
+  The measurement said to fix it: **-0.319 pp mean read error on real drosophila, a 15% relative
+  reduction and 13x both aligner divergences combined**, for about 7% in wall clock. See
+  *`solve_WIS` is suboptimal, and fixing it is the largest accuracy win found so far*. Goldens
+  re-recorded; fixed Python and fixed Rust are byte-identical.
 
 - **`args.flnc` and `args.ccs` are referenced but never defined by argparse**
   (`src/isoncorrect/isONcorrect.py:1679`). Running `isONcorrect` with no `--fastq` raises
