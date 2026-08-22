@@ -67,6 +67,66 @@ fn fill_p(intervals: &[Interval]) -> Vec<usize> {
     p
 }
 
+/// Whether `ISONCORRECT_FIX_WIS` asks for the corrected predecessor table.
+///
+/// **Off by default, and it must stay that way** until a measurement says
+/// otherwise: fixing this changes corrected output. See [`fill_p_fixed`].
+fn fix_wis() -> bool {
+    use std::sync::atomic::{AtomicU8, Ordering};
+    static MODE: AtomicU8 = AtomicU8::new(u8::MAX);
+    let cached = MODE.load(Ordering::Relaxed);
+    if cached != u8::MAX {
+        return cached == 1;
+    }
+    let on = std::env::var("ISONCORRECT_FIX_WIS")
+        .map(|v| v != "0" && !v.is_empty())
+        .unwrap_or(false);
+    MODE.store(u8::from(on), Ordering::Relaxed);
+    on
+}
+
+/// `p[j]` as weighted interval scheduling actually defines it.
+///
+/// [`fill_p`] reproduces the reference, which has two defects in one line
+/// (`fill_p2`, `isONcorrect.py:952`):
+///
+/// 1. it stores a **0-based** interval index and then indexes the **1-based**
+///    `OPT` array with it, so every predecessor is shifted down by one and
+///    compatible earlier intervals are treated as incompatible;
+/// 2. `j_max` starts at 0 and means both "interval 0" and "no compatible
+///    predecessor", so an interval with nothing before it is credited with
+///    interval 0's optimum.
+///
+/// Both make the selection *conservative* — it corrects over fewer regions than
+/// intended — rather than invalid. This version stores a 1-based index and uses
+/// `0` exclusively for "none".
+fn fill_p_fixed(intervals: &[Interval]) -> Vec<usize> {
+    let mut p = vec![0usize; intervals.len() + 1];
+    if intervals.is_empty() {
+        return p;
+    }
+    let max_stop = intervals[intervals.len() - 1].stop;
+    // `Some(j)` is 0-based; stored as `j + 1`. Absent means no predecessor.
+    let mut stop_to_max_j: Vec<Option<usize>> = vec![None; max_stop + 1];
+    for (j, iv) in intervals.iter().enumerate() {
+        if iv.start < iv.stop && iv.stop <= max_stop {
+            stop_to_max_j[iv.stop] = Some(j);
+        }
+    }
+    let mut coord: Vec<usize> = vec![0; max_stop + 1];
+    let mut j_max = 0usize; // 0 = none
+    for i in 0..=max_stop {
+        if let Some(j) = stop_to_max_j[i] {
+            j_max = j + 1;
+        }
+        coord[i] = j_max;
+    }
+    for (j, iv) in intervals.iter().enumerate() {
+        p[j + 1] = coord[iv.start.min(max_stop)];
+    }
+    p
+}
+
 /// Weight of interval `j`, exactly as the reference computes it.
 fn weight(iv: &Interval) -> f64 {
     // (w - 1) * (stop - start + epsilon). `w - 1` can be 0 but never negative
@@ -86,7 +146,11 @@ pub fn solve(intervals: &[Interval]) -> Vec<usize> {
         return opt_indices;
     }
 
-    let p = fill_p(intervals);
+    let p = if fix_wis() {
+        fill_p_fixed(intervals)
+    } else {
+        fill_p(intervals)
+    };
 
     // v and OPT are 1-based with a leading placeholder.
     let mut v = vec![0.0f64; intervals.len() + 1];
@@ -299,5 +363,167 @@ mod replay {
             checked += 1;
         }
         eprintln!("replayed {checked} solve_WIS calls from {dir}");
+    }
+}
+
+#[cfg(test)]
+mod fixed_vs_reference {
+    use super::*;
+
+    /// Three pairwise-disjoint intervals: a correct WIS takes all three.
+    ///
+    /// This is the case that proves the reference is suboptimal rather than
+    /// merely different — it is the same example recorded in PORTING.md, checked
+    /// against `solve_WIS` itself.
+    #[test]
+    fn the_fixed_table_selects_all_three_disjoint_intervals() {
+        let ivs = vec![
+            Interval {
+                start: 0,
+                stop: 10,
+                support: 5,
+            },
+            Interval {
+                start: 20,
+                stop: 30,
+                support: 5,
+            },
+            Interval {
+                start: 40,
+                stop: 50,
+                support: 5,
+            },
+        ];
+        let p_ref = fill_p(&ivs);
+        let p_fix = fill_p_fixed(&ivs);
+        // The reference shifts every predecessor down by one.
+        assert_ne!(p_ref, p_fix);
+        // Interval 3 (1-based) is compatible with interval 2, and interval 2
+        // with interval 1; the fixed table says so, the reference's does not.
+        assert_eq!(p_fix[3], 2);
+        assert_eq!(p_fix[2], 1);
+        assert_eq!(p_fix[1], 0, "nothing precedes the first interval");
+    }
+
+    /// The fixed table is **optimal**, checked against brute force.
+    ///
+    /// This is the claim that matters and it is not implied by the unit cases
+    /// above: it says the corrected predecessor table maximises total weight over
+    /// non-overlapping intervals, which is the whole point of `solve_WIS`. The
+    /// reference's table is checked at the same time and is expected to be
+    /// **never better and sometimes worse** — that asymmetry is what makes the
+    /// defect conservative rather than dangerous.
+    #[test]
+    fn the_fixed_table_is_optimal_and_the_reference_is_not() {
+        // Deterministic xorshift so a failure is reproducible.
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let (mut ref_worse, mut ref_better) = (0usize, 0usize);
+        for _ in 0..3000 {
+            let n = 1 + (next() % 9) as usize;
+            let mut ivs: Vec<Interval> = (0..n)
+                .map(|_| {
+                    let start = (next() % 60) as usize;
+                    let len = 1 + (next() % 20) as usize;
+                    Interval {
+                        start,
+                        stop: start + len,
+                        support: 1 + (next() % 8) as usize,
+                    }
+                })
+                .collect();
+            // `solve_WIS` requires intervals sorted by finish; the driver sorts
+            // by (stop, start) before calling, so mirror that.
+            ivs.sort_by_key(|iv| (iv.stop, iv.start));
+
+            let best = brute_force(&ivs);
+            let got_fixed = total(&ivs, &solve_with(&ivs, true));
+            let got_ref = total(&ivs, &solve_with(&ivs, false));
+            assert!(
+                (got_fixed - best).abs() < 1e-9,
+                "fixed table suboptimal: {got_fixed} < {best} on {ivs:?}"
+            );
+            if got_ref < best - 1e-9 {
+                ref_worse += 1;
+            }
+            if got_ref > best + 1e-9 {
+                ref_better += 1;
+            }
+        }
+        assert_eq!(ref_better, 0, "the reference cannot beat the optimum");
+        assert!(
+            ref_worse > 0,
+            "the corpus should contain cases the reference gets wrong"
+        );
+        eprintln!("reference suboptimal on {ref_worse} of 3000 random instances");
+    }
+
+    /// Maximum total weight over pairwise-compatible intervals, by exhaustive
+    /// search. Only used on instances of at most 9 intervals.
+    fn brute_force(ivs: &[Interval]) -> f64 {
+        let n = ivs.len();
+        let mut best = 0.0f64;
+        for mask in 0u32..(1 << n) {
+            let chosen: Vec<usize> = (0..n).filter(|i| mask >> i & 1 == 1).collect();
+            let ok = chosen.windows(2).all(|w| ivs[w[0]].stop <= ivs[w[1]].start);
+            if !ok {
+                continue;
+            }
+            let sum: f64 = chosen.iter().map(|&i| weight(&ivs[i])).sum();
+            if sum > best {
+                best = sum;
+            }
+        }
+        best
+    }
+
+    fn total(ivs: &[Interval], picked: &[usize]) -> f64 {
+        picked.iter().map(|&i| weight(&ivs[i])).sum()
+    }
+
+    /// `solve` with the predecessor table chosen explicitly, so both can be
+    /// compared without touching the process-wide env cache.
+    fn solve_with(intervals: &[Interval], fixed: bool) -> Vec<usize> {
+        let p = if fixed {
+            fill_p_fixed(intervals)
+        } else {
+            fill_p(intervals)
+        };
+        let mut v = vec![0.0f64; intervals.len() + 1];
+        for (j, iv) in intervals.iter().enumerate() {
+            v[j + 1] = weight(iv);
+        }
+        let mut opt = vec![0.0f64; intervals.len() + 1];
+        for j in 1..=intervals.len() {
+            opt[j] = (v[j] + opt[p[j]]).max(opt[j - 1]);
+        }
+        let mut out = Vec::new();
+        let mut j = intervals.len();
+        while j > 0 {
+            if v[j] + opt[p[j]] > opt[j - 1] {
+                out.push(j - 1);
+                j = p[j];
+            } else {
+                j -= 1;
+            }
+        }
+        out
+    }
+
+    /// A single interval must have no predecessor, which the reference's
+    /// "0 means both none and interval 0" conflation cannot express.
+    #[test]
+    fn a_lone_interval_has_no_predecessor() {
+        let ivs = vec![Interval {
+            start: 5,
+            stop: 15,
+            support: 1,
+        }];
+        assert_eq!(fill_p_fixed(&ivs)[1], 0);
     }
 }

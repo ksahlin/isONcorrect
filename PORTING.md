@@ -1204,6 +1204,167 @@ sub-stage measurements have to be taken and then removed, never left in.
 - **Real long-read data.** The real corpus here is SIRV, whose reads are short (median ~600 bp). A
   transcriptome with multi-kb transcripts would stress the guard and the band assumptions harder.
 
+### The drosophila corpus, and the bug it found
+
+The SIRV corpora are all short (median ~600 bp) and, more importantly, all *one organism's spike-in
+transcripts*. Real ONT cDNA from drosophila adds genuine isoform complexity and a longer tail
+(p99 2 705 bp, max 7 228 against SIRV's 2 898). 100 000 reads through isONclust gives **266 clusters,
+54 721 reads**, the largest 3 528 — comfortably over `--max_seqs`.
+
+**It found a real bug in the port on the first run.** In exact mode, 2 of 266 clusters and 588 of
+54 721 reads differed from the reference.
+
+`get_minimizer_combinations_database` drops an anchor pair whose occurrences outnumber the reads
+("highly abundant"). The reference's batch loop is `for batch_id, reads in enumerate(batch(all_reads,
+args.max_seqs))`, which **rebinds `reads` to the batch**, so `len(reads)` in that filter is the
+*batch* size. The port passed the *cluster* size. A higher threshold means abundant anchors the
+reference drops survive, and the read picks up extra very-high-support intervals — on the offending
+anchor, three extra partners at support 1070 where the reference kept four at 715, 17, 1123 and 55.
+
+Two things make this worth recording beyond the one-line fix:
+
+- **Only a cluster larger than `--max_seqs` can expose it**, and even then only when some anchor's
+  occurrence count falls between the batch size and the cluster size. Every SIRV real cluster is
+  3 000 reads, so batching *was* exercised there — and the output was byte-identical both before and
+  after the fix. The bug was latent on 75 442 reads across two corpora.
+- **No stage oracle could see it.** Every one of them passed on the drosophila clusters: 845 810
+  edlib CIGARs, 803 268 MSA rows, 800 586 `cigar_to_seq` expansions, 2 682 corrections, 11 526
+  alternatives, 3 522 `solve_WIS` calls, 3 522 `fix_correction` calls, 3 522 `correct_read` reads. They
+  replay *recorded reference inputs*, so they cannot detect the port following a different trajectory.
+  What found it was comparing `spans.tsv` — see below.
+
+#### `spans.tsv` from the live driver closes the last hole
+
+`isoncorrect-dump` can emit spans, but it does not correct, so `previously_corrected_regions` is
+always empty there and only the `--exact` trajectory was ever comparable. The anchor filtering that
+consumes those regions was therefore **inert in every dump ever taken**, and the non-exact trajectory
+had no stage-level check at all.
+
+`driver::SpansDump` records the same format from the real driver, where the feedback loop is live:
+
+```bash
+ISONCORRECT_SPANS_DUMP=/tmp/rs_spans.tsv isONcorrect --fastq cluster.fastq --outfolder /tmp/x
+diff /tmp/py/spans.tsv /tmp/rs_spans.tsv
+```
+
+That diff pointed at row 2 580 of 160 797 — one anchor, on read 1, where the port emitted three
+intervals the reference did not. Read 1 is the *first* read, where the regions map is empty and the
+filtering is inert, which immediately ruled out the filtering and pointed at the database instead.
+
+After the fix: **1 of 266 clusters and 1 of 54 721 reads** differ, and that one is the parasail
+tie-break below.
+
+#### Accuracy against a genome, by spliced alignment
+
+There is no transcriptome here worth depending on, so `bench/accuracy_genome.py` uses the genome:
+`minimap2 -ax splice -uf --secondary=no`, error rate `NM / aligned_read_bases` from the primary
+alignment.
+
+**It reports the aligned fraction too, and that is not optional.** Error rate alone is gamed by
+aligning less of the read — a correction that mangled the ends would soft-clip them away and score
+*better*. The pair cannot be gamed in that direction. `NM` over a genome also includes real
+biological difference (SNPs against the assembly, mis-placed unannotated splice sites), so the
+absolute rate overstates sequencing error; the inflation is identical across implementations, so
+comparisons hold where the absolute number does not.
+
+| set | err mean % | err med % | err p90 % | err total % | aligned mean % | unaligned |
+| --- | --- | --- | --- | --- | --- | --- |
+| raw | 8.445 | 7.407 | 14.472 | 8.507 | 94.03 | 1 853 |
+| Python reference | 2.117 | 1.438 | 4.360 | 2.102 | 94.19 | 1 127 |
+| Rust, exact mode | 2.117 | 1.438 | 4.360 | 2.102 | 94.19 | 1 127 |
+| Rust, default | **2.092** | **1.416** | **4.314** | **2.076** | **94.31** | **1 120** |
+
+Paired against the reference: exact mode differs on **1 read of 52 848**; default is -0.0244 pp,
+better on 11 417 and worse on 9 901.
+
+**That is a 53.6% win rate, against 63% on SIRV** — the divergences are still net better on every
+statistic, and correction still makes more reads alignable (1 853 unaligned to 1 120), but on real
+drosophila the margin is much closer to a coin flip than the simulated and spike-in corpora implied.
+Any claim about the size of the divergence's benefit should cite this number, not the SIRV one.
+
+Wall clock, 266 clusters at `--t 8`: Python 192 s, Rust exact ~40 s, **Rust default 19.2 s — 10x**.
+
+#### The parasail tie-break the corpus finally reached
+
+One divergence survives in exact mode, and it is the one this file predicted. *The structural-
+overcorrection guard* records that two of the four tie-break parameters — which of the last row and
+column to scan first, and whether to keep the first or last equally-good end cell — were **unpinned
+by the corpus**, because a read against its own correction never produces an end-cell tie. Drosophila
+produces them: 1 of 420 CIGARs on one cluster, 20 of 3 522 on another, with **0 score mismatches** in
+both. Purely which equally-optimal path parasail reports.
+
+Re-running the sweep on the new cases **confirms the current configuration rather than overturning
+it** — it is still the best at 419/420, and no combination in the 96-parameter space reaches 420. So
+parasail's choice here is not expressible as a fixed preference order over predecessors, and
+reproducing it would mean reproducing its vectorised scan. Not worth it for one read in 54 721, and
+the divergence is *better* on that read by the accuracy measure.
+
+Note also that of the 20 differing CIGARs on cluster 0, **none changed a corrected read**:
+`fix_correction` collapsed all of them to the same sequence, which is the point of recording guard
+output differences separately from CIGAR differences.
+
+### `solve_WIS` is suboptimal, and fixing it is the largest accuracy win found so far
+
+*Known bugs* #2 has recorded since early in the port that `fill_p2` is off by one and that the port
+reproduces it, with a note that "it is worth measuring what it does to accuracy first, since it may
+be a free improvement". Measured. It is not free — it is **13x larger than both aligner divergences
+combined**.
+
+The defect is two defects in one line (`isONcorrect.py:952`):
+
+1. it stores a **0-based** interval index in `p` and then indexes the **1-based** `OPT` array with it,
+   so every predecessor is shifted down by one and compatible earlier intervals look incompatible;
+2. `j_max` starts at `0`, which means both "interval 0" and "no compatible predecessor", so an
+   interval with nothing before it is credited with interval 0's optimum.
+
+`wis::fill_p_fixed` stores a 1-based index and reserves `0` for "none". Selected behind
+`ISONCORRECT_FIX_WIS=1` — **off by default**, because this changes corrected output.
+
+**It is provably the fix, not merely a different answer.** `wis::fixed_vs_reference` compares both
+tables against exhaustive maximum-weight-independent-set search over 3 000 random instances of up to
+9 intervals:
+
+| | |
+| --- | --- |
+| fixed table suboptimal | **0 of 3 000** |
+| reference suboptimal | **2 040 of 3 000** |
+| reference *better* than the optimum | 0 — impossible, and confirmed |
+
+Accuracy on the 266 real drosophila clusters, 52 848 reads with a primary spliced alignment:
+
+| set | err mean % | err med % | err p90 % | err total % | aligned mean % |
+| --- | --- | --- | --- | --- | --- |
+| raw | 8.445 | 7.407 | 14.472 | 8.507 | 94.03 |
+| Python reference | 2.117 | 1.438 | 4.360 | 2.102 | 94.19 |
+| Rust default (both aligner divergences) | 2.092 | 1.416 | 4.314 | 2.076 | 94.31 |
+| **+ `fill_p` fixed** | **1.773** | **1.164** | **3.659** | **1.728** | **94.35** |
+
+Paired against the Rust default: **-0.3189 pp, better on 26 086 reads and worse on 7 889** — a 77%
+win rate and a **15% relative reduction in error**. Every summary statistic improves, including the
+aligned fraction, so it is not trading coverage for accuracy. For scale, the guard's aligner is worth
+-0.005 pp and the affine MSA aligner -0.013 pp.
+
+**Confirmed independently on the SIRV corpus**, which matters because it is a different organism, a
+different truth source (edlib against a transcriptome rather than spliced alignment against a genome)
+and a different error profile — 32 real isONclust clusters, 75 156 reads:
+
+| set | mean % | median % | p90 % | total % | perfect |
+| --- | --- | --- | --- | --- | --- |
+| Python reference | 1.714 | 1.165 | 3.601 | 1.259 | 156 |
+| Rust default | 1.696 | 1.143 | 3.608 | 1.232 | 158 |
+| **+ `fill_p` fixed** | **1.632** | **1.086** | **3.456** | **1.157** | **169** |
+
+-0.0638 pp against the Rust default, better on 20 198 and worse on 9 753 — a 67% win rate. Smaller in
+absolute terms than on drosophila (-0.319 pp), which is consistent with everything else in this file:
+the simulated and spike-in corpora understate how much these decisions matter on real data.
+
+It costs about 7% in wall clock (48.1 s to 51.8 s on the 32 SIRV clusters at `--t 8`), which is
+exactly what one expects from correcting more regions — the defect's only virtue was doing less work.
+
+**This is a defect in the published tool, not a porting artefact**, and fixing it in the reference is
+the cleaner end state. Doing so changes every golden and every downstream number in this file, so it
+needs to be a deliberate, separate decision rather than something that rides along.
+
 ### The real-data corpus
 
 `isONclust` is **not** in the reference environment; it is installed in a separate `isonclust-tool`
@@ -1258,6 +1419,13 @@ behaviour reaches the output:
 | 6 | `--disable_numpy` raises `ValueError` on any eligible context — the flag has never worked | the flag is unusable | flag removed from the Rust CLI |
 | 7 | `batch()` raises `UnboundLocalError` on an empty fastq | error path | **diverged**: writes an empty output |
 | 8 | `args.flnc` / `args.ccs` are read but never defined by argparse, so no-`--fastq` raises | error path | **diverged**: prints help, exits 0 |
+
+**And one bug in the port, for symmetry**, since it is the only one a corpus has ever found rather
+than inspection: `anchors::build` was given the cluster size where the reference passes the batch
+size, so the high-abundance anchor filter used the wrong threshold on any cluster over `--max_seqs`.
+Fixed; see *The drosophila corpus, and the bug it found*. The lesson is not the bug but that **no
+stage oracle could see it** — they replay recorded reference inputs, so a port on a different
+trajectory still passes. Comparing `spans.tsv` from the live driver is what caught it.
 
 - ~~**`get_best_corrections` is non-deterministic on the default path.**~~ **Fixed.**
   `get_alternative_ref_contexts` returned a `set`, and the correction loop's `break` and strict `<`
@@ -1337,17 +1505,16 @@ behaviour reaches the output:
   remaining time win is vectorising the DP, which is sound (the recurrence does not change) but a
   substantially larger piece of work; `parasail_cases.tsv` is what makes it checkable. It is still
   ~65% of runtime, so it is the top of the list.
-- **The reference realigns after `fix_correction` and discards the result**
-  (`isONcorrect.py:1312`). The port omits that second call. It is output-neutral by inspection — the
-  return value feeds nothing — and the `correct_read` oracle agrees on 1 204 reads, but deleting it
-  from the Python is a separate commit.
+- ~~**The reference realigns after `fix_correction` and discards the result.**~~ **Done** — deleted.
+  It was output-neutral by inspection (the return value fed nothing), and all 43 goldens are
+  byte-identical after the deletion, which is the check that matters.
 - ~~**The positioned vector allocates one `Vec<u8>` per slot.**~~ **Done** — `msa::Positioned` is one
   flat buffer plus an offset table, halving the stage. See *The MSA matrix: one buffer instead of
   `2t + 1` allocations*.
-- `create_multialignment_format_NEW` takes `start`/`stop` and filters to rows covering that window,
-  but the only caller passes the full vector, so the filter always admits everything and
-  `t_vector_start`/`t_vector_end` are constants. The port drops the parameters. Deleting them from
-  the Python is a separate commit.
+- ~~**`create_multialignment_format_NEW` takes `start`/`stop` that are always constants.**~~ **Done** —
+  the only caller passed `0` and `2*len(repr_seq)`, and `position_query_to_alignment` always returns
+  `t_vector_start = 0`, `t_vector_end = 2*t` (it asserts as much), so the filter admitted every row
+  and the slice was the whole vector. Parameters and filter deleted; all 43 goldens byte-identical.
 - The `hash_fcn` parameter is threaded through but hardcoded to `"lex"`; `get_kmer_minimizers`
   (random) and `get_kmer_maximizers` are dead in the default path.
 - Dropping the flags listed under *Scope* leaves a large amount of now-unreachable Python
