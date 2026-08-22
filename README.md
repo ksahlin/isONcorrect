@@ -24,12 +24,15 @@ Needs a Rust toolchain (1.85+) and nothing else — no C/C++ toolchain, no CMake
 git clone https://github.com/ksahlin/isONcorrect.git
 cd isONcorrect
 cargo build --release --manifest-path rust/Cargo.toml
-mkdir -p ~/.local/bin && cp rust/target/release/{isONcorrect,run_isoncorrect} ~/.local/bin/
 ```
 
-No Rust? `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`. Prefer not to build?
-Binaries for Linux and macOS (x86_64, arm64) are attached to each
-[release](https://github.com/ksahlin/isONcorrect/releases).
+This builds two binaries, `isONcorrect` and `run_isoncorrect`, in
+`rust/target/release/`. Copy them somewhere on your `PATH`.
+
+No Rust? `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+
+Prefer not to build? Binaries for Linux and macOS (x86_64, arm64) are attached to
+[release v0.2.0](https://github.com/ksahlin/isONcorrect/releases/tag/v0.2.0).
 
 For the full pipeline you also want pychopper and isONclust:
 
@@ -47,7 +50,7 @@ The deprecated Python version, if you need it to reproduce the paper:
 From the repository root:
 
 ```bash
-isONcorrect --fastq test_data/isoncorrect/0.fastq --outfolder /tmp/isoncorrect_test
+rust/target/release/isONcorrect --fastq test_data/isoncorrect/0.fastq --outfolder /tmp/isoncorrect_test
 ```
 
 Under a second. Writes `/tmp/isoncorrect_test/corrected_reads.fastq` — 100 reads, same headers as the
