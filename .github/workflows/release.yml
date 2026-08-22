@@ -55,7 +55,7 @@ jobs:
             native: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
@@ -89,7 +89,7 @@ jobs:
           # `shasum -c` fails for anyone who downloaded the tarball into their own
           # directory -- which is everyone. v0.2.0 shipped that way at first.
           ( cd dist && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256" )
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: |
