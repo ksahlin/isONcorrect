@@ -118,10 +118,11 @@ pub fn best_corrections(
     let mut aligned: Vec<(Vec<u8>, Vec<u8>)> = Vec::with_capacity(segments.len() + 1);
     aligned.push((consensus.clone(), consensus.clone()));
     let _align_t = crate::profile::scope("align (NW cigar)");
+    let mut ops: Vec<align::CigarOp> = Vec::new();
     for seg in &segments {
-        let cigar = segment_cigar(seg, &consensus);
+        segment_ops(seg, &consensus, &mut ops);
         let (read_aln, ref_aln) =
-            align::cigar_to_seq(&cigar, seg, &consensus).expect("an alignment's own CIGAR expands");
+            align::ops_to_seq(&ops, seg, &consensus).expect("an alignment's own CIGAR expands");
         aligned.push((read_aln, ref_aln));
     }
 
@@ -248,13 +249,16 @@ fn trim(v: &[u8], k_size: usize) -> Vec<u8> {
 /// corrected base. About 11% of alignments take a different path than edlib's
 /// unit-cost one. `ISONCORRECT_EXACT_ALIGN=1` restores the exact edlib-compatible
 /// path and `bench/equivalence.sh` sets it, so the byte-identity gate is intact.
-fn segment_cigar(seg: &[u8], consensus: &[u8]) -> String {
-    if !exact_align() && seg.len() >= simd::MIN_LEN && consensus.len() >= simd::MIN_LEN {
-        if let Some(cigar) = simd::global_cigar(seg, consensus, Scoring::GUARD) {
-            return cigar;
-        }
+fn segment_ops(seg: &[u8], consensus: &[u8], out: &mut Vec<align::CigarOp>) {
+    if !exact_align()
+        && seg.len() >= simd::MIN_LEN
+        && consensus.len() >= simd::MIN_LEN
+        && simd::global_ops(seg, consensus, Scoring::GUARD, out)
+    {
+        return;
     }
-    align::global(seg, consensus).cigar
+    let cigar = align::global(seg, consensus).cigar;
+    *out = align::parse_cigar(&cigar).expect("the DP's own CIGAR parses");
 }
 
 /// Whether `ISONCORRECT_EXACT_ALIGN` asks for the edlib-compatible DP.

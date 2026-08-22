@@ -945,13 +945,51 @@ per read and its output is either "keep the correction" or "revert this run", so
 changes little. This CIGAR builds the MSA, which builds the PFM, which decides *every corrected
 base*. `ISONCORRECT_EXACT_ALIGN=1` restores `align::global` and `bench/equivalence.sh` sets it.
 
+#### Then the per-call cost, which was most of it
+
+Profiling *inside* the stage found three things, and the first two were assumptions worth checking:
+
+- **the 64 bp threshold was excluding the majority of the work.** These segments are median ~55 bp,
+  so `simd::MIN_LEN = 64` sent **1 683 397 of 4 272 008 alignments (39%)** to the scalar DP. Below
+  32 there is genuinely nothing to gain — that is block-aligner's minimum block size, so the block
+  already spans the whole alignment — but between 32 and 64 there was. Lowering it leaves only
+  **75 587** fallbacks, which are the gap-padded `min_ed` queries that cannot use SIMD at all;
+- **per-call setup competed with the arithmetic.** A ~55x57 DP is a few thousand cells, and there are
+  4.27 million calls per four real clusters, against which a fresh `Block`, two `PaddedBytes` and a
+  `Cigar` (which allocates *and zeroes* `q + r + 5` 16-byte entries, ~2 KB here) are not free.
+  `simd::Scratch` reuses all four. `Block::new` takes *maximum* lengths and `align` takes the actual
+  sequences, so one block serves every smaller pair; and `cigar_eq` calls `Cigar::clear` itself, so a
+  long-lived `Cigar` is safe even though `clear` is `pub(crate)`;
+- **the CIGAR was round-tripping through a `String`.** The aligner reports operations natively and
+  `cigar_to_seq` immediately parsed them back. `simd::global_ops` and `align::ops_to_seq` skip it.
+
+| | four real clusters |
+| --- | --- |
+| `MIN_LEN` 64, fresh allocations, string CIGAR | 12.93 s + 7.75 s fallback + 1.13 s expand = **21.81 s** |
+| `MIN_LEN` 32, reused scratch, ops | 11.54 s + 0.11 s fallback + 0.88 s expand = **12.53 s** |
+
+**1.74x on the stage**, and 58.0 s -> **48.1 s** on the 32 real clusters at `--t 8`.
+
+Lowering `MIN_LEN` changes output — it extends the same divergence to more alignments — so it was
+checked the same way. `align::block_option` now exercises `simd::global_ops` itself rather than its
+own copy of the aligner: **159 209 recorded alignments across six corpora, 0 suboptimal, 0 refused,
+0 that fail to span their inputs.** And on accuracy it is better again:
+
+| set | mean % | median % | p90 % | total % | perfect | paired vs Python |
+| --- | --- | --- | --- | --- | --- | --- |
+| affine, `MIN_LEN` 64 | 1.702 | 1.154 | **3.571** | 1.243 | 156 | -0.0129 pp |
+| affine, `MIN_LEN` 32 | **1.696** | **1.143** | 3.608 | **1.232** | **158** | **-0.0185 pp** |
+
+Better on 11 891 reads and worse on 6 614 — the same 64% ratio on a larger changed set. Four of the
+five summary statistics improve; **p90 is marginally worse** (3.608 against 3.571), so the tail of
+hard reads gives back a little of what the bulk gains. Worth recording rather than rounding away.
+
 Two call sites stay on the exact DP regardless:
 
-- **sequences shorter than 64 bp**, where block-aligner's minimum block dominates;
+- **sequences shorter than 32 bp**, where the block already spans everything;
 - **`msa::min_ed`**, whose query is a gap-padded insertion slot like `"-TT-"`. block-aligner's
-  `NucMatrix` has no entry for `-` and `convert_char` asserts `A..=Z`, so `simd::global_cigar`
-  rejects non-ACGTN input and the caller falls through. It is a small minority — 27 of 677
-  `task="path"` calls at default parameters.
+  `NucMatrix` has no entry for `-` and `convert_char` asserts `A..=Z`, so `simd::global_ops`
+  refuses non-ACGTN input and the caller falls through. 75 587 of 4 272 008 calls.
 
 ### The MSA matrix: one buffer instead of `2t + 1` allocations
 
@@ -1121,7 +1159,7 @@ error rate); the claim is the sign, not the magnitude.
 | --- | --- | --- | --- | --- |
 | one 200-read gene cluster | 16.1 s, 339 MB | 3.3 s | **1.4 s, ~147 MB** | 11.6x faster |
 | 68 simulated clusters, `--t 8` | 83.7 s | 23.8 s | **13.3 s** | 6.3x faster |
-| **32 real isONclust clusters, 75 442 reads, `--t 8`** | **417.7 s** | 128.9 s | **58.0 s** | **7.2x faster** |
+| **32 real isONclust clusters, 75 442 reads, `--t 8`** | **417.7 s** | 128.9 s | **48.1 s** | **8.7x faster** |
 
 Byte-identical with both exact-mode variables set. The two divergences are the guard's aligner
 (~0.8% of reads) and the MSA's aligner (~11% of alignments); see *Goal* for the table.
@@ -1133,20 +1171,28 @@ Where the time goes now, ten real clusters and 30 000 reads, after the MSA and `
 
 | stage | calls | self | share |
 | --- | --- | --- | --- |
-| `align` (segment vs consensus) | 11 775 | 39.82 s | **27.2%** |
-| `find_most_supported_span` | 342 940 | 21.78 s | 14.9% |
-| `run_spoa` | 11 775 | 21.61 s | 14.8% |
-| `get_alternative_ref_contexts` | 11 775 | 19.53 s | 13.3% |
-| `create_multialignment_matrix` | 11 775 | 17.73 s | 12.1% |
-| `get_minimizer_combinations_database` | 20 | 4.35 s | 3.0% |
-| the guard | 30 000 | 1.75 s | 1.2% |
-| I/O, parsing, glue | | 11.30 s | 7.7% |
-| **total** | | **146.31 s** | |
+| `align` (segment vs consensus) | 11 775 | 20.99 s | 17.3% |
+| `run_spoa` | 11 775 | 20.29 s | 16.8% |
+| `find_most_supported_span` | 342 940 | 20.20 s | 16.7% |
+| `get_alternative_ref_contexts` | 11 775 | 19.07 s | 15.8% |
+| `create_multialignment_matrix` | 11 775 | 17.25 s | 14.3% |
+| `get_minimizer_combinations_database` | 20 | 3.87 s | 3.2% |
+| the guard | 30 000 | 2.41 s | 2.0% |
+| I/O, parsing, glue | | 10.47 s | 8.7% |
+| **total** | | **120.99 s** | |
 
-Cumulatively **207.9 s -> 146.3 s** across three rounds: the MSA representation, the affine aligner,
-and `find_most_supported_span`. No stage is dominant any more — the top five are 27%, 15%, 15%, 13%
-and 12%, so the next win is either broad or in `align`, whose remaining time is mostly the sub-64 bp
-segments that fall through to the scalar DP.
+Cumulatively **207.9 s -> 121.0 s** across four rounds: the MSA representation, the affine aligner,
+`find_most_supported_span`, and the segment aligner's per-call cost.
+
+**The profile is now flat** — 17%, 17%, 17%, 16%, 14% — which is a different situation from every
+round above, each of which had one obvious target. There is no single next win; each remaining stage
+is worth at most ~8% of total even if halved.
+
+Two notes on reading these numbers. Absolute totals move with machine load (the same build measured
+132 s and 121 s in two runs while other jobs came and went); *shares* are stable to a point or so and
+are what the table is for. And instrumenting inside a stage distorts it badly at these call counts —
+a temporary scope on the 7 million per-call alignments added ~10 s of mutex traffic on its own, so
+sub-stage measurements have to be taken and then removed, never left in.
 
 ### What is not done
 

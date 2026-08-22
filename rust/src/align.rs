@@ -136,11 +136,19 @@ pub fn parse_cigar(cigar: &str) -> Option<Vec<CigarOp>> {
 ///
 /// Returns `None` if the CIGAR does not parse or does not cover both sequences.
 pub fn cigar_to_seq(cigar: &str, query: &[u8], reference: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
-    let ops = parse_cigar(cigar)?;
+    ops_to_seq(&parse_cigar(cigar)?, query, reference)
+}
+
+/// [`cigar_to_seq`] without the string.
+///
+/// The SIMD aligner reports operations directly, so on the hot path formatting a
+/// CIGAR only to parse it straight back is pure overhead — 4.27 million times per
+/// four real clusters. [`crate::simd::global_ops`] feeds this instead.
+pub fn ops_to_seq(ops: &[CigarOp], query: &[u8], reference: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
     let (mut q_index, mut r_index) = (0usize, 0usize);
     let (mut q_aln, mut r_aln) = (Vec::new(), Vec::new());
 
-    for (len, op) in ops {
+    for &(len, op) in ops {
         match op {
             b'=' | b'X' => {
                 q_aln.extend_from_slice(query.get(q_index..q_index + len)?);
@@ -167,6 +175,16 @@ pub fn cigar_to_seq(cigar: &str, query: &[u8], reference: &[u8]) -> Option<(Vec<
         return None;
     }
     Some((q_aln, r_aln))
+}
+
+/// `[(2, b'='), (1, b'X')]` becomes `"2=1X"`. The inverse of [`parse_cigar`].
+pub fn encode_cigar(ops: &[CigarOp]) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    for &(len, op) in ops {
+        let _ = write!(out, "{len}{}", op as char);
+    }
+    out
 }
 
 /// `[b'=', b'=', b'X']` becomes `"2=1X"`.
@@ -443,7 +461,6 @@ mod oracle {
 #[cfg(test)]
 mod block_option {
     use crate::parasail::{self, Scoring, TieBreak};
-    use block_aligner::{cigar::*, scan_block::*, scores::*};
 
     /// `(query, target, edlib's CIGAR, edlib's edit distance)`.
     type Case = (Vec<u8>, Vec<u8>, String, usize);
@@ -490,22 +507,6 @@ mod block_option {
         }
 
         let sc = Scoring::GUARD;
-        let matrix = NucMatrix::new_simple(sc.match_score as i8, sc.mismatch as i8);
-        let gaps = Gaps {
-            open: -(sc.open as i8),
-            extend: -(sc.ext as i8),
-        };
-        // A global alignment of sequences of unequal length *must* deviate from
-        // the diagonal by their length difference, so the starting block has to
-        // be at least that wide or the greedy band never finds the gap. Measured:
-        // at a fixed 32 this misses 10 of 14 831 on one cluster, all of them a
-        // ~43 bp segment against an ~86 bp consensus.
-        let max_block = 256;
-        let longest = cases
-            .iter()
-            .map(|(a, b, _, _)| a.len().max(b.len()))
-            .max()
-            .unwrap_or(0);
 
         let t0 = std::time::Instant::now();
         for (q, r, _, _) in &cases {
@@ -513,68 +514,91 @@ mod block_option {
         }
         let scalar_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
-        // The `Block` is reused across calls, as block-aligner's docs recommend;
-        // `PaddedBytes` and `Cigar` cannot be (`Cigar::clear` is private), so
-        // their allocation is part of what is measured — which is honest, since
-        // the real call site would pay it too.
-        let mut block = Block::<true, false>::new(longest, longest, max_block);
+        // The shipped aligner, not a copy of it: `simd::global_ops` is exactly
+        // what `corrections::segment_ops` calls, including the reused block and
+        // the derived starting width.
+        let mut ops = Vec::new();
         let t0 = std::time::Instant::now();
-        let mut suboptimal = 0usize;
-        let mut clipped = 0usize;
+        let mut refused = 0usize;
         let mut same_as_unit_cost = 0usize;
-        let mut scores: Vec<i32> = Vec::with_capacity(cases.len());
+        let mut got: Vec<Option<Vec<crate::align::CigarOp>>> = Vec::with_capacity(cases.len());
         for (q, r, want_cigar, _) in &cases {
-            let pq = PaddedBytes::from_bytes::<NucMatrix>(q, max_block);
-            let pr = PaddedBytes::from_bytes::<NucMatrix>(r, max_block);
-            let need = q.len().abs_diff(r.len()) + 32;
-            let min_block = (32usize.max(need.next_power_of_two())).min(max_block);
-            block.align(&pq, &pr, &matrix, gaps, min_block..=max_block, 0);
-            let res = block.res();
-            if res.query_idx != q.len() || res.reference_idx != r.len() {
-                clipped += 1;
-                scores.push(i32::MIN);
+            if !crate::simd::global_ops(q, r, sc, &mut ops) {
+                refused += 1;
+                got.push(None);
                 continue;
             }
-            scores.push(res.score);
-            let mut cigar_buf = Cigar::new(res.query_idx, res.reference_idx);
-            block
-                .trace()
-                .cigar_eq(&pq, &pr, res.query_idx, res.reference_idx, &mut cigar_buf);
-            if cigar_buf.to_string() == *want_cigar {
+            if crate::align::encode_cigar(&ops) == *want_cigar {
                 same_as_unit_cost += 1;
             }
+            got.push(Some(ops.clone()));
         }
         let block_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
-        // Optimality against the exact affine DP. Not timed — it is the oracle,
-        // not a candidate.
-        let t0 = std::time::Instant::now();
-        for ((q, r, _, _), &got) in cases.iter().zip(&scores) {
+        // Optimality against the exact affine DP. Not timed — it is the oracle.
+        let mut suboptimal = 0usize;
+        let mut unexpanded = 0usize;
+        for ((q, r, _, _), ops) in cases.iter().zip(&got) {
+            let Some(ops) = ops else { continue };
             let exact = parasail::global_affine(q, r, sc, TieBreak::PARASAIL);
-            if got != i32::MIN && got != exact.score {
+            if score_of(ops, q, r, sc) != exact.score {
                 suboptimal += 1;
             }
+            if crate::align::ops_to_seq(ops, q, r).is_none() {
+                unexpanded += 1;
+            }
         }
-        let exact_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
         eprintln!(
             "{} recorded segment-vs-consensus alignments (median ~55x57 bp)",
             cases.len()
         );
-        eprintln!("  scalar unit-cost DP (today)  {scalar_ms:>9.1} ms");
+        eprintln!("  scalar unit-cost DP     {scalar_ms:>9.1} ms");
         eprintln!(
-            "  block-aligner, affine        {block_ms:>9.1} ms   ({:.2}x)",
+            "  simd::global_ops        {block_ms:>9.1} ms   ({:.2}x)",
             scalar_ms / block_ms.max(0.001)
         );
-        eprintln!("  exact affine DP (oracle)     {exact_ms:>9.1} ms");
         eprintln!(
-            "  suboptimal {suboptimal}, clipped {clipped}, same path as unit cost {same_as_unit_cost}/{}",
+            "  suboptimal {suboptimal}, refused {refused}, unexpandable {unexpanded}, \
+             same path as unit cost {same_as_unit_cost}/{}",
             cases.len()
         );
-        assert_eq!(clipped, 0, "block-aligner failed to span both sequences");
+        assert_eq!(suboptimal, 0, "missed the optimal affine score");
         assert_eq!(
-            suboptimal, 0,
-            "block-aligner missed the optimal affine score"
+            unexpanded, 0,
+            "returned a CIGAR that does not span its inputs"
         );
+        // Every case here is ACGTN by construction, so nothing should be refused.
+        assert_eq!(refused, 0, "refused a plain ACGTN pair");
+    }
+
+    /// Score an alignment under `sc`, to compare against the exact DP's own.
+    fn score_of(ops: &[crate::align::CigarOp], q: &[u8], r: &[u8], sc: Scoring) -> i32 {
+        let (mut qi, mut ri, mut total) = (0usize, 0usize, 0i32);
+        for &(len, op) in ops {
+            match op {
+                b'=' | b'X' => {
+                    for _ in 0..len {
+                        total += if q[qi] == r[ri] {
+                            sc.match_score
+                        } else {
+                            sc.mismatch
+                        };
+                        qi += 1;
+                        ri += 1;
+                    }
+                }
+                b'I' | b'D' => {
+                    total -= sc.open + sc.ext * (len as i32 - 1);
+                    if op == b'I' {
+                        qi += len;
+                    } else {
+                        ri += len;
+                    }
+                }
+                _ => unreachable!("unexpected op"),
+            }
+        }
+        total
     }
 }

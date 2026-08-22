@@ -50,9 +50,15 @@ fn min_block(a: usize, b: usize) -> usize {
 
 /// Shortest sequence worth handing to SIMD.
 ///
-/// Below this the exact DP is already trivial and block-aligner's minimum block
-/// size would dominate, so there is nothing to gain.
-pub const MIN_LEN: usize = 64;
+/// **Measured, not assumed.** At 64 this sent 39% of segment-vs-consensus
+/// alignments (1.68 million of 4.27 million on four real clusters) to the scalar
+/// DP, since those segments are median ~55 bp. Lowering it to 32 moved them onto
+/// the SIMD path and cut the fallback to 75 587 calls — the gap-padded `min_ed`
+/// queries, which cannot use it at all.
+///
+/// Below 32 there is genuinely nothing to gain: that is block-aligner's minimum
+/// block size, so the block already spans the whole alignment.
+pub const MIN_LEN: usize = 32;
 
 /// Affine global alignment, returning an extended CIGAR.
 ///
@@ -66,35 +72,142 @@ pub const MIN_LEN: usize = 64;
 /// clipped result. Every caller falls back to an exact DP, so `None` is "use the
 /// slow path", never an error.
 pub fn global_cigar(query: &[u8], reference: &[u8], sc: Scoring) -> Option<String> {
-    use block_aligner::{cigar::*, scan_block::*, scores::*};
+    let mut ops = Vec::new();
+    global_ops(query, reference, sc, &mut ops).then(|| crate::align::encode_cigar(&ops))
+}
 
-    if !usable(query) || !usable(reference) {
-        return None;
+/// The same alignment, reported as operations rather than a CIGAR string.
+///
+/// This is the form the aligner produces natively, and what
+/// [`crate::align::ops_to_seq`] consumes, so the hot path never builds a string.
+/// `out` is cleared first and is a caller-owned buffer so it can be reused.
+/// Returns `false` in exactly the cases [`global_cigar`] returns `None`.
+pub fn global_ops(
+    query: &[u8],
+    reference: &[u8],
+    sc: Scoring,
+    out: &mut Vec<crate::align::CigarOp>,
+) -> bool {
+    SCRATCH.with_borrow_mut(|scratch| scratch.align_into(query, reference, sc, out))
+}
+
+thread_local! {
+    /// See [`Scratch`]. Thread-local rather than threaded through every caller:
+    /// the aligner is called from deep inside `get_best_corrections`, and
+    /// clusters are processed one per thread.
+    static SCRATCH: std::cell::RefCell<Scratch> = std::cell::RefCell::new(Scratch::new());
+}
+
+/// Reusable allocations for the aligner.
+///
+/// **This is not a micro-optimisation.** The DP over a ~55x57 segment is a few
+/// thousand cells, and there are **4.27 million calls per four real clusters**, so
+/// per-call setup competes with the arithmetic. A fresh `Block`, two
+/// `PaddedBytes` and a `Cigar` (which allocates and zeroes `q + r + 5` 16-byte
+/// entries, ~2 KB here) per call cost **18.84 s of 4 clusters; reused, 11.54 s**.
+///
+/// `Block::new` takes *maximum* lengths and `align` then takes the actual
+/// sequences, so one block sized to the largest pair seen so far serves every
+/// smaller one. It only ever grows.
+struct Scratch {
+    block: block_aligner::scan_block::Block<true, false>,
+    q: block_aligner::scan_block::PaddedBytes,
+    r: block_aligner::scan_block::PaddedBytes,
+    /// Reusable because `cigar_eq` clears it itself — `Cigar::clear` is
+    /// `pub(crate)`, but the traceback calls it, so a long-lived `Cigar` is safe.
+    /// `Cigar::new` allocates and zeroes `q + r + 5` 16-byte entries, which at
+    /// these lengths is ~2 KB per call.
+    cigar: block_aligner::cigar::Cigar,
+    cap: usize,
+}
+
+/// Starting capacity, and the granularity it grows in. Round up so a run of
+/// slightly-longer sequences does not reallocate on every call.
+const CAP_STEP: usize = 256;
+
+impl Scratch {
+    fn new() -> Self {
+        use block_aligner::{scan_block::*, scores::*};
+        Self {
+            block: Block::new(CAP_STEP, CAP_STEP, MAX_BLOCK),
+            q: PaddedBytes::new::<NucMatrix>(CAP_STEP, MAX_BLOCK),
+            r: PaddedBytes::new::<NucMatrix>(CAP_STEP, MAX_BLOCK),
+            cigar: block_aligner::cigar::Cigar::new(CAP_STEP, CAP_STEP),
+            cap: CAP_STEP,
+        }
     }
-    let matrix = NucMatrix::new_simple(
-        i8::try_from(sc.match_score).ok()?,
-        i8::try_from(sc.mismatch).ok()?,
-    );
-    let gaps = Gaps {
-        open: i8::try_from(-sc.open).ok()?,
-        extend: i8::try_from(-sc.ext).ok()?,
-    };
 
-    let q = PaddedBytes::from_bytes::<NucMatrix>(query, MAX_BLOCK);
-    let r = PaddedBytes::from_bytes::<NucMatrix>(reference, MAX_BLOCK);
-    let mut block = Block::<true, false>::new(query.len(), reference.len(), MAX_BLOCK);
-    let lo = min_block(query.len(), reference.len());
-    block.align(&q, &r, &matrix, gaps, lo..=MAX_BLOCK, 0);
-
-    let res = block.res();
-    if res.query_idx != query.len() || res.reference_idx != reference.len() {
-        return None;
+    fn reserve(&mut self, len: usize) {
+        use block_aligner::{scan_block::*, scores::*};
+        if len <= self.cap {
+            return;
+        }
+        self.cap = len.next_multiple_of(CAP_STEP);
+        self.block = Block::new(self.cap, self.cap, MAX_BLOCK);
+        self.q = PaddedBytes::new::<NucMatrix>(self.cap, MAX_BLOCK);
+        self.r = PaddedBytes::new::<NucMatrix>(self.cap, MAX_BLOCK);
+        self.cigar = block_aligner::cigar::Cigar::new(self.cap, self.cap);
     }
-    let mut cigar = Cigar::new(res.query_idx, res.reference_idx);
-    block
-        .trace()
-        .cigar_eq(&q, &r, res.query_idx, res.reference_idx, &mut cigar);
-    Some(cigar.to_string())
+
+    fn align_into(
+        &mut self,
+        query: &[u8],
+        reference: &[u8],
+        sc: Scoring,
+        out: &mut Vec<crate::align::CigarOp>,
+    ) -> bool {
+        use block_aligner::{cigar::Operation, scores::*};
+
+        out.clear();
+        if !usable(query) || !usable(reference) {
+            return false;
+        }
+        let (Ok(m), Ok(x), Ok(open), Ok(extend)) = (
+            i8::try_from(sc.match_score),
+            i8::try_from(sc.mismatch),
+            i8::try_from(-sc.open),
+            i8::try_from(-sc.ext),
+        ) else {
+            return false;
+        };
+        let matrix = NucMatrix::new_simple(m, x);
+        let gaps = Gaps { open, extend };
+
+        self.reserve(query.len().max(reference.len()));
+        self.q.set_bytes::<NucMatrix>(query, MAX_BLOCK);
+        self.r.set_bytes::<NucMatrix>(reference, MAX_BLOCK);
+        let lo = min_block(query.len(), reference.len());
+        self.block
+            .align(&self.q, &self.r, &matrix, gaps, lo..=MAX_BLOCK, 0);
+
+        let res = self.block.res();
+        if res.query_idx != query.len() || res.reference_idx != reference.len() {
+            return false;
+        }
+        self.block.trace().cigar_eq(
+            &self.q,
+            &self.r,
+            res.query_idx,
+            res.reference_idx,
+            &mut self.cigar,
+        );
+
+        out.reserve(self.cigar.len());
+        for i in 0..self.cigar.len() {
+            let op_len = self.cigar.get(i);
+            let op = match op_len.op {
+                Operation::Eq => b'=',
+                Operation::X => b'X',
+                Operation::I => b'I',
+                Operation::D => b'D',
+                // `cigar_eq` never emits M or Sentinel; treat either as "cannot
+                // use this alignment" rather than guessing.
+                _ => return false,
+            };
+            out.push((op_len.len, op));
+        }
+        true
+    }
 }
 
 /// Whether `block-aligner`'s nucleotide matrix covers every character.
