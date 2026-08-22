@@ -644,7 +644,10 @@ Remaining options if `spoars` ever fails that gate:
 2. **`spoa` / `spoa-sys` bindings.** Identical by construction, at the cost of a C++ dependency.
 
 `abpoa-rs` / `rsabpoa` (adaptive banded) and `poasta` (optimal gap-affine) implement *different*
-algorithms and will not reproduce spoa's output. Do not use them for the identical-output port.
+algorithms and will not reproduce spoa's output, so they were never candidates while byte-identity
+was the specification. It no longer is, and they have since been measured and rejected on their own
+merits — abPOA aborts the process, `poa-consensus` is 11.6x slower, `poasta` has no consensus at all.
+See *The POA bake-off*.
 
 **Sequence insertion order into the POA graph changes the consensus.** Keep the exact order in
 which `get_best_corrections` writes segments to the temp fasta, including the `i > max_seqs_to_spoa`
@@ -1419,6 +1422,51 @@ This was a defect in the published tool rather than a porting artefact, which is
   defect, so their *relative* conclusions stand — the aligner divergences are still worth what they
   were worth — but every absolute error rate there is now pessimistic by roughly the 0.3 pp above.
 
+### The POA bake-off: `spoars` wins, and that closes the native-POA question
+
+`run_spoa` is 20% of runtime, so it is the obvious next target, and the *reason* it was previously
+off-limits no longer holds. This file used to say of the banded POA crates: "implement **different**
+algorithms and will not reproduce spoa's output. Do not use them for the identical-output port."
+That prohibition was correct then and is void now — byte-identity with spoa is not the specification,
+accuracy is. So the alternatives were actually tried.
+
+Every candidate on crates.io, on real recorded intervals (drosophila cluster 0: 2 682 intervals,
+287 830 sequences, 17.6 Mbases, mean 107 sequences per interval at 61 bp), configured with
+isONcorrect's own scoring:
+
+| candidate | time | agrees with spoa | verdict |
+| --- | --- | --- | --- |
+| **`spoars` (incumbent, pure Rust)** | **2.83 s** | **2 682 / 2 682** | keep |
+| `abpoa-rs` -> abPOA (C, adaptive banded) | — | — | **aborts the process** |
+| `poa-consensus` (pure Rust, banded) | 32.7 s | 1 654 / 2 682 (62%) | **11.6x slower** |
+| `poasta` (pure Rust, optimal gap-affine) | — | — | **no consensus API** |
+
+Three findings, none of which was predictable from the crate descriptions:
+
+- **abPOA calls `exit(1)` from inside the C library** on real isONcorrect intervals —
+  `[simd_abpoa_align_sequence_to_subgraph] Error in lg_backtrack.` and the process is gone. It does
+  this in **both** local and global mode. For something invoked once per correction interval, with
+  no way to catch it, that is disqualifying regardless of speed. It would also have reintroduced a C
+  toolchain, ending the port's freedom from one;
+- **`poa-consensus` is an order of magnitude slower**, not faster, despite being banded. Confirmed on
+  a second corpus (1 735 intervals: 831 ms against 7 548 ms). It is also a different consensus by
+  construction — it picks the *median-length* read as its backbone and ignores the caller's seed, so
+  insertion order, which `get_best_corrections` controls deliberately, stops mattering;
+- **`poasta` has no consensus function at all.** It is an aligner; heaviest-bundle traversal would
+  have to be written on top.
+
+So `spoars` is simultaneously the fastest option available and the only one byte-identical to spoa.
+`run_spoa`'s 20% is therefore **not addressable by swapping libraries**, and writing a native POA
+would mean beating both spoa and abPOA at their own game — a research project, not a porting task.
+The dependency risk (v0.1.3, low usage) stands, and `poa::oracle` is the mitigation: it has held on
+**5 705 recorded intervals in a single session** across the fixture, SIRV and drosophila, and must
+stay green on every upgrade.
+
+The earlier measurement in `poa.rs` — that hoisting the engine into a thread-local is worth nothing —
+fits the same picture: the time is in the DP, and the DP is already vectorised. `spoars` does have
+real NEON kernels with spoa's own int16/int32 escalation ladder, so this is *not* the `triple_accel`
+situation where SIMD was silently x86-only.
+
 ### The real-data corpus
 
 `isONclust` is **not** in the reference environment; it is installed in a separate `isonclust-tool`
@@ -1543,18 +1591,8 @@ trajectory still passes. Comparing `spans.tsv` from the live driver is what caug
 
 
 
-- **Write a native linear-gap kSW POA + heaviest-bundle consensus**, replacing `spoars`. **Still
-  deferred, and the case for it is now weaker than when this note was written.** It had two
-  justifications and one of them has been measured to zero: reusing allocations across intervals is
-  worth nothing (`run_spoa` 21.28 s to 21.21 s when the engine is hoisted into a thread-local — see
-  `poa.rs`), because the cost is the POA dynamic programming, not the per-call setup. A native
-  implementation constrained to reproduce spoa's output exactly would do the same asymptotic work.
-
-  What remains is the dependency argument: `spoars` is v0.1.3 with low usage, sitting on the critical
-  path. Against that, `spoars` is ~14 000 lines of which ~5 700 is the SIMD alignment core, so this is
-  a large project, and `poa::oracle` has now held byte-identical on **5 705 recorded intervals in a
-  single session**, across the fixture, SIRV and drosophila. The oracle is the standing mitigation and
-  must stay green on every upgrade.
+- ~~**Write a native linear-gap kSW POA + heaviest-bundle consensus**, replacing `spoars`.~~
+  **Closed, by measurement rather than by deferral.** See *The POA bake-off* below.
 - ~~**The guard's semi-global alignment is `O(n*m)` in time and memory.**~~ **Done both ways.**
   `block-aligner` replaced it (SIMD + banded, ~0.8% of reads change), and the exact DP behind
   `ISONCORRECT_EXACT_GUARD=1` got the two-row rewrite. Original note follows for context:
