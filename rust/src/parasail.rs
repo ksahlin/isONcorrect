@@ -1642,3 +1642,68 @@ mod blockalign {
         );
     }
 }
+
+/// Probe one alignment in isolation.
+///
+/// The oracle prints mismatching CIGARs, but at these lengths the print is long
+/// enough to be truncated by a terminal, and a truncated CIGAR looks exactly like
+/// an alignment that fails to span its inputs -- which is how a tie-break
+/// difference was briefly misdiagnosed as a correctness bug. This reports the
+/// span and the score directly, and runs both semi-global and global so the
+/// free-end-gap question is answered at the same time.
+///
+/// ```bash
+/// PARASAIL_ONE=/tmp/s1.txt,/tmp/s2.txt \
+///   cargo test --release --manifest-path rust/Cargo.toml one_case -- --nocapture
+/// ```
+#[cfg(test)]
+mod one_case {
+    use super::*;
+
+    /// See the module-level docs above.
+    #[test]
+    fn probe() {
+        let Ok(spec) = std::env::var("PARASAIL_ONE") else {
+            return;
+        };
+        let (p1, p2) = spec.split_once(',').expect("two paths");
+        let s1 = std::fs::read_to_string(p1)
+            .unwrap()
+            .trim()
+            .as_bytes()
+            .to_vec();
+        let s2 = std::fs::read_to_string(p2)
+            .unwrap()
+            .trim()
+            .as_bytes()
+            .to_vec();
+        let sg = semiglobal(&s1, &s2, Scoring::GUARD);
+        let gl = global_affine(&s1, &s2, Scoring::GUARD, TieBreak::PARASAIL);
+        for (name, a) in [("semiglobal", &sg), ("global", &gl)] {
+            let ops = crate::align::parse_cigar(&a.cigar).unwrap();
+            let (mut q, mut r) = (0usize, 0usize);
+            for (n, op) in &ops {
+                match op {
+                    b'=' | b'X' => {
+                        q += n;
+                        r += n;
+                    }
+                    b'I' => q += n,
+                    b'D' => r += n,
+                    _ => panic!(),
+                }
+            }
+            eprintln!(
+                "{name}: score={} consumes q={q}/{} r={r}/{} expands={}",
+                a.score,
+                s1.len(),
+                s2.len(),
+                crate::align::cigar_to_seq(&a.cigar, &s1, &s2).is_some()
+            );
+            eprintln!(
+                "  tail: ...{}",
+                &a.cigar[a.cigar.len().saturating_sub(60)..]
+            );
+        }
+    }
+}

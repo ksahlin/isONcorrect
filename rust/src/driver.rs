@@ -128,11 +128,31 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
             .collect();
         let db = {
             let _t = crate::profile::scope("get_minimizer_combinations_database");
-            anchors::build(&mins, p.k, p.xmin, p.xmax, reads.len())
+            // `batch.len()`, NOT `reads.len()`. The reference rebinds `reads` to
+            // the current batch at the top of its batch loop, so the abundance
+            // threshold in `get_minimizer_combinations_database` -- "more
+            // occurrences than there are reads" -- counts the *batch*. Passing
+            // the cluster size raises the threshold, so highly abundant anchors
+            // that the reference drops survive, and the read gets extra
+            // high-support intervals.
+            //
+            // Only a cluster larger than `--max_seqs` can show this, which is
+            // why it took a drosophila cluster of 3 528 reads to find: it
+            // changed 587 of that cluster's reads.
+            anchors::build(&mins, p.k, p.xmin, p.xmax, batch.len())
         };
 
         // Per batch, exactly as the reference rebuilds it.
         let mut previously_corrected: HashMap<usize, Vec<Correction>> = HashMap::new();
+
+        // See [`SpansDump`]. Off unless ISONCORRECT_SPANS_DUMP is set.
+        let mut spans_dump = SpansDump::from_env();
+
+        // Hoisted out of the read loop so its scratch buffers survive, with
+        // `reset_cache` per read reproducing the reference's `already_computed =
+        // {}`. Building a `SpanFinder` per read would throw the buffers away and
+        // give back most of what reusing them bought.
+        let mut finder = SpanFinder::new(&seqs, &qvs, p.k);
 
         for read in batch {
             let r_id = read.r_id;
@@ -153,7 +173,8 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
             };
 
             let mut all: Vec<Pending> = Vec::new();
-            let mut finder = SpanFinder::new(&seqs, &qvs, p.k);
+            // The reference resets `already_computed` per read, unconditionally.
+            finder.reset_cache();
             let minimizers_of_read = &mins
                 .iter()
                 .find(|(id, _)| *id == r_id)
@@ -169,6 +190,7 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
                     let _t = crate::profile::scope("find_most_supported_span");
                     finder.find(r_id, m1, p1, &kept, &db, &mut found);
                 }
+                spans_dump.record(r_id, m1, p1, &found);
                 all.extend(found.into_iter().map(|c| Pending {
                     start: c.start,
                     stop: c.stop,
@@ -176,7 +198,6 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
                     payload: Payload::Instance(c.instance),
                 }));
             }
-            stats.edlib_calls += finder.edlib_calls;
 
             // Carried-over regions join the solver after the fresh candidates.
             all.extend(carried.into_iter().map(|c| Pending {
@@ -270,9 +291,90 @@ pub fn correct_cluster(reads: &[Read], p: &Params) -> (Vec<Corrected>, Stats) {
                 seq: corrected,
             });
         }
+        // Once per batch, not once per read: `finder` now spans the batch, so its
+        // counter is cumulative and adding it inside the loop would double-count.
+        stats.edlib_calls += finder.edlib_calls;
+        spans_dump.flush();
     }
 
     (out, stats)
+}
+
+/// The `spans.tsv` oracle, recorded from the **live driver** rather than the
+/// dump binary.
+///
+/// This closes the one real hole in the port's stage coverage.
+/// `isoncorrect-dump` can emit spans, but it does not correct, so
+/// `previously_corrected_regions` is always empty there and only the `--exact`
+/// trajectory is comparable. The anchor filtering that consumes those regions
+/// (`regions::filter_spans`, `considered_positions`, `pos_groups`) is therefore
+/// *inert* in every dump ever taken, and had no oracle at all — it was covered
+/// only by end-to-end output on a 100-read fixture where it barely fires.
+///
+/// Recording here instead makes the non-exact trajectory directly comparable to
+/// `bench/dump_reference.py`'s `spans.tsv`, which has always recorded the live
+/// reference. Format is identical, so the two files diff.
+///
+/// ```bash
+/// ISONCORRECT_SPANS_DUMP=/tmp/rs_spans.tsv isONcorrect --fastq c.fastq --outfolder /tmp/x
+/// diff /tmp/py/spans.tsv /tmp/rs_spans.tsv
+/// ```
+struct SpansDump {
+    path: Option<String>,
+    rows: Vec<String>,
+}
+
+impl SpansDump {
+    fn from_env() -> Self {
+        Self {
+            path: std::env::var("ISONCORRECT_SPANS_DUMP")
+                .ok()
+                .filter(|p| !p.is_empty()),
+            rows: Vec::new(),
+        }
+    }
+
+    fn record(&mut self, r_id: usize, m1: &[u8], p1: usize, found: &[crate::support::Candidate]) {
+        if self.path.is_none() {
+            return;
+        }
+        for c in found {
+            let payload: Vec<String> = c
+                .instance
+                .iter()
+                .flat_map(|&(r, a, b)| [r.to_string(), a.to_string(), b.to_string()])
+                .collect();
+            self.rows.push(format!(
+                "{r_id}\t{}\t{p1}\t{}\t{}\t{}\t{}",
+                String::from_utf8_lossy(m1),
+                c.start,
+                c.stop,
+                c.support,
+                payload.join(",")
+            ));
+        }
+    }
+
+    /// Appended per batch, so a multi-batch cluster produces one file in read
+    /// order — the order the reference's list is built in.
+    fn flush(&mut self) {
+        let Some(path) = self.path.clone() else {
+            return;
+        };
+        use std::io::Write;
+        let existed = std::path::Path::new(&path).exists();
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .expect("spans dump path is writable");
+        if !existed {
+            writeln!(f, "#r_id\tm1\tp1\tstart\tstop\tweight\tinstance").expect("spans dump header");
+        }
+        for row in self.rows.drain(..) {
+            writeln!(f, "{row}").expect("spans dump row");
+        }
+    }
 }
 
 /// Write `corrected_reads.fastq`, matching the reference's format exactly.
