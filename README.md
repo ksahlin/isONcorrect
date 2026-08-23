@@ -18,7 +18,8 @@ isONcorrect error-corrects Oxford Nanopore cDNA reads. It handles highly variabl
 Install
 -------
 
-Needs a Rust toolchain (1.85+) and nothing else — no C/C++ toolchain, no CMake.
+Needs a Rust toolchain (1.85+). No Rust?
+`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 
 ```bash
 git clone https://github.com/ksahlin/isONcorrect.git
@@ -26,17 +27,34 @@ cd isONcorrect
 cargo build --release --manifest-path rust/Cargo.toml
 ```
 
-This builds two binaries, `isONcorrect` and `run_isoncorrect`, in
-`rust/target/release/`. Copy them somewhere on your `PATH`.
+That builds `isONcorrect` and `run_isoncorrect` into `rust/target/release/`. Copy them onto your
+`PATH`. Test it:
 
-No Rust? `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+```bash
+rust/target/release/isONcorrect --fastq test_data/isoncorrect/0.fastq --outfolder /tmp/isoncorrect_test
+```
 
-Prefer not to build? Binaries for Linux and macOS (x86_64, arm64) are attached to
-[release v0.2.0](https://github.com/ksahlin/isONcorrect/releases/tag/v0.2.0). Linux comes in two
-flavours: take `musl` if your glibc is older than 2.34 (CentOS 7, RHEL 8, Ubuntu 20.04) or you would
-rather not check, and `gnu` otherwise — see [CHANGELOG.md](CHANGELOG.md).
+Should take less than a second and writes 100 corrected reads to `/tmp/isoncorrect_test/corrected_reads.fastq`.
 
-For the full pipeline you also want pychopper and isONclust:
+Rather not build? Prebuilt binaries are attached to
+[release v0.2.0](https://github.com/ksahlin/isONcorrect/releases/tag/v0.2.0). For Linux take `musl` if
+your glibc is older than 2.34 (CentOS 7, RHEL 8, Ubuntu 20.04) or you would rather not check, `gnu`
+otherwise.
+
+
+Still want the Python version? (deprecated)
+---------------------------------------
+
+```bash
+pip install isONcorrect && conda install -c bioconda spoa
+```
+
+
+Full pipeline
+-------------
+
+isONcorrect corrects one gene cluster at a time, so the usual workflow is pychopper for full-length
+reads → isONclust to group them into genes → isONcorrect per cluster. Those two are separate tools:
 
 ```bash
 conda create -n isoncorrect python=3.9 pip && conda activate isoncorrect
@@ -44,32 +62,13 @@ pip install isONclust
 conda install -c bioconda "hmmer>=3.0" "pychopper>=2.0"
 ```
 
-The deprecated Python version, if you need it to reproduce the paper:
-`pip install isONcorrect && conda install -c bioconda spoa`.
-
-### Test the install
-
-From the repository root:
-
-```bash
-rust/target/release/isONcorrect --fastq test_data/isoncorrect/0.fastq --outfolder /tmp/isoncorrect_test
-```
-
-Under a second. Writes `/tmp/isoncorrect_test/corrected_reads.fastq` — 100 reads, same headers as the
-input, corrected sequences.
-
-
-Run
----
-
-One command for the whole pipeline:
+Then either run the whole thing with one command:
 
 ```bash
 ./scripts/correction_pipeline.sh raw_reads.fq outfolder 20   # reads, outdir, cores
 ```
 
-Or the steps yourself — pychopper for full-length reads, isONclust to group them into genes, then
-isONcorrect per cluster:
+or the steps yourself:
 
 ```bash
 cdna_classifier.py raw_reads.fq out/full_length.fq -t 20
