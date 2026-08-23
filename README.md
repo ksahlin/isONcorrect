@@ -28,7 +28,9 @@ cargo build --release --manifest-path rust/Cargo.toml
 ```
 
 That builds `isONcorrect` and `run_isoncorrect` into `rust/target/release/`. Copy them onto your
-`PATH`. Test it:
+`PATH`. 
+
+#### Test the installation
 
 ```bash
 rust/target/release/isONcorrect --fastq test_data/isoncorrect/0.fastq --outfolder /tmp/isoncorrect_test
