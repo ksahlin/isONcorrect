@@ -5,14 +5,14 @@ isONcorrect
 
 isONcorrect error-corrects Oxford Nanopore cDNA reads. It handles highly variable coverage and exon variation within reads, and leverages regions shared between reads from different isoforms to reach low error rates even for low-abundance transcripts. See the [paper](https://www.nature.com/articles/s41467-020-20340-8).
 
-> ## v0.2.0 — isONcorrect is now written in Rust
->
-> Same command line, so existing pipelines do not need editing. About **10x faster**, uses **less
-> memory**, and **more accurate** — a bug in region selection meant every previous version corrected
-> fewer regions than it should have. **Corrected output therefore differs from earlier releases.**
->
-> The Python implementation is still here but is **deprecated**, kept as the reference the Rust
-> version is verified against. Details, numbers, and the removed flags: **[CHANGELOG.md](CHANGELOG.md)**.
+## v0.2.0 — isONcorrect is now written in Rust
+
+Same command line, so existing pipelines do not need editing. About **10x faster**, uses **less
+memory**, and **more accurate** — a bug in region selection meant every previous version corrected
+fewer regions than it should have. **Corrected output therefore differs from earlier releases.**
+
+The Python implementation is still here but is **deprecated**, kept as the reference the Rust
+version is verified against. Details, numbers, and the removed flags: **[CHANGELOG.md](CHANGELOG.md)**.
 
 
 Install
