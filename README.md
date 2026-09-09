@@ -5,6 +5,10 @@ isONcorrect
 
 isONcorrect error-corrects Oxford Nanopore cDNA reads. It handles highly variable coverage and exon variation within reads, and leverages regions shared between reads from different isoforms to reach low error rates even for low-abundance transcripts. See the [paper](https://www.nature.com/articles/s41467-020-20340-8).
 
+**Doing de novo transcriptome reconstruction?** isONclust, isONcorrect and isONform are one
+workflow — [isONpipe](https://github.com/ksahlin/isONpipe) installs all three and runs them
+with one command.
+
 ## v0.2.0 — isONcorrect is now written in Rust
 
 Same command line, so existing pipelines do not need editing. About **10x faster**, uses **less
@@ -56,7 +60,17 @@ Full pipeline
 -------------
 
 isONcorrect corrects one gene cluster at a time, so the usual workflow is pychopper for full-length
-reads → isONclust to group them into genes → isONcorrect per cluster. Those two are separate tools:
+reads → isONclust to group them into genes → isONcorrect per cluster.
+
+[isONpipe](https://github.com/ksahlin/isONpipe) installs those tools together with isONform, which
+reconstructs isoforms from the corrected reads, and runs the whole thing:
+
+```bash
+isONpipe install
+isONpipe run --reads reads.fq --outfolder out --t 20
+```
+
+To install and run the steps yourself instead — isONclust and pychopper are separate tools:
 
 ```bash
 conda create -n isoncorrect python=3.9 pip && conda activate isoncorrect
