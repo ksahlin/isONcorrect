@@ -2,6 +2,9 @@ isONcorrect
 ===========
 
 [![ci](https://github.com/ksahlin/isONcorrect/actions/workflows/ci.yml/badge.svg)](https://github.com/ksahlin/isONcorrect/actions/workflows/ci.yml)
+[![install with Bioconda](https://anaconda.org/bioconda/isoncorrect/badges/downloads.svg)](https://anaconda.org/bioconda/isoncorrect/badges/downloads.svg
+)
+
 
 isONcorrect error-corrects Oxford Nanopore cDNA reads. It handles highly variable coverage and exon variation within reads, and leverages regions shared between reads from different isoforms to reach low error rates even for low-abundance transcripts. See the [paper](https://www.nature.com/articles/s41467-020-20340-8).
 
